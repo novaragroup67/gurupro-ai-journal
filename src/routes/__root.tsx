@@ -7,27 +7,31 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import { Bell, Search } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
+
+import { AppSidebar } from "@/components/app-sidebar";
+import { GuruProMark } from "@/components/gurupro-logo";
+import { Button } from "@/components/ui/button";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Toaster } from "@/components/ui/sonner";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="flex min-h-[70vh] items-center justify-center px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
+        <h1 className="font-display text-7xl font-bold text-navy">404</h1>
+        <h2 className="mt-4 text-xl font-semibold">Halaman tidak ditemukan</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
+          Halaman yang Anda cari tidak tersedia atau sudah dipindahkan.
         </p>
         <div className="mt-6">
-          <Link
-            to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Go home
-          </Link>
+          <Button asChild>
+            <Link to="/">Kembali ke Dashboard</Link>
+          </Button>
         </div>
       </div>
     </div>
@@ -42,30 +46,26 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   }, [error]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="flex min-h-[70vh] items-center justify-center px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
+        <h1 className="font-display text-xl font-semibold tracking-tight">
+          Halaman ini gagal dimuat
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          Terjadi kesalahan. Coba muat ulang atau kembali ke dashboard.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <button
+          <Button
             onClick={() => {
               router.invalidate();
               reset();
             }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Try again
-          </button>
-          <a
-            href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Go home
-          </a>
+            Coba lagi
+          </Button>
+          <Button asChild variant="outline">
+            <a href="/">Ke Dashboard</a>
+          </Button>
         </div>
       </div>
     </div>
@@ -77,19 +77,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
+      { title: "GuruPro — Satu Pintu, Semua Administrasi" },
+      {
+        name: "description",
+        content:
+          "GuruPro membantu guru SMK menyusun jurnal mengajar, modul ajar, dan administrasi pembelajaran lebih cepat.",
+      },
+      { name: "author", content: "GuruPro" },
     ],
     links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: appCss,
+        href: "https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap",
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
@@ -102,7 +104,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="id">
       <head>
         <HeadContent />
       </head>
@@ -119,8 +121,50 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <SidebarProvider>
+        <div className="flex min-h-screen w-full bg-background">
+          <AppSidebar />
+
+          <div className="flex min-w-0 flex-1 flex-col">
+            <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-card/85 px-4 backdrop-blur sm:px-6">
+              <SidebarTrigger className="shrink-0" />
+              <div className="flex min-w-0 flex-1 items-center gap-2 md:hidden">
+                <GuruProMark className="h-7 w-7 shrink-0" />
+                <span className="font-display text-base font-bold text-navy">
+                  Guru<span className="text-primary">Pro</span>
+                </span>
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <Button variant="ghost" size="icon" aria-label="Cari" className="hidden sm:inline-flex">
+                  <Search className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" aria-label="Notifikasi">
+                  <Bell className="h-4 w-4" />
+                </Button>
+                <div className="flex min-w-0 items-center gap-2 rounded-full border bg-background py-1 pl-1 pr-3">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-gradient text-xs font-bold text-navy-foreground">
+                    BS
+                  </span>
+                  <span className="hidden min-w-0 leading-tight sm:block">
+                    <span className="block truncate text-xs font-semibold">Bu Sari</span>
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      Guru RPL
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </header>
+
+            <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+              <div className="mx-auto w-full max-w-6xl">
+                {/* Required: nested routes render here. */}
+                <Outlet />
+              </div>
+            </main>
+          </div>
+        </div>
+        <Toaster position="top-right" richColors />
+      </SidebarProvider>
     </QueryClientProvider>
   );
 }
