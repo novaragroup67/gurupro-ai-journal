@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as JurnalIndexRouteImport } from './routes/jurnal/index'
+import { Route as JurnalCreateRouteImport } from './routes/jurnal/create'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,30 +23,39 @@ const JurnalIndexRoute = JurnalIndexRouteImport.update({
   path: '/jurnal/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const JurnalCreateRoute = JurnalCreateRouteImport.update({
+  id: '/jurnal/create',
+  path: '/jurnal/create',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/jurnal/create': typeof JurnalCreateRoute
   '/jurnal/': typeof JurnalIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/jurnal/create': typeof JurnalCreateRoute
   '/jurnal': typeof JurnalIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/jurnal/create': typeof JurnalCreateRoute
   '/jurnal/': typeof JurnalIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/jurnal/'
+  fullPaths: '/' | '/jurnal/create' | '/jurnal/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/jurnal'
-  id: '__root__' | '/' | '/jurnal/'
+  to: '/' | '/jurnal/create' | '/jurnal'
+  id: '__root__' | '/' | '/jurnal/create' | '/jurnal/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  JurnalCreateRoute: typeof JurnalCreateRoute
   JurnalIndexRoute: typeof JurnalIndexRoute
 }
 
@@ -65,11 +75,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof JurnalIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/jurnal/create': {
+      id: '/jurnal/create'
+      path: '/jurnal/create'
+      fullPath: '/jurnal/create'
+      preLoaderRoute: typeof JurnalCreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  JurnalCreateRoute: JurnalCreateRoute,
   JurnalIndexRoute: JurnalIndexRoute,
 }
 export const routeTree = rootRouteImport
