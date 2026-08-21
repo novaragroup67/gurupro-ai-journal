@@ -58,7 +58,7 @@ export const Route = createFileRoute("/jurnal/ai")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: AiGeneratorPage;
+  component: AiGeneratorPage,
 });
 
 type Step = "input" | "loading" | "preview";
