@@ -10,6 +10,12 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ArsipRouteImport } from './routes/arsip'
+import { Route as ModulAjarRouteImport } from './routes/modul-ajar'
+import { Route as PenilaianRouteImport } from './routes/penilaian'
+import { Route as PenugasanRouteImport } from './routes/penugasan'
+import { Route as ProfilRouteImport } from './routes/profil'
+import { Route as SoalRouteImport } from './routes/soal'
 import { Route as JurnalIndexRouteImport } from './routes/jurnal/index'
 import { Route as JurnalAiRouteImport } from './routes/jurnal/ai'
 import { Route as JurnalCreateRouteImport } from './routes/jurnal/create'
@@ -19,6 +25,36 @@ import { Route as JurnalIdEditRouteImport } from './routes/jurnal/$id.edit'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ArsipRoute = ArsipRouteImport.update({
+  id: '/arsip',
+  path: '/arsip',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ModulAjarRoute = ModulAjarRouteImport.update({
+  id: '/modul-ajar',
+  path: '/modul-ajar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PenilaianRoute = PenilaianRouteImport.update({
+  id: '/penilaian',
+  path: '/penilaian',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PenugasanRoute = PenugasanRouteImport.update({
+  id: '/penugasan',
+  path: '/penugasan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfilRoute = ProfilRouteImport.update({
+  id: '/profil',
+  path: '/profil',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SoalRoute = SoalRouteImport.update({
+  id: '/soal',
+  path: '/soal',
   getParentRoute: () => rootRouteImport,
 } as any)
 const JurnalIndexRoute = JurnalIndexRouteImport.update({
@@ -49,6 +85,12 @@ const JurnalIdEditRoute = JurnalIdEditRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/arsip': typeof ArsipRoute
+  '/modul-ajar': typeof ModulAjarRoute
+  '/penilaian': typeof PenilaianRoute
+  '/penugasan': typeof PenugasanRoute
+  '/profil': typeof ProfilRoute
+  '/soal': typeof SoalRoute
   '/jurnal/ai': typeof JurnalAiRoute
   '/jurnal/create': typeof JurnalCreateRoute
   '/jurnal/': typeof JurnalIndexRoute
@@ -57,6 +99,12 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/arsip': typeof ArsipRoute
+  '/modul-ajar': typeof ModulAjarRoute
+  '/penilaian': typeof PenilaianRoute
+  '/penugasan': typeof PenugasanRoute
+  '/profil': typeof ProfilRoute
+  '/soal': typeof SoalRoute
   '/jurnal/ai': typeof JurnalAiRoute
   '/jurnal/create': typeof JurnalCreateRoute
   '/jurnal': typeof JurnalIndexRoute
@@ -66,6 +114,12 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/arsip': typeof ArsipRoute
+  '/modul-ajar': typeof ModulAjarRoute
+  '/penilaian': typeof PenilaianRoute
+  '/penugasan': typeof PenugasanRoute
+  '/profil': typeof ProfilRoute
+  '/soal': typeof SoalRoute
   '/jurnal/ai': typeof JurnalAiRoute
   '/jurnal/create': typeof JurnalCreateRoute
   '/jurnal/': typeof JurnalIndexRoute
@@ -76,6 +130,12 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/arsip'
+    | '/modul-ajar'
+    | '/penilaian'
+    | '/penugasan'
+    | '/profil'
+    | '/soal'
     | '/jurnal/ai'
     | '/jurnal/create'
     | '/jurnal/'
@@ -84,6 +144,12 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/arsip'
+    | '/modul-ajar'
+    | '/penilaian'
+    | '/penugasan'
+    | '/profil'
+    | '/soal'
     | '/jurnal/ai'
     | '/jurnal/create'
     | '/jurnal'
@@ -92,6 +158,12 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/arsip'
+    | '/modul-ajar'
+    | '/penilaian'
+    | '/penugasan'
+    | '/profil'
+    | '/soal'
     | '/jurnal/ai'
     | '/jurnal/create'
     | '/jurnal/'
@@ -101,6 +173,12 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ArsipRoute: typeof ArsipRoute
+  ModulAjarRoute: typeof ModulAjarRoute
+  PenilaianRoute: typeof PenilaianRoute
+  PenugasanRoute: typeof PenugasanRoute
+  ProfilRoute: typeof ProfilRoute
+  SoalRoute: typeof SoalRoute
   JurnalAiRoute: typeof JurnalAiRoute
   JurnalCreateRoute: typeof JurnalCreateRoute
   JurnalIndexRoute: typeof JurnalIndexRoute
@@ -115,6 +193,48 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/arsip': {
+      id: '/arsip'
+      path: '/arsip'
+      fullPath: '/arsip'
+      preLoaderRoute: typeof ArsipRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/modul-ajar': {
+      id: '/modul-ajar'
+      path: '/modul-ajar'
+      fullPath: '/modul-ajar'
+      preLoaderRoute: typeof ModulAjarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/penilaian': {
+      id: '/penilaian'
+      path: '/penilaian'
+      fullPath: '/penilaian'
+      preLoaderRoute: typeof PenilaianRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/penugasan': {
+      id: '/penugasan'
+      path: '/penugasan'
+      fullPath: '/penugasan'
+      preLoaderRoute: typeof PenugasanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profil': {
+      id: '/profil'
+      path: '/profil'
+      fullPath: '/profil'
+      preLoaderRoute: typeof ProfilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/soal': {
+      id: '/soal'
+      path: '/soal'
+      fullPath: '/soal'
+      preLoaderRoute: typeof SoalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/jurnal/': {
@@ -157,6 +277,12 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ArsipRoute: ArsipRoute,
+  ModulAjarRoute: ModulAjarRoute,
+  PenilaianRoute: PenilaianRoute,
+  PenugasanRoute: PenugasanRoute,
+  ProfilRoute: ProfilRoute,
+  SoalRoute: SoalRoute,
   JurnalAiRoute: JurnalAiRoute,
   JurnalCreateRoute: JurnalCreateRoute,
   JurnalIndexRoute: JurnalIndexRoute,
