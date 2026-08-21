@@ -10,33 +10,180 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ArsipRouteImport } from './routes/arsip'
+import { Route as ModulAjarRouteImport } from './routes/modul-ajar'
+import { Route as PenilaianRouteImport } from './routes/penilaian'
+import { Route as PenugasanRouteImport } from './routes/penugasan'
+import { Route as ProfilRouteImport } from './routes/profil'
+import { Route as SoalRouteImport } from './routes/soal'
+import { Route as JurnalIndexRouteImport } from './routes/jurnal/index'
+import { Route as JurnalAiRouteImport } from './routes/jurnal/ai'
+import { Route as JurnalCreateRouteImport } from './routes/jurnal/create'
+import { Route as JurnalIdIndexRouteImport } from './routes/jurnal/$id.index'
+import { Route as JurnalIdEditRouteImport } from './routes/jurnal/$id.edit'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ArsipRoute = ArsipRouteImport.update({
+  id: '/arsip',
+  path: '/arsip',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ModulAjarRoute = ModulAjarRouteImport.update({
+  id: '/modul-ajar',
+  path: '/modul-ajar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PenilaianRoute = PenilaianRouteImport.update({
+  id: '/penilaian',
+  path: '/penilaian',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PenugasanRoute = PenugasanRouteImport.update({
+  id: '/penugasan',
+  path: '/penugasan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfilRoute = ProfilRouteImport.update({
+  id: '/profil',
+  path: '/profil',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SoalRoute = SoalRouteImport.update({
+  id: '/soal',
+  path: '/soal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JurnalIndexRoute = JurnalIndexRouteImport.update({
+  id: '/jurnal/',
+  path: '/jurnal/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JurnalAiRoute = JurnalAiRouteImport.update({
+  id: '/jurnal/ai',
+  path: '/jurnal/ai',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JurnalCreateRoute = JurnalCreateRouteImport.update({
+  id: '/jurnal/create',
+  path: '/jurnal/create',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JurnalIdIndexRoute = JurnalIdIndexRouteImport.update({
+  id: '/jurnal/$id/',
+  path: '/jurnal/$id/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JurnalIdEditRoute = JurnalIdEditRouteImport.update({
+  id: '/jurnal/$id/edit',
+  path: '/jurnal/$id/edit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/arsip': typeof ArsipRoute
+  '/modul-ajar': typeof ModulAjarRoute
+  '/penilaian': typeof PenilaianRoute
+  '/penugasan': typeof PenugasanRoute
+  '/profil': typeof ProfilRoute
+  '/soal': typeof SoalRoute
+  '/jurnal/ai': typeof JurnalAiRoute
+  '/jurnal/create': typeof JurnalCreateRoute
+  '/jurnal/': typeof JurnalIndexRoute
+  '/jurnal/$id/edit': typeof JurnalIdEditRoute
+  '/jurnal/$id/': typeof JurnalIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/arsip': typeof ArsipRoute
+  '/modul-ajar': typeof ModulAjarRoute
+  '/penilaian': typeof PenilaianRoute
+  '/penugasan': typeof PenugasanRoute
+  '/profil': typeof ProfilRoute
+  '/soal': typeof SoalRoute
+  '/jurnal/ai': typeof JurnalAiRoute
+  '/jurnal/create': typeof JurnalCreateRoute
+  '/jurnal': typeof JurnalIndexRoute
+  '/jurnal/$id/edit': typeof JurnalIdEditRoute
+  '/jurnal/$id': typeof JurnalIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/arsip': typeof ArsipRoute
+  '/modul-ajar': typeof ModulAjarRoute
+  '/penilaian': typeof PenilaianRoute
+  '/penugasan': typeof PenugasanRoute
+  '/profil': typeof ProfilRoute
+  '/soal': typeof SoalRoute
+  '/jurnal/ai': typeof JurnalAiRoute
+  '/jurnal/create': typeof JurnalCreateRoute
+  '/jurnal/': typeof JurnalIndexRoute
+  '/jurnal/$id/edit': typeof JurnalIdEditRoute
+  '/jurnal/$id/': typeof JurnalIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/arsip'
+    | '/modul-ajar'
+    | '/penilaian'
+    | '/penugasan'
+    | '/profil'
+    | '/soal'
+    | '/jurnal/ai'
+    | '/jurnal/create'
+    | '/jurnal/'
+    | '/jurnal/$id/edit'
+    | '/jurnal/$id/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/arsip'
+    | '/modul-ajar'
+    | '/penilaian'
+    | '/penugasan'
+    | '/profil'
+    | '/soal'
+    | '/jurnal/ai'
+    | '/jurnal/create'
+    | '/jurnal'
+    | '/jurnal/$id/edit'
+    | '/jurnal/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/arsip'
+    | '/modul-ajar'
+    | '/penilaian'
+    | '/penugasan'
+    | '/profil'
+    | '/soal'
+    | '/jurnal/ai'
+    | '/jurnal/create'
+    | '/jurnal/'
+    | '/jurnal/$id/edit'
+    | '/jurnal/$id/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ArsipRoute: typeof ArsipRoute
+  ModulAjarRoute: typeof ModulAjarRoute
+  PenilaianRoute: typeof PenilaianRoute
+  PenugasanRoute: typeof PenugasanRoute
+  ProfilRoute: typeof ProfilRoute
+  SoalRoute: typeof SoalRoute
+  JurnalAiRoute: typeof JurnalAiRoute
+  JurnalCreateRoute: typeof JurnalCreateRoute
+  JurnalIndexRoute: typeof JurnalIndexRoute
+  JurnalIdEditRoute: typeof JurnalIdEditRoute
+  JurnalIdIndexRoute: typeof JurnalIdIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +195,99 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/arsip': {
+      id: '/arsip'
+      path: '/arsip'
+      fullPath: '/arsip'
+      preLoaderRoute: typeof ArsipRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/modul-ajar': {
+      id: '/modul-ajar'
+      path: '/modul-ajar'
+      fullPath: '/modul-ajar'
+      preLoaderRoute: typeof ModulAjarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/penilaian': {
+      id: '/penilaian'
+      path: '/penilaian'
+      fullPath: '/penilaian'
+      preLoaderRoute: typeof PenilaianRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/penugasan': {
+      id: '/penugasan'
+      path: '/penugasan'
+      fullPath: '/penugasan'
+      preLoaderRoute: typeof PenugasanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profil': {
+      id: '/profil'
+      path: '/profil'
+      fullPath: '/profil'
+      preLoaderRoute: typeof ProfilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/soal': {
+      id: '/soal'
+      path: '/soal'
+      fullPath: '/soal'
+      preLoaderRoute: typeof SoalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/jurnal/': {
+      id: '/jurnal/'
+      path: '/jurnal'
+      fullPath: '/jurnal/'
+      preLoaderRoute: typeof JurnalIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/jurnal/ai': {
+      id: '/jurnal/ai'
+      path: '/jurnal/ai'
+      fullPath: '/jurnal/ai'
+      preLoaderRoute: typeof JurnalAiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/jurnal/create': {
+      id: '/jurnal/create'
+      path: '/jurnal/create'
+      fullPath: '/jurnal/create'
+      preLoaderRoute: typeof JurnalCreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/jurnal/$id/': {
+      id: '/jurnal/$id/'
+      path: '/jurnal/$id'
+      fullPath: '/jurnal/$id/'
+      preLoaderRoute: typeof JurnalIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/jurnal/$id/edit': {
+      id: '/jurnal/$id/edit'
+      path: '/jurnal/$id/edit'
+      fullPath: '/jurnal/$id/edit'
+      preLoaderRoute: typeof JurnalIdEditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ArsipRoute: ArsipRoute,
+  ModulAjarRoute: ModulAjarRoute,
+  PenilaianRoute: PenilaianRoute,
+  PenugasanRoute: PenugasanRoute,
+  ProfilRoute: ProfilRoute,
+  SoalRoute: SoalRoute,
+  JurnalAiRoute: JurnalAiRoute,
+  JurnalCreateRoute: JurnalCreateRoute,
+  JurnalIndexRoute: JurnalIndexRoute,
+  JurnalIdEditRoute: JurnalIdEditRoute,
+  JurnalIdIndexRoute: JurnalIdIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
