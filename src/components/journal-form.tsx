@@ -40,12 +40,12 @@ export function validateJournal(draft: JournalDraft): JournalErrors {
   };
   const errors: JournalErrors = {};
   REQUIRED_FIELDS.forEach((field) => {
-    if (!String(draft[field] ?? "").trim()) errors[field] = labels[field];
+    if (!String(draft[field] ?? "").trim()) errors[field] = labels[field] ?? "Wajib diisi.";
   });
   return errors;
 }
 
-function FieldError({ message }: { message?: string }) {
+function FieldError({ message }: { message?: string | undefined }) {
   if (!message) return null;
   return <p className="text-xs font-medium text-destructive">{message}</p>;
 }
@@ -77,7 +77,7 @@ export function JournalForm({ draft, errors, onChange, showAiSections = false }:
               Mata Pelajaran <span className="text-destructive">*</span>
             </Label>
             <Select
-              value={draft.mataPelajaran || undefined}
+              value={draft.mataPelajaran}
               onValueChange={(v) => onChange({ mataPelajaran: v })}
             >
               <SelectTrigger className={cn("w-full", invalid("mataPelajaran"))}>
@@ -98,7 +98,7 @@ export function JournalForm({ draft, errors, onChange, showAiSections = false }:
             <Label>
               Kelas <span className="text-destructive">*</span>
             </Label>
-            <Select value={draft.kelas || undefined} onValueChange={(v) => onChange({ kelas: v })}>
+            <Select value={draft.kelas} onValueChange={(v) => onChange({ kelas: v })}>
               <SelectTrigger className={cn("w-full", invalid("kelas"))}>
                 <SelectValue placeholder="Pilih kelas" />
               </SelectTrigger>
@@ -178,7 +178,7 @@ export function JournalForm({ draft, errors, onChange, showAiSections = false }:
             <div className="grid gap-2">
               <Label>Metode Pembelajaran</Label>
               <Select
-                value={draft.metode || undefined}
+                value={draft.metode}
                 onValueChange={(v) => onChange({ metode: v })}
               >
                 <SelectTrigger className="w-full">
@@ -197,7 +197,7 @@ export function JournalForm({ draft, errors, onChange, showAiSections = false }:
             <div className="grid gap-2">
               <Label>Kondisi Kelas</Label>
               <Select
-                value={draft.kondisiKelas || undefined}
+                value={draft.kondisiKelas}
                 onValueChange={(v) => onChange({ kondisiKelas: v })}
               >
                 <SelectTrigger className="w-full">
