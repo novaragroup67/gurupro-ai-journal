@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as JurnalIndexRouteImport } from './routes/jurnal/index'
+import { Route as JurnalAiRouteImport } from './routes/jurnal/ai'
 import { Route as JurnalCreateRouteImport } from './routes/jurnal/create'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +24,11 @@ const JurnalIndexRoute = JurnalIndexRouteImport.update({
   path: '/jurnal/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const JurnalAiRoute = JurnalAiRouteImport.update({
+  id: '/jurnal/ai',
+  path: '/jurnal/ai',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const JurnalCreateRoute = JurnalCreateRouteImport.update({
   id: '/jurnal/create',
   path: '/jurnal/create',
@@ -31,30 +37,34 @@ const JurnalCreateRoute = JurnalCreateRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/jurnal/ai': typeof JurnalAiRoute
   '/jurnal/create': typeof JurnalCreateRoute
   '/jurnal/': typeof JurnalIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/jurnal/ai': typeof JurnalAiRoute
   '/jurnal/create': typeof JurnalCreateRoute
   '/jurnal': typeof JurnalIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/jurnal/ai': typeof JurnalAiRoute
   '/jurnal/create': typeof JurnalCreateRoute
   '/jurnal/': typeof JurnalIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/jurnal/create' | '/jurnal/'
+  fullPaths: '/' | '/jurnal/ai' | '/jurnal/create' | '/jurnal/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/jurnal/create' | '/jurnal'
-  id: '__root__' | '/' | '/jurnal/create' | '/jurnal/'
+  to: '/' | '/jurnal/ai' | '/jurnal/create' | '/jurnal'
+  id: '__root__' | '/' | '/jurnal/ai' | '/jurnal/create' | '/jurnal/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  JurnalAiRoute: typeof JurnalAiRoute
   JurnalCreateRoute: typeof JurnalCreateRoute
   JurnalIndexRoute: typeof JurnalIndexRoute
 }
@@ -75,6 +85,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof JurnalIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/jurnal/ai': {
+      id: '/jurnal/ai'
+      path: '/jurnal/ai'
+      fullPath: '/jurnal/ai'
+      preLoaderRoute: typeof JurnalAiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/jurnal/create': {
       id: '/jurnal/create'
       path: '/jurnal/create'
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  JurnalAiRoute: JurnalAiRoute,
   JurnalCreateRoute: JurnalCreateRoute,
   JurnalIndexRoute: JurnalIndexRoute,
 }

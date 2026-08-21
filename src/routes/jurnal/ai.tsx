@@ -131,9 +131,9 @@ function AiGeneratorPage() {
 
   const handleGenerate = () => {
     const errors: Record<string, string> = {};
-    if (!input.mataPelajaran) errors.mataPelajaran = "Mata pelajaran wajib dipilih.";
-    if (!input.kelas) errors.kelas = "Kelas wajib dipilih.";
-    if (!input.materi.trim()) errors.materi = "Materi wajib diisi agar hasil AI relevan.";
+    if (!input.mataPelajaran) errors["mataPelajaran"] = "Mata pelajaran wajib dipilih.";
+    if (!input.kelas) errors["kelas"] = "Kelas wajib dipilih.";
+    if (!input.materi.trim()) errors["materi"] = "Materi wajib diisi agar hasil AI relevan.";
     setInputErrors(errors);
     if (Object.keys(errors).length > 0) {
       toast.error("Lengkapi data agar GuruPro AI punya konteks yang cukup.");
@@ -209,8 +209,8 @@ function AiGeneratorPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                {inputErrors.mataPelajaran ? (
-                  <p className="text-xs font-medium text-destructive">{inputErrors.mataPelajaran}</p>
+                {inputErrors["mataPelajaran"] ? (
+                  <p className="text-xs font-medium text-destructive">{inputErrors["mataPelajaran"]}</p>
                 ) : null}
               </div>
 
@@ -230,8 +230,8 @@ function AiGeneratorPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                {inputErrors.kelas ? (
-                  <p className="text-xs font-medium text-destructive">{inputErrors.kelas}</p>
+                {inputErrors["kelas"] ? (
+                  <p className="text-xs font-medium text-destructive">{inputErrors["kelas"]}</p>
                 ) : null}
               </div>
 
@@ -267,8 +267,8 @@ function AiGeneratorPage() {
                 onChange={(e) => setField({ materi: e.target.value })}
                 className={invalid("materi")}
               />
-              {inputErrors.materi ? (
-                <p className="text-xs font-medium text-destructive">{inputErrors.materi}</p>
+              {inputErrors["materi"] ? (
+                <p className="text-xs font-medium text-destructive">{inputErrors["materi"]}</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
                   Contoh topik: Konsep Database, Subnetting, Flexbox, Statistika Dasar.
