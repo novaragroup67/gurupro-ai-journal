@@ -104,11 +104,12 @@ function profileFor(materi: string, mapel: string): TopicProfile {
   return TOPIC_RULES.find((r) => r.match.test(haystack))?.profile ?? DEFAULT_PROFILE;
 }
 
-function pick<T>(arr: T[], seed: number) {
-  return arr[seed % arr.length];
+function pick<T>(arr: T[], seed: number): T {
+  return arr[seed % arr.length] as T;
 }
 
 export function generateJournal(input: AiInput, seed = Date.now()): JournalDraft {
+  const kk = (i: number) => profileFor(input.materi, input.mataPelajaran).kataKunci[i] ?? "konsep dasar";
   const p = profileFor(input.materi, input.mataPelajaran);
   const materi = input.materi.trim() || "materi pembelajaran";
   const mapel = input.mataPelajaran.trim() || "Mata Pelajaran";
@@ -142,11 +143,11 @@ export function generateJournal(input: AiInput, seed = Date.now()): JournalDraft
     source: "AI",
     aktivitas: [
       `Pendahuluan (10 menit): ${pembuka}`,
-      `Kegiatan Inti (60 menit): Guru menjelaskan ${p.kataKunci[0]} dan ${p.kataKunci[1]} pada ${materi}, kemudian peserta didik ${p.praktik} menggunakan pendekatan ${metode.toLowerCase()}.`,
-      `Penutup (20 menit): Peserta didik menyimpulkan poin penting ${materi}, guru memberikan penguatan tentang ${p.kataKunci[3]} dan menyampaikan rencana pertemuan berikutnya.`,
+      `Kegiatan Inti (60 menit): Guru menjelaskan ${kk(0)} dan ${kk(1)} pada ${materi}, kemudian peserta didik ${p.praktik} menggunakan pendekatan ${metode.toLowerCase()}.`,
+      `Penutup (20 menit): Peserta didik menyimpulkan poin penting ${materi}, guru memberikan penguatan tentang ${kk(3)} dan menyampaikan rencana pertemuan berikutnya.`,
     ].join("\n"),
     partisipasi: `Kehadiran ${hadir} dari ${total} peserta didik. Sebagian besar siswa aktif bertanya dan berdiskusi saat membahas ${materi}. Beberapa siswa perlu pendampingan tambahan pada bagian ${p.kesulitan}.`,
-    penilaian: `Penilaian sikap melalui observasi keaktifan diskusi; penilaian pengetahuan melalui pertanyaan lisan seputar ${p.kataKunci[0]} pada ${materi}; penilaian keterampilan melalui hasil kerja peserta didik saat ${p.praktik}.`,
+    penilaian: `Penilaian sikap melalui observasi keaktifan diskusi; penilaian pengetahuan melalui pertanyaan lisan seputar ${kk(0)} pada ${materi}; penilaian keterampilan melalui hasil kerja peserta didik saat ${p.praktik}.`,
     refleksi: `Pendekatan ${metode.toLowerCase()} efektif membantu peserta didik ${kelas} memahami ${materi} karena dikaitkan langsung dengan ${p.konteks}. Pengelolaan waktu pada kegiatan inti masih perlu diperbaiki agar semua kelompok mendapat kesempatan presentasi.`,
     tindakLanjut: `Pertemuan berikutnya dilanjutkan dengan ${p.lanjutan}. Peserta didik yang belum tuntas pada ${p.kesulitan} akan mendapat pendampingan dan latihan tambahan di luar jam pelajaran.`,
     catatan:
