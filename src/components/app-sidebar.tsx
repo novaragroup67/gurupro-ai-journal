@@ -6,10 +6,12 @@ import {
   FileQuestion,
   GraduationCap,
   LayoutDashboard,
-  NotebookPen,
+  LogOut,
   Sparkles,
   UserRound,
+  UserCheck,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { GuruProLogo } from "@/components/gurupro-logo";
 import {
@@ -28,17 +30,17 @@ import {
 
 const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
-  { title: "Jurnal", url: "/jurnal", icon: NotebookPen },
   { title: "Modul Ajar", url: "/modul-ajar", icon: BookOpen },
   { title: "Soal", url: "/soal", icon: FileQuestion },
   { title: "Penugasan", url: "/penugasan", icon: ClipboardList },
   { title: "Penilaian", url: "/penilaian", icon: GraduationCap },
-];
+] as const;
 
 const secondaryItems = [
-  { title: "Arsip", url: "/arsip", icon: Archive },
+  { title: "Verifikasi Akun Siswa", url: "/verifikasi", icon: UserCheck },
+  { title: "Arsip Data", url: "/arsip", icon: Archive },
   { title: "Profil", url: "/profil", icon: UserRound },
-];
+] as const;
 
 export function AppSidebar() {
   const { isMobile, setOpenMobile } = useSidebar();
@@ -51,13 +53,13 @@ export function AppSidebar() {
     if (isMobile) setOpenMobile(false);
   };
 
-  const renderItems = (items: typeof mainItems) => (
+  const renderItems = (items: ReadonlyArray<(typeof mainItems)[number] | (typeof secondaryItems)[number]>) => (
     <SidebarMenu>
       {items.map((item) => (
         <SidebarMenuItem key={item.title}>
           <SidebarMenuButton
             asChild
-            isActive={isActive(item.url, item.exact)}
+            isActive={isActive(item.url, "exact" in item ? item.exact : false)}
             tooltip={item.title}
           >
             <Link to={item.url} onClick={closeOnMobile} className="gap-3">
@@ -86,13 +88,30 @@ export function AppSidebar() {
 
         <SidebarGroup>
           <SidebarGroupLabel>Lainnya</SidebarGroupLabel>
-          <SidebarGroupContent>{renderItems(secondaryItems)}</SidebarGroupContent>
+          <SidebarGroupContent>
+            {renderItems(secondaryItems)}
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Log Out"
+                  className="gap-3 text-sidebar-foreground/80"
+                  onClick={() => {
+                    closeOnMobile();
+                    toast.success("Anda telah keluar (prototipe).");
+                  }}
+                >
+                  <LogOut className="h-4 w-4 shrink-0" />
+                  <span className="truncate">Log Out</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-3 group-data-[collapsible=icon]:hidden">
         <Link
-          to="/jurnal/ai"
+          to="/modul-ajar"
           onClick={closeOnMobile}
           className="block rounded-xl bg-sidebar-accent p-3 transition-colors hover:bg-sidebar-primary/25"
         >
@@ -101,7 +120,7 @@ export function AppSidebar() {
             GuruPro AI
           </span>
           <span className="mt-1 block text-xs leading-relaxed text-sidebar-foreground/70">
-            Susun jurnal mengajar otomatis dalam hitungan detik.
+            Susun modul, ilustrasi, PPT, dan soal secara otomatis.
           </span>
         </Link>
       </SidebarFooter>

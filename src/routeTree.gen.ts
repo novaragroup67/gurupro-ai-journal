@@ -16,11 +16,7 @@ import { Route as PenilaianRouteImport } from './routes/penilaian'
 import { Route as PenugasanRouteImport } from './routes/penugasan'
 import { Route as ProfilRouteImport } from './routes/profil'
 import { Route as SoalRouteImport } from './routes/soal'
-import { Route as JurnalIndexRouteImport } from './routes/jurnal/index'
-import { Route as JurnalAiRouteImport } from './routes/jurnal/ai'
-import { Route as JurnalCreateRouteImport } from './routes/jurnal/create'
-import { Route as JurnalIdIndexRouteImport } from './routes/jurnal/$id.index'
-import { Route as JurnalIdEditRouteImport } from './routes/jurnal/$id.edit'
+import { Route as VerifikasiRouteImport } from './routes/verifikasi'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -57,29 +53,9 @@ const SoalRoute = SoalRouteImport.update({
   path: '/soal',
   getParentRoute: () => rootRouteImport,
 } as any)
-const JurnalIndexRoute = JurnalIndexRouteImport.update({
-  id: '/jurnal/',
-  path: '/jurnal/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const JurnalAiRoute = JurnalAiRouteImport.update({
-  id: '/jurnal/ai',
-  path: '/jurnal/ai',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const JurnalCreateRoute = JurnalCreateRouteImport.update({
-  id: '/jurnal/create',
-  path: '/jurnal/create',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const JurnalIdIndexRoute = JurnalIdIndexRouteImport.update({
-  id: '/jurnal/$id/',
-  path: '/jurnal/$id/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const JurnalIdEditRoute = JurnalIdEditRouteImport.update({
-  id: '/jurnal/$id/edit',
-  path: '/jurnal/$id/edit',
+const VerifikasiRoute = VerifikasiRouteImport.update({
+  id: '/verifikasi',
+  path: '/verifikasi',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -91,11 +67,7 @@ export interface FileRoutesByFullPath {
   '/penugasan': typeof PenugasanRoute
   '/profil': typeof ProfilRoute
   '/soal': typeof SoalRoute
-  '/jurnal/ai': typeof JurnalAiRoute
-  '/jurnal/create': typeof JurnalCreateRoute
-  '/jurnal/': typeof JurnalIndexRoute
-  '/jurnal/$id/edit': typeof JurnalIdEditRoute
-  '/jurnal/$id/': typeof JurnalIdIndexRoute
+  '/verifikasi': typeof VerifikasiRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -105,11 +77,7 @@ export interface FileRoutesByTo {
   '/penugasan': typeof PenugasanRoute
   '/profil': typeof ProfilRoute
   '/soal': typeof SoalRoute
-  '/jurnal/ai': typeof JurnalAiRoute
-  '/jurnal/create': typeof JurnalCreateRoute
-  '/jurnal': typeof JurnalIndexRoute
-  '/jurnal/$id/edit': typeof JurnalIdEditRoute
-  '/jurnal/$id': typeof JurnalIdIndexRoute
+  '/verifikasi': typeof VerifikasiRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -120,11 +88,7 @@ export interface FileRoutesById {
   '/penugasan': typeof PenugasanRoute
   '/profil': typeof ProfilRoute
   '/soal': typeof SoalRoute
-  '/jurnal/ai': typeof JurnalAiRoute
-  '/jurnal/create': typeof JurnalCreateRoute
-  '/jurnal/': typeof JurnalIndexRoute
-  '/jurnal/$id/edit': typeof JurnalIdEditRoute
-  '/jurnal/$id/': typeof JurnalIdIndexRoute
+  '/verifikasi': typeof VerifikasiRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -136,11 +100,7 @@ export interface FileRouteTypes {
     | '/penugasan'
     | '/profil'
     | '/soal'
-    | '/jurnal/ai'
-    | '/jurnal/create'
-    | '/jurnal/'
-    | '/jurnal/$id/edit'
-    | '/jurnal/$id/'
+    | '/verifikasi'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -150,11 +110,7 @@ export interface FileRouteTypes {
     | '/penugasan'
     | '/profil'
     | '/soal'
-    | '/jurnal/ai'
-    | '/jurnal/create'
-    | '/jurnal'
-    | '/jurnal/$id/edit'
-    | '/jurnal/$id'
+    | '/verifikasi'
   id:
     | '__root__'
     | '/'
@@ -164,11 +120,7 @@ export interface FileRouteTypes {
     | '/penugasan'
     | '/profil'
     | '/soal'
-    | '/jurnal/ai'
-    | '/jurnal/create'
-    | '/jurnal/'
-    | '/jurnal/$id/edit'
-    | '/jurnal/$id/'
+    | '/verifikasi'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -179,11 +131,7 @@ export interface RootRouteChildren {
   PenugasanRoute: typeof PenugasanRoute
   ProfilRoute: typeof ProfilRoute
   SoalRoute: typeof SoalRoute
-  JurnalAiRoute: typeof JurnalAiRoute
-  JurnalCreateRoute: typeof JurnalCreateRoute
-  JurnalIndexRoute: typeof JurnalIndexRoute
-  JurnalIdEditRoute: typeof JurnalIdEditRoute
-  JurnalIdIndexRoute: typeof JurnalIdIndexRoute
+  VerifikasiRoute: typeof VerifikasiRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -237,39 +185,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SoalRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/jurnal/': {
-      id: '/jurnal/'
-      path: '/jurnal'
-      fullPath: '/jurnal/'
-      preLoaderRoute: typeof JurnalIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/jurnal/ai': {
-      id: '/jurnal/ai'
-      path: '/jurnal/ai'
-      fullPath: '/jurnal/ai'
-      preLoaderRoute: typeof JurnalAiRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/jurnal/create': {
-      id: '/jurnal/create'
-      path: '/jurnal/create'
-      fullPath: '/jurnal/create'
-      preLoaderRoute: typeof JurnalCreateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/jurnal/$id/': {
-      id: '/jurnal/$id/'
-      path: '/jurnal/$id'
-      fullPath: '/jurnal/$id/'
-      preLoaderRoute: typeof JurnalIdIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/jurnal/$id/edit': {
-      id: '/jurnal/$id/edit'
-      path: '/jurnal/$id/edit'
-      fullPath: '/jurnal/$id/edit'
-      preLoaderRoute: typeof JurnalIdEditRouteImport
+    '/verifikasi': {
+      id: '/verifikasi'
+      path: '/verifikasi'
+      fullPath: '/verifikasi'
+      preLoaderRoute: typeof VerifikasiRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -283,11 +203,7 @@ const rootRouteChildren: RootRouteChildren = {
   PenugasanRoute: PenugasanRoute,
   ProfilRoute: ProfilRoute,
   SoalRoute: SoalRoute,
-  JurnalAiRoute: JurnalAiRoute,
-  JurnalCreateRoute: JurnalCreateRoute,
-  JurnalIndexRoute: JurnalIndexRoute,
-  JurnalIdEditRoute: JurnalIdEditRoute,
-  JurnalIdIndexRoute: JurnalIdIndexRoute,
+  VerifikasiRoute: VerifikasiRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
