@@ -6,7 +6,7 @@ export interface ModulSection {
   judul: string;
   poin: string[];
   isi: string;
-  ilustrasi?: string;
+  ilustrasi?: string | undefined;
 }
 
 export interface Slide {
