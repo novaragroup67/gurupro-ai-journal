@@ -16,6 +16,7 @@ import { Route as PenilaianRouteImport } from './routes/penilaian'
 import { Route as PenugasanRouteImport } from './routes/penugasan'
 import { Route as ProfilRouteImport } from './routes/profil'
 import { Route as SoalRouteImport } from './routes/soal'
+import { Route as VerifikasiRouteImport } from './routes/verifikasi'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -52,6 +53,11 @@ const SoalRoute = SoalRouteImport.update({
   path: '/soal',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VerifikasiRoute = VerifikasiRouteImport.update({
+  id: '/verifikasi',
+  path: '/verifikasi',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/penugasan': typeof PenugasanRoute
   '/profil': typeof ProfilRoute
   '/soal': typeof SoalRoute
+  '/verifikasi': typeof VerifikasiRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   '/penugasan': typeof PenugasanRoute
   '/profil': typeof ProfilRoute
   '/soal': typeof SoalRoute
+  '/verifikasi': typeof VerifikasiRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   '/penugasan': typeof PenugasanRoute
   '/profil': typeof ProfilRoute
   '/soal': typeof SoalRoute
+  '/verifikasi': typeof VerifikasiRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +100,7 @@ export interface FileRouteTypes {
     | '/penugasan'
     | '/profil'
     | '/soal'
+    | '/verifikasi'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
     | '/penugasan'
     | '/profil'
     | '/soal'
+    | '/verifikasi'
   id:
     | '__root__'
     | '/'
@@ -109,6 +120,7 @@ export interface FileRouteTypes {
     | '/penugasan'
     | '/profil'
     | '/soal'
+    | '/verifikasi'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,6 +131,7 @@ export interface RootRouteChildren {
   PenugasanRoute: typeof PenugasanRoute
   ProfilRoute: typeof ProfilRoute
   SoalRoute: typeof SoalRoute
+  VerifikasiRoute: typeof VerifikasiRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -172,6 +185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SoalRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/verifikasi': {
+      id: '/verifikasi'
+      path: '/verifikasi'
+      fullPath: '/verifikasi'
+      preLoaderRoute: typeof VerifikasiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -183,6 +203,7 @@ const rootRouteChildren: RootRouteChildren = {
   PenugasanRoute: PenugasanRoute,
   ProfilRoute: ProfilRoute,
   SoalRoute: SoalRoute,
+  VerifikasiRoute: VerifikasiRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
