@@ -121,7 +121,7 @@ function hash(text: string) {
 /** Deterministic local "AI" illustration: contextual SVG diagram per sub-heading. */
 export function buatIlustrasi(judul: string, poin: string[], nonce = 0) {
   const seed = hash(judul + nonce);
-  const palette = PALETTES[seed % PALETTES.length];
+  const palette = PALETTES[seed % PALETTES.length] as string[];
   const shapes: string[] = [];
   const count = 3 + (seed % 3);
   for (let i = 0; i < count; i += 1) {
