@@ -138,9 +138,8 @@ function RootComponent() {
                 <Button variant="ghost" size="icon" aria-label="Cari" className="hidden sm:inline-flex">
                   <Search className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" aria-label="Notifikasi">
-                  <Bell className="h-4 w-4" />
-                </Button>
+                <NotificationMenu />
+
                 <div className="flex min-w-0 items-center gap-2 rounded-full border bg-background py-1 pl-1 pr-3">
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-gradient text-xs font-bold text-navy-foreground">
                     BS
