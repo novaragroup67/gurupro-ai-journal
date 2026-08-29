@@ -86,7 +86,7 @@ export const Route = createFileRoute("/soal")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: SoalPage;
+  component: SoalPage,
 });
 
 type Mode = "bank" | "buat" | "review";
