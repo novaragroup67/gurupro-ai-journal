@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ArsipRouteImport } from './routes/arsip'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as ModulAjarRouteImport } from './routes/modul-ajar'
 import { Route as PenilaianRouteImport } from './routes/penilaian'
 import { Route as PenugasanRouteImport } from './routes/penugasan'
@@ -26,6 +27,11 @@ const IndexRoute = IndexRouteImport.update({
 const ArsipRoute = ArsipRouteImport.update({
   id: '/arsip',
   path: '/arsip',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ModulAjarRoute = ModulAjarRouteImport.update({
@@ -62,6 +68,7 @@ const VerifikasiRoute = VerifikasiRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/arsip': typeof ArsipRoute
+  '/login': typeof LoginRoute
   '/modul-ajar': typeof ModulAjarRoute
   '/penilaian': typeof PenilaianRoute
   '/penugasan': typeof PenugasanRoute
@@ -72,6 +79,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/arsip': typeof ArsipRoute
+  '/login': typeof LoginRoute
   '/modul-ajar': typeof ModulAjarRoute
   '/penilaian': typeof PenilaianRoute
   '/penugasan': typeof PenugasanRoute
@@ -83,6 +91,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/arsip': typeof ArsipRoute
+  '/login': typeof LoginRoute
   '/modul-ajar': typeof ModulAjarRoute
   '/penilaian': typeof PenilaianRoute
   '/penugasan': typeof PenugasanRoute
@@ -95,6 +104,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/arsip'
+    | '/login'
     | '/modul-ajar'
     | '/penilaian'
     | '/penugasan'
@@ -105,6 +115,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/arsip'
+    | '/login'
     | '/modul-ajar'
     | '/penilaian'
     | '/penugasan'
@@ -115,6 +126,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/arsip'
+    | '/login'
     | '/modul-ajar'
     | '/penilaian'
     | '/penugasan'
@@ -126,6 +138,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ArsipRoute: typeof ArsipRoute
+  LoginRoute: typeof LoginRoute
   ModulAjarRoute: typeof ModulAjarRoute
   PenilaianRoute: typeof PenilaianRoute
   PenugasanRoute: typeof PenugasanRoute
@@ -148,6 +161,13 @@ declare module '@tanstack/react-router' {
       path: '/arsip'
       fullPath: '/arsip'
       preLoaderRoute: typeof ArsipRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/modul-ajar': {
@@ -198,6 +218,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ArsipRoute: ArsipRoute,
+  LoginRoute: LoginRoute,
   ModulAjarRoute: ModulAjarRoute,
   PenilaianRoute: PenilaianRoute,
   PenugasanRoute: PenugasanRoute,
