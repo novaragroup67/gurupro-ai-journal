@@ -97,7 +97,9 @@ export function AppSidebar() {
                   className="gap-3 text-sidebar-foreground/80"
                   onClick={() => {
                     closeOnMobile();
-                    toast.success("Anda telah keluar (prototipe).");
+                    logout();
+                    toast.success("Anda telah keluar dari GuruPro.");
+                    navigate({ to: "/login", replace: true });
                   }}
                 >
                   <LogOut className="h-4 w-4 shrink-0" />
