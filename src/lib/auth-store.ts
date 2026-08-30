@@ -12,6 +12,7 @@ export interface GuruProfile {
 }
 
 export interface AuthState {
+  ready: boolean;
   signedIn: boolean;
   profile: GuruProfile;
 }
@@ -32,7 +33,8 @@ export const DEFAULT_PROFILE: GuruProfile = {
   bio: "Guru matematika yang senang memanfaatkan teknologi untuk mengurangi beban administrasi.",
 };
 
-const LOGGED_OUT: AuthState = { signedIn: false, profile: DEFAULT_PROFILE };
+const PENDING: AuthState = { ready: false, signedIn: false, profile: DEFAULT_PROFILE };
+const LOGGED_OUT: AuthState = { ready: true, signedIn: false, profile: DEFAULT_PROFILE };
 
 let state: AuthState | null = null;
 const listeners = new Set<() => void>();
@@ -52,14 +54,16 @@ function load() {
   if (state || typeof window === "undefined") return;
   try {
     const raw = window.localStorage.getItem(KEY);
-    state = raw ? ({ ...LOGGED_OUT, ...(JSON.parse(raw) as AuthState) }) : LOGGED_OUT;
+    state = raw
+      ? { ...LOGGED_OUT, ...(JSON.parse(raw) as AuthState), ready: true }
+      : { ...LOGGED_OUT };
   } catch {
-    state = LOGGED_OUT;
+    state = { ...LOGGED_OUT };
   }
   emit();
 }
 
-const get = () => state ?? LOGGED_OUT;
+const get = () => state ?? PENDING;
 
 const subscribe = (l: () => void) => {
   listeners.add(l);
@@ -72,14 +76,13 @@ function set(next: AuthState) {
   emit();
 }
 
-/** null = belum diketahui (SSR / sebelum localStorage dibaca). */
-export function useAuth(): { ready: boolean; signedIn: boolean; profile: GuruProfile } {
-  const current = useSyncExternalStore(subscribe, get, () => LOGGED_OUT);
+/** ready=false selama SSR / sebelum localStorage dibaca. */
+export function useAuth(): AuthState {
+  const current = useSyncExternalStore(subscribe, get, () => PENDING);
   useEffect(() => {
     load();
   }, []);
-  const ready = typeof window !== "undefined" && state !== null;
-  return { ready, signedIn: current.signedIn, profile: current.profile };
+  return current;
 }
 
 export function login(email: string, password: string): boolean {
@@ -87,7 +90,7 @@ export function login(email: string, password: string): boolean {
   if (email.trim().toLowerCase() !== DEMO_AKUN.email || password !== DEMO_AKUN.password) {
     return false;
   }
-  set({ signedIn: true, profile: { ...get().profile, email: DEMO_AKUN.email } });
+  set({ ready: true, signedIn: true, profile: { ...get().profile, email: DEMO_AKUN.email } });
   return true;
 }
 
