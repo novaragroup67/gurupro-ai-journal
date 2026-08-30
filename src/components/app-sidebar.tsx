@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Archive,
   BookOpen,
@@ -27,6 +27,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { logout } from "@/lib/auth-store";
 
 const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
@@ -44,6 +45,7 @@ const secondaryItems = [
 
 export function AppSidebar() {
   const { isMobile, setOpenMobile } = useSidebar();
+  const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   const isActive = (url: string, exact?: boolean) =>
