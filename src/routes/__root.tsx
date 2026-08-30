@@ -156,10 +156,10 @@ function AppShell({ children }: { children: ReactNode }) {
     if (ready && !signedIn) navigate({ to: "/login", replace: true });
   }, [ready, signedIn, navigate]);
 
-  if (ready && !signedIn) {
+  if (!ready || !signedIn) {
     return (
       <div className="grid min-h-screen place-items-center px-4">
-        <p className="text-sm text-muted-foreground">Mengalihkan ke halaman login…</p>
+        <p className="text-sm text-muted-foreground">Memuat GuruPro…</p>
       </div>
     );
   }
