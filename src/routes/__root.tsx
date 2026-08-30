@@ -4,18 +4,30 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useNavigate,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { Search } from "lucide-react";
+import { LogOut, Search, UserRound } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
+import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { GuruProMark } from "@/components/gurupro-logo";
 import { NotificationMenu } from "@/components/notification-menu";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { initials, logout, useAuth } from "@/lib/auth-store";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -119,52 +131,110 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isLoginRoute = pathname === "/login";
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SidebarProvider>
-        <div className="flex min-h-screen w-full bg-background">
-          <AppSidebar />
-
-          <div className="flex min-w-0 flex-1 flex-col">
-            <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-card/85 px-4 backdrop-blur sm:px-6">
-              <SidebarTrigger className="shrink-0" />
-              <div className="flex min-w-0 flex-1 items-center gap-2 md:hidden">
-                <GuruProMark className="h-7 w-7 shrink-0" />
-                <span className="font-display text-base font-bold text-navy">
-                  Guru<span className="text-primary">Pro</span>
-                </span>
-              </div>
-              <div className="ml-auto flex items-center gap-2">
-                <Button variant="ghost" size="icon" aria-label="Cari" className="hidden sm:inline-flex">
-                  <Search className="h-4 w-4" />
-                </Button>
-                <NotificationMenu />
-
-                <div className="flex min-w-0 items-center gap-2 rounded-full border bg-background py-1 pl-1 pr-3">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-gradient text-xs font-bold text-navy-foreground">
-                    BS
-                  </span>
-                  <span className="hidden min-w-0 leading-tight sm:block">
-                    <span className="block truncate text-xs font-semibold">Bu Sari</span>
-                    <span className="block truncate text-[11px] text-muted-foreground">
-                      Guru RPL
-                    </span>
-                  </span>
-                </div>
-              </div>
-            </header>
-
-            <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
-              <div className="mx-auto w-full max-w-6xl">
-                {/* Required: nested routes render here. */}
-                <Outlet />
-              </div>
-            </main>
-          </div>
-        </div>
-        <Toaster position="bottom-right" richColors />
-      </SidebarProvider>
+      {isLoginRoute ? (
+        <Outlet />
+      ) : (
+        <AppShell>
+          <Outlet />
+        </AppShell>
+      )}
+      <Toaster position="bottom-right" richColors />
     </QueryClientProvider>
+  );
+}
+
+function AppShell({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
+  const { ready, signedIn, profile } = useAuth();
+
+  useEffect(() => {
+    if (ready && !signedIn) navigate({ to: "/login", replace: true });
+  }, [ready, signedIn, navigate]);
+
+  if (!ready || !signedIn) {
+    return (
+      <div className="grid min-h-screen place-items-center px-4">
+        <p className="text-sm text-muted-foreground">Memuat GuruPro…</p>
+      </div>
+    );
+  }
+
+  return (
+    <SidebarProvider>
+      <div className="flex min-h-screen w-full bg-background">
+        <AppSidebar />
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-card/85 px-4 backdrop-blur sm:px-6">
+            <SidebarTrigger className="shrink-0" />
+            <div className="flex min-w-0 flex-1 items-center gap-2 md:hidden">
+              <GuruProMark className="h-7 w-7 shrink-0" />
+              <span className="font-display text-base font-bold text-navy">
+                Guru<span className="text-primary">Pro</span>
+              </span>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <Button variant="ghost" size="icon" aria-label="Cari" className="hidden sm:inline-flex">
+                <Search className="h-4 w-4" />
+              </Button>
+              <NotificationMenu />
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex min-w-0 items-center gap-2 rounded-full border bg-background py-1 pl-1 pr-3 transition-colors hover:bg-muted/60"
+                    aria-label="Menu akun"
+                  >
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-gradient text-xs font-bold text-navy-foreground">
+                      {initials(profile.nama)}
+                    </span>
+                    <span className="hidden min-w-0 text-left leading-tight sm:block">
+                      <span className="block truncate text-xs font-semibold">{profile.nama}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {profile.mapel || "Guru"}
+                      </span>
+                    </span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="truncate">{profile.email}</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/profil">
+                      <UserRound className="h-4 w-4" />
+                      Profil Saya
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onSelect={() => {
+                      logout();
+                      toast.success("Anda telah keluar dari GuruPro.");
+                      navigate({ to: "/login", replace: true });
+                    }}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Log Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </header>
+
+          <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+            <div className="mx-auto w-full max-w-6xl">
+              {/* Required: nested routes render here. */}
+              {children}
+            </div>
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 }

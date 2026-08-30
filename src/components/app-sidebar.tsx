@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Archive,
   BookOpen,
@@ -27,6 +27,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { logout } from "@/lib/auth-store";
 
 const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
@@ -44,6 +45,7 @@ const secondaryItems = [
 
 export function AppSidebar() {
   const { isMobile, setOpenMobile } = useSidebar();
+  const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   const isActive = (url: string, exact?: boolean) =>
@@ -97,7 +99,9 @@ export function AppSidebar() {
                   className="gap-3 text-sidebar-foreground/80"
                   onClick={() => {
                     closeOnMobile();
-                    toast.success("Anda telah keluar (prototipe).");
+                    logout();
+                    toast.success("Anda telah keluar dari GuruPro.");
+                    navigate({ to: "/login", replace: true });
                   }}
                 >
                   <LogOut className="h-4 w-4 shrink-0" />
