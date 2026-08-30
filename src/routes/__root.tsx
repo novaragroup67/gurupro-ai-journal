@@ -4,18 +4,30 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useNavigate,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { Search } from "lucide-react";
+import { LogOut, Search, UserRound } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
+import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { GuruProMark } from "@/components/gurupro-logo";
 import { NotificationMenu } from "@/components/notification-menu";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { initials, logout, useAuth } from "@/lib/auth-store";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
