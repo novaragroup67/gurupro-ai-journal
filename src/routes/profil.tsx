@@ -68,7 +68,7 @@ function ProfilPage() {
       toast.error("Nama dan email wajib diisi.");
       return;
     }
-    updateProfile(draft);
+    void updateProfile(draft);
     setEdit(false);
     toast.success("Profil berhasil diperbarui.");
   };
@@ -195,9 +195,9 @@ function ProfilPage() {
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
-                logout();
+                void logout();
                 toast.success("Anda telah keluar dari GuruPro.");
-                navigate({ to: "/login", replace: true });
+                navigate({ to: "/auth", replace: true });
               }}
             >
               Log Out

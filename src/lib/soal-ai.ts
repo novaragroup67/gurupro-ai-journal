@@ -1,4 +1,4 @@
-import { uid } from "./local-store";
+import { uid } from "./cloud-store";
 import type { JenisSoal, Soal, Tingkat } from "./soal-types";
 
 const STEM_MUDAH = [

@@ -171,7 +171,7 @@ export function ModulEditor({
                   </div>
                 </>
               ) : (
-                <p className="text-sm leading-relaxed text-muted-foreground">{modul.ringkasan}</p>
+                <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{modul.ringkasan}</p>
               )}
             </CardContent>
           </Card>
@@ -215,7 +215,7 @@ export function ModulEditor({
                         </li>
                       ))}
                     </ul>
-                    <p className="text-sm leading-relaxed text-muted-foreground">{s.isi}</p>
+                    <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{s.isi}</p>
                   </>
                 )}
                 {s.ilustrasi ? (

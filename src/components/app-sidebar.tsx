@@ -30,7 +30,7 @@ import {
 import { logout } from "@/lib/auth-store";
 
 const mainItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, exact: true },
   { title: "Modul Ajar", url: "/modul-ajar", icon: BookOpen },
   { title: "Soal", url: "/soal", icon: FileQuestion },
   { title: "Penugasan", url: "/penugasan", icon: ClipboardList },
@@ -77,7 +77,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
-        <Link to="/" onClick={closeOnMobile} className="flex min-w-0 items-center">
+        <Link to="/dashboard" onClick={closeOnMobile} className="flex min-w-0 items-center">
           <GuruProLogo variant="light" className="group-data-[collapsible=icon]:gap-0" />
         </Link>
       </SidebarHeader>
@@ -99,9 +99,9 @@ export function AppSidebar() {
                   className="gap-3 text-sidebar-foreground/80"
                   onClick={() => {
                     closeOnMobile();
-                    logout();
+                    void logout();
                     toast.success("Anda telah keluar dari GuruPro.");
-                    navigate({ to: "/login", replace: true });
+                    navigate({ to: "/auth", replace: true });
                   }}
                 >
                   <LogOut className="h-4 w-4 shrink-0" />
