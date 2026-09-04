@@ -1,5 +1,5 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Eye, EyeOff, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, GraduationCap, Loader2, Paperclip, Sparkles, User } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { login, register, resetPassword, useAuth } from "@/lib/auth-store";
+import { cn } from "@/lib/utils";
 
 type Mode = "login" | "daftar" | "lupa";
 
@@ -43,10 +44,25 @@ function AuthPage() {
   const search = Route.useSearch();
   const { ready, signedIn } = useAuth();
 
+  type Role = "guru" | "siswa";
   const [mode, setMode] = useState<Mode>(search.mode ?? "login");
+  const [role, setRole] = useState<Role>("guru");
   const [nama, setNama] = useState("");
   const [email, setEmail] = useState("");
+  const [telepon, setTelepon] = useState("");
+  const [sekolah, setSekolah] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  // Guru fields
+  const [mapel, setMapel] = useState("");
+  const [nip, setNip] = useState("");
+
+  // Siswa fields
+  const [kelas, setKelas] = useState("");
+  const [nis, setNis] = useState("");
+  const [kartuPelajarName, setKartuPelajarName] = useState("");
+
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [info, setInfo] = useState("");
@@ -67,9 +83,46 @@ function AuthPage() {
       toast.error("Password minimal 6 karakter.");
       return;
     }
-    if (mode === "daftar" && !nama.trim()) {
-      toast.error("Nama lengkap wajib diisi.");
-      return;
+    if (mode === "daftar") {
+      if (!nama.trim()) {
+        toast.error("Nama lengkap wajib diisi.");
+        return;
+      }
+      if (!telepon.trim()) {
+        toast.error("Nomor HP / WhatsApp wajib diisi.");
+        return;
+      }
+      if (!sekolah.trim()) {
+        toast.error("Asal sekolah wajib diisi.");
+        return;
+      }
+      if (role === "guru") {
+        if (!mapel.trim()) {
+          toast.error("Mata pelajaran yang diampu wajib diisi.");
+          return;
+        }
+        if (!nip.trim()) {
+          toast.error("NIP / NUPTK wajib diisi.");
+          return;
+        }
+      } else {
+        if (!kelas.trim()) {
+          toast.error("Kelas wajib diisi.");
+          return;
+        }
+        if (!nis.trim()) {
+          toast.error("NIS / NISN wajib diisi.");
+          return;
+        }
+        if (!kartuPelajarName) {
+          toast.error("Unggah foto Kartu Pelajar sebagai bukti identitas.");
+          return;
+        }
+      }
+      if (password !== confirmPassword) {
+        toast.error("Konfirmasi password tidak cocok.");
+        return;
+      }
     }
 
     setLoading(true);
@@ -86,7 +139,18 @@ function AuthPage() {
       }
 
       if (mode === "daftar") {
-        const res = await register(nama, mail, password);
+        const res = await register({
+          nama,
+          email: mail,
+          password,
+          role,
+          telepon,
+          sekolah,
+          mapel: role === "guru" ? mapel : "Siswa",
+          nip: role === "guru" ? nip : nis,
+          kelas: role === "siswa" ? kelas : "",
+          nis: role === "siswa" ? nis : "",
+        });
         if (!res.ok) {
           toast.error(res.message);
           return;
@@ -97,7 +161,11 @@ function AuthPage() {
           toast.success("Pendaftaran berhasil, cek email konfirmasi.");
           return;
         }
-        toast.success("Akun dibuat. Selamat bergabung di GuruPro!");
+        toast.success(
+          role === "guru"
+            ? "Akun guru berhasil dibuat. Selamat bergabung di GuruPro!"
+            : "Akun siswa berhasil dibuat. Selamat belajar!",
+        );
         navigate({ to: "/dashboard", replace: true });
         return;
       }
@@ -139,7 +207,7 @@ function AuthPage() {
       </aside>
 
       <main className="flex items-center justify-center px-4 py-10 sm:px-8">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-lg">
           <div className="mb-6 flex items-center justify-between lg:hidden">
             <GuruProLogo />
             <Button asChild variant="ghost" size="sm">
@@ -165,33 +233,171 @@ function AuthPage() {
 
           <h1 className="mt-6 font-display text-2xl font-bold text-navy sm:text-3xl">
             {mode === "daftar"
-              ? "Buat akun guru"
+              ? role === "guru"
+                ? "Buat akun guru"
+                : "Buat akun siswa"
               : mode === "lupa"
                 ? "Atur ulang password"
                 : "Masuk ke GuruPro"}
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
             {mode === "daftar"
-              ? "Gratis, cukup nama, email, dan password."
+              ? role === "guru"
+                ? "Daftar akun guru untuk menyusun modul & bank soal AI."
+                : "Daftar akun siswa untuk akses penugasan & materi."
               : mode === "lupa"
                 ? "Kami kirim tautan atur ulang ke email Anda."
-                : "Gunakan email dan password akun guru Anda."}
+                : "Gunakan email dan password akun Anda."}
           </p>
 
           <Card className="mt-6">
             <CardContent className="p-5 sm:p-6">
               <form className="grid gap-4" onSubmit={submit} noValidate>
                 {mode === "daftar" ? (
-                  <div className="grid gap-2">
-                    <Label htmlFor="nama">Nama Lengkap</Label>
-                    <Input
-                      id="nama"
-                      autoComplete="name"
-                      value={nama}
-                      onChange={(e) => setNama(e.target.value)}
-                      placeholder="Misal: Sari Wulandari"
-                    />
-                  </div>
+                  <>
+                    {/* Role Selector */}
+                    <div className="grid gap-2">
+                      <Label>Daftar Sebagai</Label>
+                      <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/60 p-1">
+                        <button
+                          type="button"
+                          onClick={() => setRole("guru")}
+                          className={cn(
+                            "flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold transition-all",
+                            role === "guru"
+                              ? "bg-card text-navy shadow-sm"
+                              : "text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          <GraduationCap className="h-4 w-4 text-primary" />
+                          Guru / Pengajar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRole("siswa")}
+                          className={cn(
+                            "flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold transition-all",
+                            role === "siswa"
+                              ? "bg-card text-navy shadow-sm"
+                              : "text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          <User className="h-4 w-4 text-accent" />
+                          Siswa
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Nama Lengkap */}
+                    <div className="grid gap-2">
+                      <Label htmlFor="nama">Nama Lengkap</Label>
+                      <Input
+                        id="nama"
+                        autoComplete="name"
+                        value={nama}
+                        onChange={(e) => setNama(e.target.value)}
+                        placeholder={role === "guru" ? "Misal: Sari Wulandari, S.Pd." : "Misal: Budi Santoso"}
+                      />
+                    </div>
+
+                    {/* Nomor Telepon & Asal Sekolah */}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label htmlFor="telepon">Nomor WhatsApp / HP</Label>
+                        <Input
+                          id="telepon"
+                          type="tel"
+                          value={telepon}
+                          onChange={(e) => setTelepon(e.target.value)}
+                          placeholder="0812-3456-7890"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="sekolah">Asal Sekolah</Label>
+                        <Input
+                          id="sekolah"
+                          value={sekolah}
+                          onChange={(e) => setSekolah(e.target.value)}
+                          placeholder="SMK Negeri 1 ..."
+                        />
+                      </div>
+                    </div>
+
+                    {/* Field Khusus Guru */}
+                    {role === "guru" && (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid gap-2">
+                          <Label htmlFor="mapel">Mata Pelajaran</Label>
+                          <Input
+                            id="mapel"
+                            value={mapel}
+                            onChange={(e) => setMapel(e.target.value)}
+                            placeholder="Matematika / RPL"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="nip">NIP / NUPTK</Label>
+                          <Input
+                            id="nip"
+                            value={nip}
+                            onChange={(e) => setNip(e.target.value)}
+                            placeholder="19850312..."
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Field Khusus Siswa */}
+                    {role === "siswa" && (
+                      <>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="grid gap-2">
+                            <Label htmlFor="kelas">Kelas</Label>
+                            <Input
+                              id="kelas"
+                              value={kelas}
+                              onChange={(e) => setKelas(e.target.value)}
+                              placeholder="Misal: XII RPL 1"
+                            />
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="nis">NIS / NISN</Label>
+                            <Input
+                              id="nis"
+                              value={nis}
+                              onChange={(e) => setNis(e.target.value)}
+                              placeholder="0051234567"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label htmlFor="kartuPelajar">Upload Foto Kartu Pelajar</Label>
+                          <label className="flex cursor-pointer items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-xs text-muted-foreground hover:bg-muted/50">
+                            <span className="flex items-center gap-2 truncate">
+                              <Paperclip className="h-3.5 w-3.5 shrink-0 text-primary" />
+                              <span className="truncate">
+                                {kartuPelajarName || "Pilih foto Kartu Pelajar (JPG, PNG, PDF)"}
+                              </span>
+                            </span>
+                            <span className="ml-2 shrink-0 rounded bg-muted px-2 py-0.5 text-[10px] font-medium text-foreground">
+                              Pilih File
+                            </span>
+                            <input
+                              id="kartuPelajar"
+                              type="file"
+                              accept="image/*,.pdf"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) setKartuPelajarName(f.name);
+                              }}
+                            />
+                          </label>
+                        </div>
+                      </>
+                    )}
+                  </>
                 ) : null}
 
                 <div className="grid gap-2">
@@ -207,28 +413,66 @@ function AuthPage() {
                 </div>
 
                 {mode !== "lupa" ? (
-                  <div className="grid gap-2">
-                    <Label htmlFor="password">Password</Label>
-                    <div className="relative">
-                      <Input
-                        id="password"
-                        type={show ? "text" : "password"}
-                        autoComplete={mode === "daftar" ? "new-password" : "current-password"}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Minimal 6 karakter"
-                        className="pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShow((s) => !s)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:bg-muted"
-                        aria-label={show ? "Sembunyikan password" : "Tampilkan password"}
-                      >
-                        {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
+                  mode === "daftar" ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label htmlFor="password">Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="password"
+                            type={show ? "text" : "password"}
+                            autoComplete="new-password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="Min. 6 karakter"
+                            className="pr-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShow((s) => !s)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:bg-muted"
+                            aria-label={show ? "Sembunyikan password" : "Tampilkan password"}
+                          >
+                            {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="confirmPassword">Ulangi Password</Label>
+                        <Input
+                          id="confirmPassword"
+                          type={show ? "text" : "password"}
+                          autoComplete="new-password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="Konfirmasi password"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="grid gap-2">
+                      <Label htmlFor="password">Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="password"
+                          type={show ? "text" : "password"}
+                          autoComplete="current-password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="Minimal 6 karakter"
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShow((s) => !s)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:bg-muted"
+                          aria-label={show ? "Sembunyikan password" : "Tampilkan password"}
+                        >
+                          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  )
                 ) : null}
 
                 {info ? (
@@ -238,7 +482,9 @@ function AuthPage() {
                 <Button type="submit" disabled={loading}>
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   {mode === "daftar"
-                    ? "Daftar Sekarang"
+                    ? role === "guru"
+                      ? "Daftar Sebagai Guru"
+                      : "Daftar Sebagai Siswa"
                     : mode === "lupa"
                       ? "Kirim Tautan Atur Ulang"
                       : "Masuk"}

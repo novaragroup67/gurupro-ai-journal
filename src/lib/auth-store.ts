@@ -12,6 +12,7 @@ export interface GuruProfile {
   kelas: string;
   telepon: string;
   bio: string;
+  role?: "guru" | "siswa";
 }
 
 export interface AuthState {
@@ -101,22 +102,62 @@ export function useAuth(): AuthState {
   return current;
 }
 
-export async function register(nama: string, email: string, password: string) {
+export interface RegisterParams {
+  nama: string;
+  email: string;
+  password: string;
+  role?: "guru" | "siswa";
+  telepon?: string;
+  sekolah?: string;
+  mapel?: string;
+  nip?: string;
+  kelas?: string;
+  nis?: string;
+}
+
+export async function register(
+  paramOrNama: string | RegisterParams,
+  emailArg?: string,
+  passwordArg?: string,
+) {
+  const params: RegisterParams =
+    typeof paramOrNama === "object"
+      ? paramOrNama
+      : { nama: paramOrNama, email: emailArg ?? "", password: passwordArg ?? "" };
+
   const { data, error } = await supabase.auth.signUp({
-    email: email.trim(),
-    password,
+    email: params.email.trim(),
+    password: params.password,
     options: {
       emailRedirectTo: `${window.location.origin}/auth`,
-      data: { nama: nama.trim() },
+      data: {
+        nama: params.nama.trim(),
+        role: params.role ?? "guru",
+        telepon: params.telepon?.trim() ?? "",
+        sekolah: params.sekolah?.trim() ?? "",
+        mapel: params.mapel?.trim() ?? "",
+        nip: params.nip?.trim() ?? "",
+        kelas: params.kelas?.trim() ?? "",
+        nis: params.nis?.trim() ?? "",
+      },
     },
   });
   if (error) return { ok: false as const, message: error.message };
-  if (data.user && data.session) {
-    await supabase
-      .from("profiles")
-      .upsert({ id: data.user.id, email: email.trim(), nama: nama.trim() });
-    await syncSession(data.user.id, data.user.email ?? email);
-    return { ok: true as const, needsConfirm: false };
+  if (data.user) {
+    await supabase.from("profiles").upsert({
+      id: data.user.id,
+      email: params.email.trim(),
+      nama: params.nama.trim(),
+      telepon: params.telepon?.trim() ?? "",
+      sekolah: params.sekolah?.trim() ?? "",
+      mapel: params.mapel?.trim() ?? "",
+      nip: params.nip?.trim() ?? "",
+      kelas: params.kelas?.trim() ?? "",
+    });
+    if (data.session) {
+      await syncSession(data.user.id, data.user.email ?? params.email);
+      return { ok: true as const, needsConfirm: false };
+    }
   }
   return { ok: true as const, needsConfirm: true };
 }
