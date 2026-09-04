@@ -11,7 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ArsipRouteImport } from './routes/arsip'
-import { Route as LoginRouteImport } from './routes/login'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ModulAjarRouteImport } from './routes/modul-ajar'
 import { Route as PenilaianRouteImport } from './routes/penilaian'
 import { Route as PenugasanRouteImport } from './routes/penugasan'
@@ -29,9 +30,14 @@ const ArsipRoute = ArsipRouteImport.update({
   path: '/arsip',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ModulAjarRoute = ModulAjarRouteImport.update({
@@ -68,7 +74,8 @@ const VerifikasiRoute = VerifikasiRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/arsip': typeof ArsipRoute
-  '/login': typeof LoginRoute
+  '/auth': typeof AuthRoute
+  '/dashboard': typeof DashboardRoute
   '/modul-ajar': typeof ModulAjarRoute
   '/penilaian': typeof PenilaianRoute
   '/penugasan': typeof PenugasanRoute
@@ -79,7 +86,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/arsip': typeof ArsipRoute
-  '/login': typeof LoginRoute
+  '/auth': typeof AuthRoute
+  '/dashboard': typeof DashboardRoute
   '/modul-ajar': typeof ModulAjarRoute
   '/penilaian': typeof PenilaianRoute
   '/penugasan': typeof PenugasanRoute
@@ -91,7 +99,8 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/arsip': typeof ArsipRoute
-  '/login': typeof LoginRoute
+  '/auth': typeof AuthRoute
+  '/dashboard': typeof DashboardRoute
   '/modul-ajar': typeof ModulAjarRoute
   '/penilaian': typeof PenilaianRoute
   '/penugasan': typeof PenugasanRoute
@@ -104,7 +113,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/arsip'
-    | '/login'
+    | '/auth'
+    | '/dashboard'
     | '/modul-ajar'
     | '/penilaian'
     | '/penugasan'
@@ -115,7 +125,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/arsip'
-    | '/login'
+    | '/auth'
+    | '/dashboard'
     | '/modul-ajar'
     | '/penilaian'
     | '/penugasan'
@@ -126,7 +137,8 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/arsip'
-    | '/login'
+    | '/auth'
+    | '/dashboard'
     | '/modul-ajar'
     | '/penilaian'
     | '/penugasan'
@@ -138,7 +150,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ArsipRoute: typeof ArsipRoute
-  LoginRoute: typeof LoginRoute
+  AuthRoute: typeof AuthRoute
+  DashboardRoute: typeof DashboardRoute
   ModulAjarRoute: typeof ModulAjarRoute
   PenilaianRoute: typeof PenilaianRoute
   PenugasanRoute: typeof PenugasanRoute
@@ -163,11 +176,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ArsipRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/modul-ajar': {
@@ -218,7 +238,8 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ArsipRoute: ArsipRoute,
-  LoginRoute: LoginRoute,
+  AuthRoute: AuthRoute,
+  DashboardRoute: DashboardRoute,
   ModulAjarRoute: ModulAjarRoute,
   PenilaianRoute: PenilaianRoute,
   PenugasanRoute: PenugasanRoute,

@@ -24,6 +24,9 @@ export interface Modul {
   status: ModulStatus;
   sumberTipe: SumberTipe;
   sumberInput: string;
+  sumberUrl?: string | undefined;
+  sumberJudul?: string | undefined;
+  sumberKutipan?: string | undefined;
   ringkasan: string;
   sections: ModulSection[];
   slides: Slide[];

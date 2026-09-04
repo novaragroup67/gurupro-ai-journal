@@ -43,7 +43,7 @@ function NotFoundComponent() {
         </p>
         <div className="mt-6">
           <Button asChild>
-            <Link to="/">Kembali ke Dashboard</Link>
+            <Link to="/dashboard">Kembali ke Dashboard</Link>
           </Button>
         </div>
       </div>
@@ -132,11 +132,11 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const isLoginRoute = pathname === "/login";
+  const isPublicRoute = pathname === "/" || pathname === "/auth";
 
   return (
     <QueryClientProvider client={queryClient}>
-      {isLoginRoute ? (
+      {isPublicRoute ? (
         <Outlet />
       ) : (
         <AppShell>
@@ -153,7 +153,7 @@ function AppShell({ children }: { children: ReactNode }) {
   const { ready, signedIn, profile } = useAuth();
 
   useEffect(() => {
-    if (ready && !signedIn) navigate({ to: "/login", replace: true });
+    if (ready && !signedIn) navigate({ to: "/auth", replace: true });
   }, [ready, signedIn, navigate]);
 
   if (!ready || !signedIn) {
@@ -214,9 +214,9 @@ function AppShell({ children }: { children: ReactNode }) {
                   <DropdownMenuItem
                     className="text-destructive"
                     onSelect={() => {
-                      logout();
+                      void logout();
                       toast.success("Anda telah keluar dari GuruPro.");
-                      navigate({ to: "/login", replace: true });
+                      navigate({ to: "/auth", replace: true });
                     }}
                   >
                     <LogOut className="h-4 w-4" />

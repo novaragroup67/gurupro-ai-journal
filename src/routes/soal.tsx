@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowLeft,
   Copy,
@@ -55,8 +56,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useModuls } from "@/lib/modul-store";
 import { KELAS } from "@/lib/modul-types";
-import { uid } from "@/lib/local-store";
-import { INSTRUKSI_AI, generateSoal, reviseSoalWithAi } from "@/lib/soal-ai";
+import { uid } from "@/lib/cloud-store";
+import { INSTRUKSI_AI } from "@/lib/soal-ai";
+import { generateSoalAi, reviseSoalAi } from "@/lib/ai.functions";
 import {
   addPaket,
   deletePaket,
@@ -93,6 +95,8 @@ type Mode = "bank" | "buat" | "review";
 
 function SoalPage() {
   const moduls = useModuls();
+  const generateAi = useServerFn(generateSoalAi);
+  const reviseAi = useServerFn(reviseSoalAi);
   const pakets = usePaketSoal();
 
   const [mode, setMode] = useState<Mode>("bank");
@@ -147,7 +151,19 @@ function SoalPage() {
     setMKunci("");
   };
 
-  const runGenerate = () => {
+  const materiModul = (id: string) => {
+    const m = moduls.find((x) => x.id === id);
+    if (!m) return "";
+    return [
+      m.judul,
+      m.ringkasan,
+      ...m.sections.map((sec) => `${sec.judul}\n${sec.poin.map((p) => `- ${p}`).join("\n")}\n${sec.isi}`),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  };
+
+  const runGenerate = async () => {
     const modul = moduls.find((m) => m.id === modulId);
     const t = topik.trim() || modul?.judul.replace(/^Modul Ajar:\s*/, "") || "";
     if (!t) {
@@ -155,21 +171,36 @@ function SoalPage() {
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      const hasil = generateSoal({
-        topik: t,
-        jumlah: Number(jumlah) || 5,
-        tingkat,
-        jenis,
-        ...(modul ? { konteks: modul.judul } : {}),
+    try {
+      const hasil = await generateAi({
+        data: {
+          topik: t,
+          jumlah: Number(jumlah) || 5,
+          tingkat,
+          jenis,
+          materi: modul ? materiModul(modul.id) : "",
+        },
       });
+      const unik: Soal[] = [];
+      for (const h of hasil) {
+        const key = h.pertanyaan.trim().toLowerCase();
+        if (!key || unik.some((u) => u.pertanyaan.trim().toLowerCase() === key)) continue;
+        unik.push({ id: uid(), pertanyaan: h.pertanyaan, jenis: h.jenis, opsi: h.opsi, kunci: h.kunci });
+      }
+      if (unik.length === 0) {
+        toast.error("AI belum menghasilkan soal yang valid. Coba lagi.");
+        return;
+      }
       setTopik(t);
       setJudul(judul.trim() || t);
-      setDraftSoal(hasil);
-      setLoading(false);
+      setDraftSoal(unik);
       setMode("review");
-      toast.success(`${hasil.length} soal berhasil dibuat GuruPro AI.`);
-    }, 1500);
+      toast.success(`${unik.length} soal berhasil dibuat GuruPro AI.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "AI gagal membuat soal.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const addManual = () => {
@@ -190,24 +221,34 @@ function SoalPage() {
     toast.success("Soal ditambahkan ke draf.");
   };
 
-  const simpanKeBank = (status: "Draft" | "Terbit") => {
+  const simpanKeBank = async (status: "Draft" | "Terbit") => {
     if (draftSoal.length === 0) {
       toast.error("Belum ada soal pada draf ini.");
       return;
     }
     const judulFinal = judul.trim() || topik.trim() || "Paket Soal Baru";
-    if (paketId) {
-      updatePaket(paketId, { judul: judulFinal, topik: topik.trim() || judulFinal, soal: draftSoal, status });
-    } else {
-      const created = addPaket({
-        judul: judulFinal,
-        topik: topik.trim() || judulFinal,
-        modulId: modulId || undefined,
-        status,
-        kelas: [],
-        soal: draftSoal,
-      });
-      setPaketId(created.id);
+    try {
+      if (paketId) {
+        await updatePaket(paketId, {
+          judul: judulFinal,
+          topik: topik.trim() || judulFinal,
+          soal: draftSoal,
+          status,
+        });
+      } else {
+        const created = await addPaket({
+          judul: judulFinal,
+          topik: topik.trim() || judulFinal,
+          modulId: modulId || undefined,
+          status,
+          kelas: [],
+          soal: draftSoal,
+        });
+        setPaketId(created.id);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal menyimpan ke Bank Soal.");
+      return;
     }
     toast.success(status === "Terbit" ? "Soal berhasil diterbitkan." : "Soal disimpan ke Bank Soal.");
     if (status === "Terbit") {
@@ -216,20 +257,35 @@ function SoalPage() {
     }
   };
 
-  const applyAiRevisi = () => {
+  const applyAiRevisi = async () => {
     if (!aiTarget || !instruksi.trim()) {
       toast.error("Pilih instruksi revisi terlebih dahulu.");
       return;
     }
+    const target = aiTarget;
     setAiLoading(true);
-    setTimeout(() => {
-      const revised = reviseSoalWithAi(aiTarget, instruksi);
-      setDraftSoal((prev) => prev.map((s) => (s.id === aiTarget.id ? revised : s)));
-      setAiLoading(false);
+    try {
+      const revised = await reviseAi({
+        data: {
+          soal: {
+            pertanyaan: target.pertanyaan,
+            jenis: target.jenis,
+            opsi: target.opsi,
+            kunci: target.kunci,
+          },
+          instruksi,
+          materi: modulId ? materiModul(modulId) : "",
+        },
+      });
+      setDraftSoal((prev) => prev.map((s2) => (s2.id === target.id ? { ...s2, ...revised } : s2)));
       setAiTarget(null);
       setInstruksi("");
       toast.success("Soal direvisi AI.");
-    }, 1100);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "AI gagal merevisi soal.");
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   if (mode === "buat") {
@@ -781,7 +837,7 @@ function SoalPage() {
                   toast.error("Pilih minimal satu kelas.");
                   return;
                 }
-                if (terbitTarget) terbitkanSebagaiTugas(terbitTarget.id, kelasPilihan);
+                if (terbitTarget) void terbitkanSebagaiTugas(terbitTarget.id, kelasPilihan);
                 setTerbitTarget(null);
                 toast.success("Soal diterbitkan sebagai tugas.");
               }}
@@ -806,7 +862,7 @@ function SoalPage() {
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
-                if (hapus) deletePaket(hapus.id);
+                if (hapus) void deletePaket(hapus.id);
                 setHapus(null);
                 toast.success("Paket soal dihapus.");
               }}
@@ -844,7 +900,7 @@ function PaketActions({
           size="sm"
           variant="secondary"
           onClick={() => {
-            publishPaket(paket.id);
+            void publishPaket(paket.id);
             toast.success("Soal berhasil diterbitkan.");
           }}
         >
@@ -862,7 +918,7 @@ function PaketActions({
         variant="ghost"
         aria-label="Duplikat paket soal"
         onClick={() => {
-          duplicatePaket(paket.id);
+          void duplicatePaket(paket.id);
           toast.success("Paket soal diduplikasi sebagai draft.");
         }}
       >

@@ -1,142 +1,137 @@
-import { createLocalStore, uid } from "./local-store";
+import { supabase } from "@/integrations/supabase/client";
+import { createCloudStore, uid } from "./cloud-store";
 import { buatIlustrasi } from "./modul-ai";
-import type { Modul, ModulSection } from "./modul-types";
+import type { Modul, ModulSection, ModulStatus, Slide, SumberTipe } from "./modul-types";
 
-function seedSection(judul: string, poin: string[], isi: string): ModulSection {
-  return { id: uid(), judul, poin, isi };
+type Row = {
+  id: string;
+  judul: string;
+  kelas: string;
+  mapel: string;
+  status: string;
+  sumber_tipe: string;
+  sumber_input: string;
+  sumber_url: string | null;
+  sumber_judul: string | null;
+  sumber_kutipan: string | null;
+  ringkasan: string;
+  sections: unknown;
+  slides: unknown;
+  created_at: string;
+  updated_at: string;
+};
+
+function toModul(row: Row): Modul {
+  return {
+    id: row.id,
+    judul: row.judul,
+    kelas: row.kelas,
+    mapel: row.mapel,
+    status: (row.status as ModulStatus) ?? "Draft",
+    sumberTipe: (row.sumber_tipe as SumberTipe) ?? "Link Luar",
+    sumberInput: row.sumber_input ?? "",
+    sumberUrl: row.sumber_url ?? undefined,
+    sumberJudul: row.sumber_judul ?? undefined,
+    sumberKutipan: row.sumber_kutipan ?? undefined,
+    ringkasan: row.ringkasan ?? "",
+    sections: (Array.isArray(row.sections) ? row.sections : []) as ModulSection[],
+    slides: (Array.isArray(row.slides) ? row.slides : []) as Slide[],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
-function seed(): Modul[] {
-  const now = new Date().toISOString();
-  return [
-    {
-      id: "spl-1",
-      judul: "Modul Ajar: Sistem Persamaan Linear",
-      kelas: "XI IPA 1",
-      mapel: "Matematika",
-      status: "Terbit",
-      sumberTipe: "CP / ATP",
-      sumberInput: "Peserta didik dapat menyelesaikan sistem persamaan linear dua variabel.",
-      ringkasan:
-        "Modul menuntun siswa memahami sistem persamaan linear dua variabel melalui pemecahan masalah kuantitatif, ditutup dengan studi kasus belanja koperasi sekolah.",
-      sections: [
-        seedSection("Pengantar Sistem Persamaan Linear", [
-          "Definisi persamaan linear dua variabel",
-          "Bentuk umum dan ciri-cirinya",
-          "Contoh kasus sehari-hari",
-        ], "Bagian ini memperkenalkan bentuk umum ax + by = c dan situasi nyata yang bisa dimodelkan dengan dua variabel."),
-        seedSection("Konsep Inti Penyelesaian", [
-          "Metode substitusi",
-          "Metode eliminasi",
-          "Metode grafik",
-        ], "Siswa membandingkan tiga metode penyelesaian dan memilih metode paling efisien untuk setiap kasus."),
-        seedSection("Penerapan Sistem Persamaan Linear", [
-          "Studi kasus: belanja koperasi sekolah",
-          "Latihan terbimbing",
-          "Latihan mandiri berjenjang",
-        ], "Siswa memodelkan transaksi koperasi menjadi sistem persamaan lalu menyelesaikannya."),
-      ],
-      slides: [],
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: "turunan-1",
-      judul: "Modul Ajar: Turunan Fungsi",
-      kelas: "XI IPA 2",
-      mapel: "Matematika",
-      status: "Draft",
-      sumberTipe: "Teks",
-      sumberInput: "Turunan fungsi aljabar dan penerapannya pada laju perubahan.",
-      ringkasan: "Draf modul turunan fungsi: konsep limit, aturan turunan, dan penerapan laju perubahan.",
-      sections: [
-        seedSection("Pengantar Turunan Fungsi", ["Gagasan laju perubahan", "Hubungan limit dan turunan"], "Turunan dipahami sebagai laju perubahan sesaat suatu fungsi."),
-        seedSection("Aturan Turunan", ["Aturan pangkat", "Aturan hasil kali", "Aturan rantai"], "Siswa berlatih menurunkan fungsi aljabar dengan tiga aturan dasar."),
-      ],
-      slides: [],
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: "trigono-1",
-      judul: "Modul Ajar: Trigonometri Dasar",
-      kelas: "X IPA 3",
-      mapel: "Matematika",
-      status: "Terbit",
-      sumberTipe: "eBook / Dokumen",
-      sumberInput: "Buku Matematika Kelas X Bab Trigonometri",
-      ringkasan: "Modul trigonometri dasar: perbandingan sudut dan sisi serta pengukuran tinggi objek.",
-      sections: [
-        seedSection("Pengantar Trigonometri", ["Sudut dan satuannya", "Perbandingan sisi segitiga"], "Bagian ini memperkenalkan sinus, cosinus, dan tangen pada segitiga siku-siku."),
-        seedSection("Penerapan Trigonometri", ["Mengukur tinggi tiang bendera", "Latihan soal kontekstual"], "Siswa mengukur tinggi objek di sekolah memakai sudut elevasi."),
-      ],
-      slides: [],
-      createdAt: now,
-      updatedAt: now,
-    },
-  ];
+function toRow(modul: Partial<Modul>) {
+  return {
+    judul: modul.judul ?? "",
+    kelas: modul.kelas ?? "",
+    mapel: modul.mapel ?? "",
+    status: modul.status ?? "Draft",
+    sumber_tipe: modul.sumberTipe ?? "Link Luar",
+    sumber_input: modul.sumberInput ?? "",
+    sumber_url: modul.sumberUrl ?? null,
+    sumber_judul: modul.sumberJudul ?? null,
+    sumber_kutipan: modul.sumberKutipan ?? null,
+    ringkasan: modul.ringkasan ?? "",
+    sections: (modul.sections ?? []) as unknown as never,
+    slides: (modul.slides ?? []) as unknown as never,
+  };
 }
 
-const store = createLocalStore<Modul>("gurupro.modul", seed);
+const store = createCloudStore<Modul>(async () => {
+  const { data, error } = await supabase
+    .from("moduls")
+    .select("*")
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return (data as unknown as Row[]).map(toModul);
+});
 
 export const useModuls = store.useItems;
+export const reloadModuls = store.reload;
 
-export function addModul(data: Omit<Modul, "id" | "createdAt" | "updatedAt">) {
-  const now = new Date().toISOString();
-  const modul: Modul = { ...data, id: uid(), createdAt: now, updatedAt: now };
+async function currentUserId() {
+  const { data } = await supabase.auth.getUser();
+  const id = data.user?.id;
+  if (!id) throw new Error("Sesi berakhir. Silakan masuk kembali.");
+  return id;
+}
+
+export async function addModul(data: Omit<Modul, "id" | "createdAt" | "updatedAt">) {
+  const user_id = await currentUserId();
+  const { data: row, error } = await supabase
+    .from("moduls")
+    .insert({ user_id, ...toRow(data) })
+    .select("*")
+    .single();
+  if (error) throw error;
+  const modul = toModul(row as unknown as Row);
   store.set([modul, ...store.get()]);
   return modul;
 }
 
-export function saveModul(modul: Modul) {
-  const exists = store.get().some((m) => m.id === modul.id);
+export async function saveModul(modul: Modul) {
   const next = { ...modul, updatedAt: new Date().toISOString() };
-  store.set(exists ? store.get().map((m) => (m.id === modul.id ? next : m)) : [next, ...store.get()]);
+  store.set(store.get().map((m) => (m.id === modul.id ? next : m)));
+  const { error } = await supabase.from("moduls").update(toRow(modul)).eq("id", modul.id);
+  if (error) throw error;
   return next;
 }
 
-export function deleteModul(id: string) {
+export async function deleteModul(id: string) {
   store.set(store.get().filter((m) => m.id !== id));
+  const { error } = await supabase.from("moduls").delete().eq("id", id);
+  if (error) throw error;
 }
 
-export function publishModul(id: string) {
-  store.set(
-    store.get().map((m) =>
-      m.id === id ? { ...m, status: "Terbit" as const, updatedAt: new Date().toISOString() } : m,
-    ),
-  );
+export async function publishModul(id: string) {
+  const found = store.get().find((m) => m.id === id);
+  if (!found) return;
+  await saveModul({ ...found, status: "Terbit" });
 }
 
-export function setIlustrasi(modulId: string, sectionId: string, ilustrasi: string | undefined) {
-  store.set(
-    store.get().map((m) =>
-      m.id === modulId
-        ? {
-            ...m,
-            sections: m.sections.map((s) => (s.id === sectionId ? { ...s, ilustrasi } : s)),
-            updatedAt: new Date().toISOString(),
-          }
-        : m,
-    ),
-  );
+export async function setIlustrasi(modulId: string, sectionId: string, ilustrasi: string | undefined) {
+  const found = store.get().find((m) => m.id === modulId);
+  if (!found) return;
+  await saveModul({
+    ...found,
+    sections: found.sections.map((s) => (s.id === sectionId ? { ...s, ilustrasi } : s)),
+  });
 }
 
-export function generateSemuaIlustrasi(modulId: string) {
-  store.set(
-    store.get().map((m) =>
-      m.id === modulId
-        ? {
-            ...m,
-            sections: m.sections.map((s) => ({ ...s, ilustrasi: buatIlustrasi(s.judul, s.poin) })),
-            updatedAt: new Date().toISOString(),
-          }
-        : m,
-    ),
-  );
+export async function generateSemuaIlustrasi(modulId: string) {
+  const found = store.get().find((m) => m.id === modulId);
+  if (!found) return;
+  await saveModul({
+    ...found,
+    sections: found.sections.map((s) => ({ ...s, ilustrasi: buatIlustrasi(s.judul, s.poin) })),
+  });
 }
 
-export function setSlides(modulId: string, slides: Modul["slides"]) {
-  store.set(
-    store.get().map((m) => (m.id === modulId ? { ...m, slides, updatedAt: new Date().toISOString() } : m)),
-  );
+export async function setSlides(modulId: string, slides: Slide[]) {
+  const found = store.get().find((m) => m.id === modulId);
+  if (!found) return;
+  await saveModul({ ...found, slides });
 }
+
+export { uid };

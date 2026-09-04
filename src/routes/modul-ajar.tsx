@@ -239,9 +239,13 @@ function ModulAjarPage() {
       <ModulGeneratorDialog
         open={openGenerator}
         onOpenChange={setOpenGenerator}
-        onGenerated={(draft) => {
-          const created = addModul(draft);
-          setEditing(created);
+        onGenerated={async (draft) => {
+          try {
+            const created = await addModul(draft);
+            setEditing(created);
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Gagal menyimpan modul.");
+          }
         }}
       />
 
@@ -250,7 +254,7 @@ function ModulAjarPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Hapus modul ini?</AlertDialogTitle>
             <AlertDialogDescription>
-              Modul &ldquo;{hapus?.judul}&rdquo; akan dihapus permanen dari perangkat Anda.
+              Modul &ldquo;{hapus?.judul}&rdquo; akan dihapus permanen dari akun Anda.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -258,7 +262,7 @@ function ModulAjarPage() {
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
-                if (hapus) deleteModul(hapus.id);
+                if (hapus) void deleteModul(hapus.id);
                 setHapus(null);
                 toast.success("Modul berhasil dihapus.");
               }}

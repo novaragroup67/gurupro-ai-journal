@@ -1,5 +1,8 @@
 import { useEffect, useSyncExternalStore } from "react";
 
+import { supabase } from "@/integrations/supabase/client";
+import { resetAllCloudStores } from "./cloud-store";
+
 export interface GuruProfile {
   nama: string;
   email: string;
@@ -14,57 +17,29 @@ export interface GuruProfile {
 export interface AuthState {
   ready: boolean;
   signedIn: boolean;
+  userId: string | null;
   profile: GuruProfile;
 }
 
-const KEY = "gurupro.auth";
-
-/** Akun demo prototipe (frontend-only, tanpa backend). */
-export const DEMO_AKUN = { email: "guru@gurupro.id", password: "gurupro123" };
-
 export const DEFAULT_PROFILE: GuruProfile = {
-  nama: "Bu Sari Wulandari",
-  email: DEMO_AKUN.email,
-  nip: "19850312 201001 2 004",
-  sekolah: "SMK Negeri 1 Nusantara",
-  mapel: "Matematika",
-  kelas: "X IPA 3, XI IPA 1, XI IPA 2",
-  telepon: "0812-3456-7890",
-  bio: "Guru matematika yang senang memanfaatkan teknologi untuk mengurangi beban administrasi.",
+  nama: "",
+  email: "",
+  nip: "",
+  sekolah: "",
+  mapel: "",
+  kelas: "",
+  telepon: "",
+  bio: "",
 };
 
-const PENDING: AuthState = { ready: false, signedIn: false, profile: DEFAULT_PROFILE };
-const LOGGED_OUT: AuthState = { ready: true, signedIn: false, profile: DEFAULT_PROFILE };
+const PENDING: AuthState = { ready: false, signedIn: false, userId: null, profile: DEFAULT_PROFILE };
 
-let state: AuthState | null = null;
+let state: AuthState = PENDING;
+let started = false;
 const listeners = new Set<() => void>();
 
 const emit = () => listeners.forEach((l) => l());
-
-function persist() {
-  if (typeof window === "undefined" || !state) return;
-  try {
-    window.localStorage.setItem(KEY, JSON.stringify(state));
-  } catch {
-    /* ignore */
-  }
-}
-
-function load() {
-  if (state || typeof window === "undefined") return;
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    state = raw
-      ? { ...LOGGED_OUT, ...(JSON.parse(raw) as AuthState), ready: true }
-      : { ...LOGGED_OUT };
-  } catch {
-    state = { ...LOGGED_OUT };
-  }
-  emit();
-}
-
-const get = () => state ?? PENDING;
-
+const get = () => state;
 const subscribe = (l: () => void) => {
   listeners.add(l);
   return () => listeners.delete(l);
@@ -72,34 +47,109 @@ const subscribe = (l: () => void) => {
 
 function set(next: AuthState) {
   state = next;
-  persist();
   emit();
 }
 
-/** ready=false selama SSR / sebelum localStorage dibaca. */
+async function loadProfile(userId: string, email: string): Promise<GuruProfile> {
+  const { data } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+  if (data) {
+    return {
+      nama: data.nama || email.split("@")[0] || "Guru",
+      email: data.email || email,
+      nip: data.nip ?? "",
+      sekolah: data.sekolah ?? "",
+      mapel: data.mapel ?? "",
+      kelas: data.kelas ?? "",
+      telepon: data.telepon ?? "",
+      bio: data.bio ?? "",
+    };
+  }
+  const fresh: GuruProfile = { ...DEFAULT_PROFILE, email, nama: email.split("@")[0] || "Guru" };
+  await supabase.from("profiles").insert({ id: userId, ...fresh });
+  return fresh;
+}
+
+async function syncSession(userId: string | null, email: string | null) {
+  if (!userId) {
+    resetAllCloudStores();
+    set({ ready: true, signedIn: false, userId: null, profile: DEFAULT_PROFILE });
+    return;
+  }
+  const profile = await loadProfile(userId, email ?? "");
+  set({ ready: true, signedIn: true, userId, profile });
+}
+
+function start() {
+  if (started || typeof window === "undefined") return;
+  started = true;
+  void supabase.auth.getSession().then(({ data }) => {
+    void syncSession(data.session?.user?.id ?? null, data.session?.user?.email ?? null);
+  });
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") return;
+    if (event === "SIGNED_OUT") resetAllCloudStores();
+    void syncSession(session?.user?.id ?? null, session?.user?.email ?? null);
+  });
+}
+
+/** ready=false selama SSR / sebelum sesi dibaca. */
 export function useAuth(): AuthState {
   const current = useSyncExternalStore(subscribe, get, () => PENDING);
   useEffect(() => {
-    load();
+    start();
   }, []);
   return current;
 }
 
-export function login(email: string, password: string): boolean {
-  load();
-  if (email.trim().toLowerCase() !== DEMO_AKUN.email || password !== DEMO_AKUN.password) {
-    return false;
+export async function register(nama: string, email: string, password: string) {
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim(),
+    password,
+    options: {
+      emailRedirectTo: `${window.location.origin}/auth`,
+      data: { nama: nama.trim() },
+    },
+  });
+  if (error) return { ok: false as const, message: error.message };
+  if (data.user && data.session) {
+    await supabase
+      .from("profiles")
+      .upsert({ id: data.user.id, email: email.trim(), nama: nama.trim() });
+    await syncSession(data.user.id, data.user.email ?? email);
+    return { ok: true as const, needsConfirm: false };
   }
-  set({ ready: true, signedIn: true, profile: { ...get().profile, email: DEMO_AKUN.email } });
-  return true;
+  return { ok: true as const, needsConfirm: true };
 }
 
-export function logout() {
-  set({ ...get(), signedIn: false });
+export async function login(email: string, password: string) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.trim(),
+    password,
+  });
+  if (error) return { ok: false as const, message: error.message };
+  await syncSession(data.user?.id ?? null, data.user?.email ?? null);
+  return { ok: true as const };
 }
 
-export function updateProfile(patch: Partial<GuruProfile>) {
-  set({ ...get(), profile: { ...get().profile, ...patch } });
+export async function resetPassword(email: string) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: `${window.location.origin}/auth`,
+  });
+  return error ? { ok: false as const, message: error.message } : { ok: true as const };
+}
+
+export async function logout() {
+  resetAllCloudStores();
+  await supabase.auth.signOut();
+  set({ ready: true, signedIn: false, userId: null, profile: DEFAULT_PROFILE });
+}
+
+export async function updateProfile(patch: Partial<GuruProfile>) {
+  const current = get();
+  if (!current.userId) return;
+  const next = { ...current.profile, ...patch };
+  set({ ...current, profile: next });
+  await supabase.from("profiles").upsert({ id: current.userId, ...next });
 }
 
 export function initials(nama: string) {

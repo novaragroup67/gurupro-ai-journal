@@ -1,4 +1,4 @@
-import { uid } from "./local-store";
+import { uid } from "./cloud-store";
 import type { Modul, ModulSection, Slide, SumberTipe } from "./modul-types";
 
 const KEYWORD_MAP: Array<{ match: RegExp; konteks: string; contoh: string }> = [
