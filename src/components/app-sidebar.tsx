@@ -15,6 +15,16 @@ import { toast } from "sonner";
 
 import { GuruProLogo } from "@/components/gurupro-logo";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -28,9 +38,10 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { logout } from "@/lib/auth-store";
+import { useState } from "react";
 
 const mainItems = [
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, exact: true },
+  { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
   { title: "Modul Ajar", url: "/modul-ajar", icon: BookOpen },
   { title: "Soal", url: "/soal", icon: FileQuestion },
   { title: "Penugasan", url: "/penugasan", icon: ClipboardList },
@@ -44,9 +55,10 @@ const secondaryItems = [
 ] as const;
 
 export function AppSidebar() {
-  const { isMobile, setOpenMobile } = useSidebar();
   const navigate = useNavigate();
+  const { isMobile, setOpenMobile } = useSidebar();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [confirmLogout, setConfirmLogout] = useState(false);
 
   const isActive = (url: string, exact?: boolean) =>
     exact ? pathname === url : pathname === url || pathname.startsWith(url + "/");
@@ -75,9 +87,10 @@ export function AppSidebar() {
   );
 
   return (
+    <>
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
-        <Link to="/dashboard" onClick={closeOnMobile} className="flex min-w-0 items-center">
+        <Link to="/" onClick={closeOnMobile} className="flex min-w-0 items-center">
           <GuruProLogo variant="light" className="group-data-[collapsible=icon]:gap-0" />
         </Link>
       </SidebarHeader>
@@ -99,9 +112,7 @@ export function AppSidebar() {
                   className="gap-3 text-sidebar-foreground/80"
                   onClick={() => {
                     closeOnMobile();
-                    void logout();
-                    toast.success("Anda telah keluar dari GuruPro.");
-                    navigate({ to: "/auth", replace: true });
+                    setConfirmLogout(true);
                   }}
                 >
                   <LogOut className="h-4 w-4 shrink-0" />
@@ -129,5 +140,30 @@ export function AppSidebar() {
         </Link>
       </SidebarFooter>
     </Sidebar>
+
+      <AlertDialog open={confirmLogout} onOpenChange={setConfirmLogout}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Keluar dari GuruPro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Anda perlu masuk kembali untuk mengakses dashboard dan menu guru.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                logout();
+                toast.success("Anda telah keluar dari GuruPro.");
+                void navigate({ to: "/login", replace: true });
+              }}
+            >
+              Log Out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

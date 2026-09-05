@@ -12,13 +12,18 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ArsipRouteImport } from './routes/arsip'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as DaftarRouteImport } from './routes/daftar'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as LandingRouteImport } from './routes/landing'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as LupaKataSandiRouteImport } from './routes/lupa-kata-sandi'
 import { Route as ModulAjarRouteImport } from './routes/modul-ajar'
 import { Route as PenilaianRouteImport } from './routes/penilaian'
 import { Route as PenugasanRouteImport } from './routes/penugasan'
 import { Route as ProfilRouteImport } from './routes/profil'
 import { Route as SoalRouteImport } from './routes/soal'
 import { Route as VerifikasiRouteImport } from './routes/verifikasi'
+import { Route as GabungKodeKelasRouteImport } from './routes/gabung.$kodeKelas'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -35,9 +40,29 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DaftarRoute = DaftarRouteImport.update({
+  id: '/daftar',
+  path: '/daftar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LandingRoute = LandingRouteImport.update({
+  id: '/landing',
+  path: '/landing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LupaKataSandiRoute = LupaKataSandiRouteImport.update({
+  id: '/lupa-kata-sandi',
+  path: '/lupa-kata-sandi',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ModulAjarRoute = ModulAjarRouteImport.update({
@@ -70,43 +95,63 @@ const VerifikasiRoute = VerifikasiRouteImport.update({
   path: '/verifikasi',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GabungKodeKelasRoute = GabungKodeKelasRouteImport.update({
+  id: '/gabung/$kodeKelas',
+  path: '/gabung/$kodeKelas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/arsip': typeof ArsipRoute
   '/auth': typeof AuthRoute
+  '/daftar': typeof DaftarRoute
   '/dashboard': typeof DashboardRoute
+  '/landing': typeof LandingRoute
+  '/login': typeof LoginRoute
+  '/lupa-kata-sandi': typeof LupaKataSandiRoute
   '/modul-ajar': typeof ModulAjarRoute
   '/penilaian': typeof PenilaianRoute
   '/penugasan': typeof PenugasanRoute
   '/profil': typeof ProfilRoute
   '/soal': typeof SoalRoute
   '/verifikasi': typeof VerifikasiRoute
+  '/gabung/$kodeKelas': typeof GabungKodeKelasRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/arsip': typeof ArsipRoute
   '/auth': typeof AuthRoute
+  '/daftar': typeof DaftarRoute
   '/dashboard': typeof DashboardRoute
+  '/landing': typeof LandingRoute
+  '/login': typeof LoginRoute
+  '/lupa-kata-sandi': typeof LupaKataSandiRoute
   '/modul-ajar': typeof ModulAjarRoute
   '/penilaian': typeof PenilaianRoute
   '/penugasan': typeof PenugasanRoute
   '/profil': typeof ProfilRoute
   '/soal': typeof SoalRoute
   '/verifikasi': typeof VerifikasiRoute
+  '/gabung/$kodeKelas': typeof GabungKodeKelasRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/arsip': typeof ArsipRoute
   '/auth': typeof AuthRoute
+  '/daftar': typeof DaftarRoute
   '/dashboard': typeof DashboardRoute
+  '/landing': typeof LandingRoute
+  '/login': typeof LoginRoute
+  '/lupa-kata-sandi': typeof LupaKataSandiRoute
   '/modul-ajar': typeof ModulAjarRoute
   '/penilaian': typeof PenilaianRoute
   '/penugasan': typeof PenugasanRoute
   '/profil': typeof ProfilRoute
   '/soal': typeof SoalRoute
   '/verifikasi': typeof VerifikasiRoute
+  '/gabung/$kodeKelas': typeof GabungKodeKelasRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -114,50 +159,70 @@ export interface FileRouteTypes {
     | '/'
     | '/arsip'
     | '/auth'
+    | '/daftar'
     | '/dashboard'
+    | '/landing'
+    | '/login'
+    | '/lupa-kata-sandi'
     | '/modul-ajar'
     | '/penilaian'
     | '/penugasan'
     | '/profil'
     | '/soal'
     | '/verifikasi'
+    | '/gabung/$kodeKelas'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/arsip'
     | '/auth'
+    | '/daftar'
     | '/dashboard'
+    | '/landing'
+    | '/login'
+    | '/lupa-kata-sandi'
     | '/modul-ajar'
     | '/penilaian'
     | '/penugasan'
     | '/profil'
     | '/soal'
     | '/verifikasi'
+    | '/gabung/$kodeKelas'
   id:
     | '__root__'
     | '/'
     | '/arsip'
     | '/auth'
+    | '/daftar'
     | '/dashboard'
+    | '/landing'
+    | '/login'
+    | '/lupa-kata-sandi'
     | '/modul-ajar'
     | '/penilaian'
     | '/penugasan'
     | '/profil'
     | '/soal'
     | '/verifikasi'
+    | '/gabung/$kodeKelas'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ArsipRoute: typeof ArsipRoute
   AuthRoute: typeof AuthRoute
+  DaftarRoute: typeof DaftarRoute
   DashboardRoute: typeof DashboardRoute
+  LandingRoute: typeof LandingRoute
+  LoginRoute: typeof LoginRoute
+  LupaKataSandiRoute: typeof LupaKataSandiRoute
   ModulAjarRoute: typeof ModulAjarRoute
   PenilaianRoute: typeof PenilaianRoute
   PenugasanRoute: typeof PenugasanRoute
   ProfilRoute: typeof ProfilRoute
   SoalRoute: typeof SoalRoute
   VerifikasiRoute: typeof VerifikasiRoute
+  GabungKodeKelasRoute: typeof GabungKodeKelasRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -183,11 +248,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/daftar': {
+      id: '/daftar'
+      path: '/daftar'
+      fullPath: '/daftar'
+      preLoaderRoute: typeof DaftarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard': {
       id: '/dashboard'
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/landing': {
+      id: '/landing'
+      path: '/landing'
+      fullPath: '/landing'
+      preLoaderRoute: typeof LandingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lupa-kata-sandi': {
+      id: '/lupa-kata-sandi'
+      path: '/lupa-kata-sandi'
+      fullPath: '/lupa-kata-sandi'
+      preLoaderRoute: typeof LupaKataSandiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/modul-ajar': {
@@ -232,6 +325,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VerifikasiRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/gabung/$kodeKelas': {
+      id: '/gabung/$kodeKelas'
+      path: '/gabung/$kodeKelas'
+      fullPath: '/gabung/$kodeKelas'
+      preLoaderRoute: typeof GabungKodeKelasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -239,13 +339,18 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ArsipRoute: ArsipRoute,
   AuthRoute: AuthRoute,
+  DaftarRoute: DaftarRoute,
   DashboardRoute: DashboardRoute,
+  LandingRoute: LandingRoute,
+  LoginRoute: LoginRoute,
+  LupaKataSandiRoute: LupaKataSandiRoute,
   ModulAjarRoute: ModulAjarRoute,
   PenilaianRoute: PenilaianRoute,
   PenugasanRoute: PenugasanRoute,
   ProfilRoute: ProfilRoute,
   SoalRoute: SoalRoute,
   VerifikasiRoute: VerifikasiRoute,
+  GabungKodeKelasRoute: GabungKodeKelasRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

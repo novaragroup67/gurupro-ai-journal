@@ -3,31 +3,22 @@ import {
   Outlet,
   Link,
   createRootRouteWithContext,
-  useRouter,
   useNavigate,
+  useRouter,
   useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { LogOut, Search, UserRound } from "lucide-react";
+import { Search } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
-import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { GuruProMark } from "@/components/gurupro-logo";
 import { NotificationMenu } from "@/components/notification-menu";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
-import { initials, logout, useAuth } from "@/lib/auth-store";
+import { initials, isAuthPublicPath, shortName, useAuth } from "@/lib/auth-store";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -43,7 +34,7 @@ function NotFoundComponent() {
         </p>
         <div className="mt-6">
           <Button asChild>
-            <Link to="/dashboard">Kembali ke Dashboard</Link>
+            <Link to="/">Kembali ke Dashboard</Link>
           </Button>
         </div>
       </div>
@@ -129,40 +120,35 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
-function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const isPublicRoute = pathname === "/" || pathname === "/auth";
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      {isPublicRoute ? (
-        <Outlet />
-      ) : (
-        <AppShell>
-          <Outlet />
-        </AppShell>
-      )}
-      <Toaster position="bottom-right" richColors />
-    </QueryClientProvider>
-  );
-}
-
-function AppShell({ children }: { children: ReactNode }) {
+function AuthGate({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
-  const { ready, signedIn, profile } = useAuth();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { ready, signedIn } = useAuth();
+  const publicAuth = isAuthPublicPath(pathname);
 
   useEffect(() => {
-    if (ready && !signedIn) navigate({ to: "/auth", replace: true });
-  }, [ready, signedIn, navigate]);
+    if (!ready) return;
+    if (!signedIn && !publicAuth) {
+      void navigate({ to: "/landing", replace: true });
+    }
+    if (signedIn && publicAuth) {
+      void navigate({ to: "/", replace: true });
+    }
+  }, [ready, signedIn, publicAuth, navigate]);
 
-  if (!ready || !signedIn) {
+  if (!ready || (!signedIn && !publicAuth) || (signedIn && publicAuth)) {
     return (
-      <div className="grid min-h-screen place-items-center px-4">
-        <p className="text-sm text-muted-foreground">Memuat GuruPro…</p>
+      <div className="grid min-h-screen place-items-center bg-background text-sm text-muted-foreground">
+        Memuat sesi GuruPro…
       </div>
     );
   }
+
+  return <>{children}</>;
+}
+
+function AppShell() {
+  const { profile } = useAuth();
 
   return (
     <SidebarProvider>
@@ -184,57 +170,43 @@ function AppShell({ children }: { children: ReactNode }) {
               </Button>
               <NotificationMenu />
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex min-w-0 items-center gap-2 rounded-full border bg-background py-1 pl-1 pr-3 transition-colors hover:bg-muted/60"
-                    aria-label="Menu akun"
-                  >
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-gradient text-xs font-bold text-navy-foreground">
-                      {initials(profile.nama)}
-                    </span>
-                    <span className="hidden min-w-0 text-left leading-tight sm:block">
-                      <span className="block truncate text-xs font-semibold">{profile.nama}</span>
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        {profile.mapel || "Guru"}
-                      </span>
-                    </span>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel className="truncate">{profile.email}</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link to="/profil">
-                      <UserRound className="h-4 w-4" />
-                      Profil Saya
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive"
-                    onSelect={() => {
-                      void logout();
-                      toast.success("Anda telah keluar dari GuruPro.");
-                      navigate({ to: "/auth", replace: true });
-                    }}
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Log Out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Link
+                to="/profil"
+                className="flex min-w-0 items-center gap-2 rounded-full border bg-background py-1 pl-1 pr-3"
+              >
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-gradient text-xs font-bold text-navy-foreground">
+                  {initials(profile.nama)}
+                </span>
+                <span className="hidden min-w-0 leading-tight sm:block">
+                  <span className="block truncate text-xs font-semibold">{shortName(profile.nama)}</span>
+                  <span className="block truncate text-[11px] text-muted-foreground">{profile.mapel}</span>
+                </span>
+              </Link>
             </div>
           </header>
 
           <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
             <div className="mx-auto w-full max-w-6xl">
-              {/* Required: nested routes render here. */}
-              {children}
+              <Outlet />
             </div>
           </main>
         </div>
       </div>
     </SidebarProvider>
+  );
+}
+
+function RootComponent() {
+  const { queryClient } = Route.useRouteContext();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const publicAuth = isAuthPublicPath(pathname);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthGate>
+        {publicAuth ? <Outlet /> : <AppShell />}
+      </AuthGate>
+      <Toaster position="bottom-right" richColors />
+    </QueryClientProvider>
   );
 }
