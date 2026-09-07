@@ -22,15 +22,15 @@ import { ajukanGabung, getKelasByKode } from "@/lib/kelas-store";
 import { cn } from "@/lib/utils";
 
 interface DaftarSearchParams {
-  role?: "guru" | "siswa";
-  kode?: string;
+  role?: "guru" | "siswa" | undefined;
+  kode?: string | undefined;
 }
 
 export const Route = createFileRoute("/daftar")({
   validateSearch: (search: Record<string, unknown>): DaftarSearchParams => {
     return {
-      role: search.role === "siswa" ? "siswa" : search.role === "guru" ? "guru" : undefined,
-      kode: typeof search.kode === "string" ? search.kode : undefined,
+      role: search["role"] === "siswa" ? "siswa" : search["role"] === "guru" ? "guru" : undefined,
+      kode: typeof search["kode"] === "string" ? (search["kode"] as string) : undefined,
     };
   },
   head: () => ({

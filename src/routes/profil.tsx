@@ -86,7 +86,9 @@ function ProfilPage() {
   const myKelasList = kelasList.filter(
     (k) => k.guruEmail.toLowerCase() === profile.email.toLowerCase(),
   );
-  const [selectedKelas, setSelectedKelas] = useState<Kelas | null>(null);
+  const [selectedKelasId, setSelectedKelasId] = useState<string | null>(null);
+  const selectedKelas: Kelas | null =
+    myKelasList.find((k) => k.id === selectedKelasId) ?? myKelasList[0] ?? null;
   const [confirmPerbaruiKode, setConfirmPerbaruiKode] = useState(false);
 
   // Form buat kelas baru
@@ -100,16 +102,8 @@ function ProfilPage() {
     if (!edit) setDraft(profile);
   }, [profile, edit]);
 
-  // Set default selected kelas jika belum dipilih
-  useEffect(() => {
-    if (!selectedKelas && myKelasList.length > 0) {
-      const first = myKelasList[0];
-      if (first) setSelectedKelas(first);
-    } else if (selectedKelas) {
-      const fresh = myKelasList.find((k) => k.id === selectedKelas.id);
-      if (fresh) setSelectedKelas(fresh);
-    }
-  }, [myKelasList, selectedKelas]);
+
+
 
   const simpan = () => {
     if (!draft.nama.trim() || !draft.email.trim()) {
@@ -146,7 +140,7 @@ function ProfilPage() {
         guruEmail: profile.email,
       });
 
-      setSelectedKelas(baru);
+      setSelectedKelasId(baru.id);
       setNamaKelas("");
       toast.success(`Kelas ${baru.tingkat} ${baru.namaKelas} berhasil dibuat!`);
     } catch {
@@ -180,7 +174,7 @@ function ProfilPage() {
     if (!selectedKelas) return;
     const updated = perbaruiKodeKelas(selectedKelas.id);
     if (updated) {
-      setSelectedKelas(updated);
+      setSelectedKelasId(updated.id);
       toast.success("Kode & tautan undangan kelas berhasil diperbarui!");
     }
     setConfirmPerbaruiKode(false);

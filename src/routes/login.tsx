@@ -13,13 +13,13 @@ import { activatePendingAccount, DEMO_AKUN, login, useAuth } from "@/lib/auth-st
 import { ajukanGabung, getKelasByKode } from "@/lib/kelas-store";
 
 interface LoginSearchParams {
-  kode?: string;
+  kode?: string | undefined;
 }
 
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>): LoginSearchParams => {
     return {
-      kode: typeof search.kode === "string" ? search.kode : undefined,
+      kode: typeof search["kode"] === "string" ? (search["kode"] as string) : undefined,
     };
   },
   head: () => ({
@@ -224,7 +224,7 @@ function LoginPage() {
             <span className="px-1.5">·</span>
             <Link
               to="/daftar"
-              search={kodeKelas ? { kode: kodeKelas, role: "siswa" } : undefined}
+              search={kodeKelas ? { kode: kodeKelas, role: "siswa" as const } : {}}
               className="font-medium text-primary hover:underline"
             >
               Daftar akun baru
