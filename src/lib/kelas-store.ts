@@ -326,24 +326,38 @@ export function getKelasBySiswa(siswaEmail: string): Kelas[] {
   return readKelasList().filter((k) => activeKelasIds.has(k.id));
 }
 
-export function useKelas() {
-  const kelasList = useSyncExternalStore(
-    (cb) => {
-      listeners.add(cb);
-      return () => listeners.delete(cb);
-    },
-    readKelasList,
-    () => DEMO_KELAS,
-  );
+/**
+ * getSnapshot harus mengembalikan referensi yang stabil, kalau tidak React
+ * akan me-render ulang tanpa henti ("Maximum update depth exceeded").
+ */
+let kelasSnapshot: Kelas[] | null = null;
+let anggotaSnapshot: AnggotaKelas[] | null = null;
 
-  const anggotaList = useSyncExternalStore(
-    (cb) => {
-      listeners.add(cb);
-      return () => listeners.delete(cb);
-    },
-    readAnggotaList,
-    () => DEMO_ANGGOTA,
-  );
+listeners.add(() => {
+  kelasSnapshot = null;
+  anggotaSnapshot = null;
+});
+
+function getKelasSnapshot(): Kelas[] {
+  if (!kelasSnapshot) kelasSnapshot = readKelasList();
+  return kelasSnapshot;
+}
+
+function getAnggotaSnapshot(): AnggotaKelas[] {
+  if (!anggotaSnapshot) anggotaSnapshot = readAnggotaList();
+  return anggotaSnapshot;
+}
+
+const subscribeKelas = (cb: () => void) => {
+  listeners.add(cb);
+  return () => {
+    listeners.delete(cb);
+  };
+};
+
+export function useKelas() {
+  const kelasList = useSyncExternalStore(subscribeKelas, getKelasSnapshot, () => DEMO_KELAS);
+  const anggotaList = useSyncExternalStore(subscribeKelas, getAnggotaSnapshot, () => DEMO_ANGGOTA);
 
   return { kelasList, anggotaList };
 }
