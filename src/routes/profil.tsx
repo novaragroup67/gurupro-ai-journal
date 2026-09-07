@@ -86,7 +86,9 @@ function ProfilPage() {
   const myKelasList = kelasList.filter(
     (k) => k.guruEmail.toLowerCase() === profile.email.toLowerCase(),
   );
-  const [selectedKelas, setSelectedKelas] = useState<Kelas | null>(null);
+  const [selectedKelasId, setSelectedKelasId] = useState<string | null>(null);
+  const selectedKelas: Kelas | null =
+    myKelasList.find((k) => k.id === selectedKelasId) ?? myKelasList[0] ?? null;
   const [confirmPerbaruiKode, setConfirmPerbaruiKode] = useState(false);
 
   // Form buat kelas baru
