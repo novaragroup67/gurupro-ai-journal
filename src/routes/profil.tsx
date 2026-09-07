@@ -102,16 +102,8 @@ function ProfilPage() {
     if (!edit) setDraft(profile);
   }, [profile, edit]);
 
-  // Set default selected kelas jika belum dipilih
-  useEffect(() => {
-    if (!selectedKelas && myKelasList.length > 0) {
-      const first = myKelasList[0];
-      if (first) setSelectedKelas(first);
-    } else if (selectedKelas) {
-      const fresh = myKelasList.find((k) => k.id === selectedKelas.id);
-      if (fresh) setSelectedKelas(fresh);
-    }
-  }, [myKelasList, selectedKelas]);
+
+
 
   const simpan = () => {
     if (!draft.nama.trim() || !draft.email.trim()) {
