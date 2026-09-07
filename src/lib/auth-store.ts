@@ -167,11 +167,19 @@ function persistAuth() {
   }
 }
 
+type StoredAccount = Partial<Omit<GuruAccount, "role" | "status">> &
+  Partial<Omit<SiswaAccount, "role" | "status">> & {
+    role?: string;
+    status?: string;
+    kelas?: string;
+    nis?: string;
+  };
+
 function readAccounts(): AnyAccount[] {
   if (typeof window === "undefined") return [DEMO_ACCOUNT];
   try {
     const raw = window.localStorage.getItem(ACCOUNTS_KEY);
-    const parsed = raw ? (JSON.parse(raw) as (Partial<GuruAccount & SiswaAccount> & { role?: string; kelas?: string; nis?: string })[]) : [];
+    const parsed = raw ? (JSON.parse(raw) as StoredAccount[]) : [];
     const list: AnyAccount[] = (Array.isArray(parsed) ? parsed : []).map((acc) => {
       if (!acc.role || acc.role === "guru") {
         return {

@@ -140,7 +140,7 @@ function ProfilPage() {
         guruEmail: profile.email,
       });
 
-      setSelectedKelas(baru);
+      setSelectedKelasId(baru.id);
       setNamaKelas("");
       toast.success(`Kelas ${baru.tingkat} ${baru.namaKelas} berhasil dibuat!`);
     } catch {
@@ -174,7 +174,7 @@ function ProfilPage() {
     if (!selectedKelas) return;
     const updated = perbaruiKodeKelas(selectedKelas.id);
     if (updated) {
-      setSelectedKelas(updated);
+      setSelectedKelasId(updated.id);
       toast.success("Kode & tautan undangan kelas berhasil diperbarui!");
     }
     setConfirmPerbaruiKode(false);
