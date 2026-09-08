@@ -1,11 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { AlertCircle, ArrowRight, BookOpen, LogIn, UserPlus } from "lucide-react";
+import { AlertCircle, ArrowRight, BookOpen, Loader2, LogIn, UserPlus } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { GuruProLogo } from "@/components/gurupro-logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { initials } from "@/lib/auth-store";
-import { getKelasByKode } from "@/lib/kelas-store";
+import { getKelasByKode, type Kelas } from "@/lib/kelas-store";
 
 export const Route = createFileRoute("/gabung/$kodeKelas")({
   head: () => ({
@@ -18,16 +19,25 @@ function GabungKelasPage() {
   const { kodeKelas } = Route.useParams();
   const navigate = useNavigate();
 
-  const kelas = getKelasByKode(kodeKelas);
+  const [kelas, setKelas] = useState<Kelas | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    getKelasByKode(kodeKelas)
+      .then((k) => {
+        if (active) setKelas(k);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [kodeKelas]);
 
   const handleBelumPunyaAkun = () => {
-    if (typeof window !== "undefined") {
-      try {
-        window.sessionStorage.setItem("gurupro.pending-kode", kodeKelas);
-      } catch {
-        /* ignore */
-      }
-    }
     void navigate({
       to: "/daftar",
       search: { role: "siswa" },
@@ -35,16 +45,8 @@ function GabungKelasPage() {
   };
 
   const handleSudahPunyaAkun = () => {
-    if (typeof window !== "undefined") {
-      try {
-        window.sessionStorage.setItem("gurupro.pending-kode", kodeKelas);
-      } catch {
-        /* ignore */
-      }
-    }
     void navigate({
       to: "/login",
-      search: { kode: kodeKelas },
     });
   };
 
@@ -57,7 +59,12 @@ function GabungKelasPage() {
           </Link>
         </div>
 
-        {!kelas ? (
+        {loading ? (
+          <div className="py-16 text-center text-sm text-muted-foreground">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+            <p className="mt-3">Memeriksa tautan undangan kelas…</p>
+          </div>
+        ) : !kelas ? (
           <Card className="border-destructive/30 shadow-md">
             <CardContent className="p-6 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
@@ -67,8 +74,8 @@ function GabungKelasPage() {
                 Tautan Tidak Ditemukan
               </h1>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                Tautan undangan tidak valid atau sudah kedaluwarsa. Minta gurumu mengirim ulang
-                tautannya.
+                Tautan undangan tidak valid atau kelas tidak ditemukan. Minta gurumu mengirim ulang
+                kode atau tautannya.
               </p>
               <div className="mt-6">
                 <Button asChild variant="outline" className="w-full">
@@ -92,7 +99,7 @@ function GabungKelasPage() {
             <Card className="border-2 border-primary/20 bg-card shadow-lift">
               <CardContent className="p-6 text-center">
                 <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-gradient font-display text-xl font-bold text-navy-foreground shadow-sm">
-                  {initials(kelas.guruEmail.split("@")[0] || "GP")}
+                  {initials(kelas.mapel || "GP")}
                 </div>
 
                 <p className="mt-4 text-sm font-medium text-muted-foreground">
@@ -135,7 +142,7 @@ function GabungKelasPage() {
                   <ArrowRight className="h-4 w-4 text-primary transition-transform group-hover:translate-x-1" />
                 </div>
                 <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                  Lanjut ke form daftar — kelas di atas otomatis terisi, tidak perlu ketik ulang.
+                  Buat akun siswa terlebih dahulu, lalu masukkan kode kelas ini di dashboard siswa.
                 </p>
               </button>
 
@@ -147,13 +154,12 @@ function GabungKelasPage() {
                 <div className="flex w-full items-center justify-between">
                   <span className="flex items-center gap-2 font-display text-base font-bold text-navy">
                     <LogIn className="h-4 w-4 text-navy" />
-                    Saya Sudah Punya Akun → Login & Ajukan Gabung
+                    Saya Sudah Punya Akun → Masuk
                   </span>
                   <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
                 </div>
                 <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                  Setelah login, permintaan gabung ke kelas ini otomatis terkirim tanpa isi form
-                  daftar lagi.
+                  Masuk ke akunmu, lalu masukkan kode kelas ini di dashboard siswa untuk bergabung.
                 </p>
               </button>
             </div>

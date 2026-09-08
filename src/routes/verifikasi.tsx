@@ -28,11 +28,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { initials, useAuth } from "@/lib/auth-store";
 import {
-  getSemuaAnggotaByGuru,
   setujuiAnggota,
   tolakAnggota,
   useKelas,
-  type AnggotaKelas,
+  type AnggotaItem,
 } from "@/lib/kelas-store";
 
 export const Route = createFileRoute("/verifikasi")({
@@ -54,8 +53,6 @@ export const Route = createFileRoute("/verifikasi")({
   component: VerifikasiPage,
 });
 
-type AnggotaItem = AnggotaKelas & { namaKelas: string; mapel: string; tingkat: string };
-
 function formatTanggal(isoDate: string) {
   try {
     const d = new Date(isoDate);
@@ -72,21 +69,35 @@ function formatTanggal(isoDate: string) {
 }
 
 function VerifikasiPage() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { kelasList, anggotaList } = useKelas();
 
   const [activeTab, setActiveTab] = useState("menunggu");
   const [targetTolak, setTargetTolak] = useState<AnggotaItem | null>(null);
 
-  // Ambil semua permintaan siswa untuk kelas guru ini
-  const allAnggota = getSemuaAnggotaByGuru(profile.email);
+  // Ambil semua permintaan siswa untuk kelas guru ini berdasarkan guru_id
+  const guruId = user?.id || profile.id;
+  const myKelas = kelasList.filter((k) => k.guruId === guruId);
+  const myKelasMap = new Map(myKelas.map((k) => [k.id, k]));
+
+  const allAnggota: AnggotaItem[] = anggotaList
+    .filter((a) => myKelasMap.has(a.kelasId))
+    .map((a) => {
+      const k = myKelasMap.get(a.kelasId);
+      return {
+        ...a,
+        namaKelas: k ? `${k.tingkat} ${k.namaKelas}` : "Kelas",
+        mapel: k ? k.mapel : "-",
+        tingkat: k ? k.tingkat : "-",
+      };
+    });
 
   const menungguList = allAnggota.filter((a) => a.status === "menunggu");
   const disetujuiList = allAnggota.filter((a) => a.status === "aktif");
   const ditolakList = allAnggota.filter((a) => a.status === "ditolak");
 
-  const handleSetujui = (item: AnggotaItem) => {
-    const ok = setujuiAnggota(item.id);
+  const handleSetujui = async (item: AnggotaItem) => {
+    const ok = await setujuiAnggota(item.id);
     if (ok) {
       toast.success(`${item.siswaNama} berhasil disetujui dan bergabung ke ${item.namaKelas}.`);
     } else {
@@ -94,9 +105,9 @@ function VerifikasiPage() {
     }
   };
 
-  const handleTolakConfirm = () => {
+  const handleTolakConfirm = async () => {
     if (!targetTolak) return;
-    const ok = tolakAnggota(targetTolak.id);
+    const ok = await tolakAnggota(targetTolak.id);
     if (ok) {
       toast.info(`Permintaan bergabung dari ${targetTolak.siswaNama} telah ditolak.`);
     } else {

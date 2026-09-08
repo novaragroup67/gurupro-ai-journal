@@ -19,7 +19,7 @@ import { registerGuru, registerSiswa } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
 
 interface DaftarSearchParams {
-  role?: "guru" | "siswa" | undefined;
+  role?: "guru" | "siswa";
 }
 
 export const Route = createFileRoute("/daftar")({
@@ -45,7 +45,6 @@ type FieldKey =
   | "nip"
   | "nisn"
   | "jenjang"
-  | "kodeKelas"
   | "password"
   | "confirm";
 
@@ -87,7 +86,7 @@ function DaftarPage() {
     setErrors({});
   };
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const found: FormErrors = {};
 
@@ -116,9 +115,9 @@ function DaftarPage() {
     if (Object.keys(found).length > 0) return;
 
     setLoading(true);
-    window.setTimeout(() => {
+    try {
       if (role === "guru") {
-        const result = registerGuru({
+        const result = await registerGuru({
           nama,
           email,
           telepon,
@@ -128,16 +127,16 @@ function DaftarPage() {
           password,
         });
 
-        setLoading(false);
         if (!result.ok) {
-          setErrors({ email: "Email ini sudah terdaftar." });
-          toast.error("Email sudah dipakai. Silakan masuk atau gunakan email lain.");
+          setErrors({ email: result.message });
+          toast.error(result.message || "Pendaftaran gagal. Periksa kembali data Anda.");
           return;
         }
-        toast.success("Pendaftaran tersimpan. Akun berstatus Menunggu verifikasi Admin.");
+
+        toast.success("Pendaftaran akun guru berhasil! Silakan masuk dengan akun Anda.");
         void navigate({ to: "/login", replace: true });
       } else {
-        const result = registerSiswa({
+        const result = await registerSiswa({
           nama,
           email,
           telepon,
@@ -147,20 +146,21 @@ function DaftarPage() {
           password,
         });
 
-        setLoading(false);
         if (!result.ok) {
-          setErrors({ email: "Email ini sudah terdaftar." });
-          toast.error("Email sudah dipakai. Silakan masuk atau gunakan email lain.");
+          setErrors({ email: result.message });
+          toast.error(result.message || "Pendaftaran gagal. Periksa kembali data Anda.");
           return;
         }
 
-        // Kode kelas tidak lagi diminta saat pendaftaran — siswa memasukkannya
-        // dari dashboard siswa setelah login.
-        toast.success("Akun berhasil dibuat. Silakan masuk, lalu gabung kelas dari dashboard siswa.");
-
+        toast.success("Pendaftaran akun siswa berhasil! Silakan masuk dengan akun Anda.");
         void navigate({ to: "/login", replace: true });
       }
-    }, 800);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat pendaftaran.";
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderField = (
@@ -200,8 +200,8 @@ function DaftarPage() {
       </h1>
       <p className="mt-1.5 text-sm text-muted-foreground">
         {role === "guru"
-          ? "Akun baru berstatus Menunggu — aktif setelah Admin memverifikasi data dan NIP/NUPTK."
-          : "Daftar akun siswa untuk bergabung ke kelas pembelajaran dan mengakses tugas."}
+          ? "Daftar akun guru untuk menyusun modul ajar, bank soal, dan mengelola kelas pembelajaran."
+          : "Daftar akun siswa untuk mengakses pembelajaran, materi, dan tugas."}
       </p>
 
       {/* Pilihan Peran di Awal */}
@@ -233,8 +233,6 @@ function DaftarPage() {
           🎓 Saya Siswa
         </button>
       </div>
-
-      
 
       <Card className="mt-4">
         <CardContent className="p-5 sm:p-6">
@@ -279,11 +277,13 @@ function DaftarPage() {
             ) : null}
 
             {/* Field khusus Siswa */}
-            {role === "siswa"
-              ? renderField("jenjang", "Jenjang / Angkatan", jenjang, setJenjang, {
+            {role === "siswa" ? (
+              <>
+                {renderField("jenjang", "Jenjang / Angkatan", jenjang, setJenjang, {
                   placeholder: "Misal: X, XI, XII",
-                })
-              : null}
+                })}
+              </>
+            ) : null}
 
             <div className="grid gap-2">
               <Label htmlFor="password">Kata Sandi</Label>

@@ -75,20 +75,18 @@ const FIELDS: Array<{ key: keyof GuruProfile; label: string; placeholder: string
 
 function ProfilPage() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { kelasList, anggotaList } = useKelas();
 
   const [edit, setEdit] = useState(false);
   const [draft, setDraft] = useState<GuruProfile>(profile);
   const [confirmLogout, setConfirmLogout] = useState(false);
 
-  // Kelas state
-  const myKelasList = kelasList.filter(
-    (k) => k.guruEmail.toLowerCase() === profile.email.toLowerCase(),
+  // Kelas state berdasarkan guru_id pengguna yang sedang login
+  const myKelasList = kelasList.filter((k) =>
+    user?.id ? k.guruId === user.id : profile.id ? k.guruId === profile.id : false,
   );
-  const [selectedKelasId, setSelectedKelasId] = useState<string | null>(null);
-  const selectedKelas: Kelas | null =
-    myKelasList.find((k) => k.id === selectedKelasId) ?? myKelasList[0] ?? null;
+  const [selectedKelas, setSelectedKelas] = useState<Kelas | null>(null);
   const [confirmPerbaruiKode, setConfirmPerbaruiKode] = useState(false);
 
   // Form buat kelas baru
@@ -102,20 +100,32 @@ function ProfilPage() {
     if (!edit) setDraft(profile);
   }, [profile, edit]);
 
+  // Set default selected kelas jika belum dipilih
+  useEffect(() => {
+    if (!selectedKelas && myKelasList.length > 0) {
+      const first = myKelasList[0];
+      if (first) setSelectedKelas(first);
+    } else if (selectedKelas) {
+      const fresh = myKelasList.find((k) => k.id === selectedKelas.id);
+      if (fresh) setSelectedKelas(fresh);
+    }
+  }, [myKelasList, selectedKelas]);
 
-
-
-  const simpan = () => {
+  const simpan = async () => {
     if (!draft.nama.trim() || !draft.email.trim()) {
       toast.error("Nama dan email wajib diisi.");
       return;
     }
-    updateProfile(draft);
+    const res = await updateProfile(draft);
+    if (!res.ok) {
+      toast.error(res.message);
+      return;
+    }
     setEdit(false);
     toast.success("Profil berhasil diperbarui.");
   };
 
-  const handleBuatKelas = (e: React.FormEvent) => {
+  const handleBuatKelas = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!namaKelas.trim()) {
       toast.error("Nama kelas wajib diisi (misal: IPA 1).");
@@ -130,21 +140,28 @@ function ProfilPage() {
       return;
     }
 
+    const guruId = user?.id || profile.id;
+    if (!guruId) {
+      toast.error("Akun belum terautentikasi.");
+      return;
+    }
+
     setLoadingBuatKelas(true);
     try {
-      const baru = buatKelas({
+      const baru = await buatKelas({
         namaKelas: namaKelas.trim(),
         tingkat: tingkat.trim(),
         mapel: mapelKelas.trim(),
         tahunAjaran: tahunAjaran.trim() || "2025/2026",
-        guruEmail: profile.email,
+        guruId,
       });
 
-      setSelectedKelasId(baru.id);
+      setSelectedKelas(baru);
       setNamaKelas("");
       toast.success(`Kelas ${baru.tingkat} ${baru.namaKelas} berhasil dibuat!`);
-    } catch {
-      toast.error("Gagal membuat kelas.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Gagal membuat kelas.";
+      toast.error(msg);
     } finally {
       setLoadingBuatKelas(false);
     }
@@ -170,12 +187,16 @@ function ProfilPage() {
     }
   };
 
-  const handlePerbaruiKode = () => {
+  const handlePerbaruiKode = async () => {
     if (!selectedKelas) return;
-    const updated = perbaruiKodeKelas(selectedKelas.id);
-    if (updated) {
-      setSelectedKelasId(updated.id);
-      toast.success("Kode & tautan undangan kelas berhasil diperbarui!");
+    try {
+      const updated = await perbaruiKodeKelas(selectedKelas.id);
+      if (updated) {
+        setSelectedKelas(updated);
+        toast.success("Kode & tautan undangan kelas berhasil diperbarui!");
+      }
+    } catch {
+      toast.error("Gagal memperbarui kode kelas.");
     }
     setConfirmPerbaruiKode(false);
   };
@@ -557,10 +578,10 @@ function ProfilPage() {
             <AlertDialogCancel>Batal</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                logout();
+              onClick={async () => {
+                await logout();
                 toast.success("Anda telah keluar dari GuruPro.");
-                navigate({ to: "/login", replace: true });
+                void navigate({ to: "/login", replace: true });
               }}
             >
               Log Out

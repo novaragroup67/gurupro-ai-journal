@@ -129,14 +129,14 @@ function AuthGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready) return;
     if (!signedIn && !publicAuth) {
-      void navigate({ to: "/landing", replace: true });
+      void navigate({ to: "/login", replace: true });
     }
-    if (signedIn && publicAuth) {
+    if (signedIn && (pathname === "/login" || pathname === "/daftar")) {
       void navigate({ to: "/", replace: true });
     }
-  }, [ready, signedIn, publicAuth, navigate]);
+  }, [ready, signedIn, publicAuth, pathname, navigate]);
 
-  if (!ready || (!signedIn && !publicAuth) || (signedIn && publicAuth)) {
+  if (!ready || (!signedIn && !publicAuth) || (signedIn && (pathname === "/login" || pathname === "/daftar"))) {
     return (
       <div className="grid min-h-screen place-items-center bg-background text-sm text-muted-foreground">
         Memuat sesi GuruPro…

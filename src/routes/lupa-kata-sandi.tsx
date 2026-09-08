@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { KeyRound, Loader2, Mail } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AuthLayout } from "@/components/auth-layout";
@@ -25,8 +25,19 @@ function LupaKataSandiPage() {
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [linkTerkirim, setLinkTerkirim] = useState(false);
 
-  const kirimTautan = (e: React.FormEvent) => {
+  // Deteksi jika pengguna tiba dari tautan reset password Supabase
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash;
+      if (hash && (hash.includes("type=recovery") || hash.includes("access_token="))) {
+        setStep("baru");
+      }
+    }
+  }, []);
+
+  const kirimTautan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) {
       setError("Email akun terdaftar wajib diisi.");
@@ -36,22 +47,29 @@ function LupaKataSandiPage() {
       setError("Format email tidak valid.");
       return;
     }
+
     setLoading(true);
-    window.setTimeout(() => {
-      const ok = requestPasswordReset(email);
-      setLoading(false);
-      if (!ok) {
-        setError("Email tidak ditemukan pada akun guru di perangkat ini.");
-        toast.error("Email tidak terdaftar.");
+    setError("");
+    try {
+      const res = await requestPasswordReset(email);
+      if (!res.ok) {
+        setError(res.message);
+        toast.error(res.message || "Gagal mengirim tautan reset.");
         return;
       }
-      toast.success("Tautan reset disiapkan. Lanjutkan ke kata sandi baru.");
-      setError("");
-      setStep("baru");
-    }, 700);
+
+      setLinkTerkirim(true);
+      toast.success("Tautan reset kata sandi telah dikirim ke email Anda.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Gagal memproses permintaan.";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const simpanSandi = (e: React.FormEvent) => {
+  const simpanSandi = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password.length < 6) {
       setError("Kata sandi baru minimal 6 karakter.");
@@ -61,52 +79,87 @@ function LupaKataSandiPage() {
       setError("Konfirmasi kata sandi tidak sama.");
       return;
     }
+
     setLoading(true);
-    window.setTimeout(() => {
-      const ok = completePasswordReset(email, password);
-      setLoading(false);
-      if (!ok) {
-        setError("Reset gagal. Ulangi dari email terdaftar.");
+    setError("");
+    try {
+      const res = await completePasswordReset(password);
+      if (!res.ok) {
+        setError(res.message);
+        toast.error(res.message || "Gagal memperbarui kata sandi.");
         return;
       }
-      toast.success("Kata sandi diperbarui. Silakan masuk.");
-      navigate({ to: "/login", replace: true });
-    }, 700);
+
+      toast.success("Kata sandi berhasil diperbarui. Silakan masuk.");
+      void navigate({ to: "/login", replace: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Gagal memperbarui kata sandi.";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <AuthLayout>
-      <h1 className="font-display text-2xl font-bold text-navy sm:text-3xl">Reset Kata Sandi — Guru</h1>
+      <h1 className="font-display text-2xl font-bold text-navy sm:text-3xl">Reset Kata Sandi</h1>
       <p className="mt-1.5 text-sm text-muted-foreground">
         {step === "email"
-          ? "Tautan reset dikirim ke email terdaftar, berlaku sementara. Setelah tautan dikonfirmasi, guru mengisi kata sandi baru."
-          : "Masukkan kata sandi baru untuk akun Anda."}
+          ? "Tautan reset dikirim ke email terdaftar. Setelah membuka tautan dari email, Anda dapat mengisi kata sandi baru."
+          : "Masukkan kata sandi baru untuk akun GuruPro Anda."}
       </p>
 
       <Card className="mt-6">
         <CardContent className="p-5 sm:p-6">
           {step === "email" ? (
-            <form className="grid gap-4" onSubmit={kirimTautan} noValidate>
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email akun terdaftar</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setError("");
+            linkTerkirim ? (
+              <div className="grid gap-4 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Mail className="h-6 w-6" />
+                </div>
+                <div>
+                  <h2 className="font-display text-base font-semibold text-navy">Periksa Email Anda</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Kami telah mengirimkan tautan reset kata sandi ke <strong>{email}</strong>.
+                    Silakan klik tautan pada email tersebut untuk melanjutkan pembuatan kata sandi baru.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setLinkTerkirim(false);
+                    setEmail("");
                   }}
-                  aria-invalid={!!error}
-                />
-                {error ? <p className="text-xs text-destructive">{error}</p> : null}
+                >
+                  Kirim Ulang atau Ganti Email
+                </Button>
               </div>
-              <Button type="submit" disabled={loading}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-                {loading ? "Mengirim…" : "Kirim Tautan Reset"}
-              </Button>
-            </form>
+            ) : (
+              <form className="grid gap-4" onSubmit={kirimTautan} noValidate>
+                <div className="grid gap-2">
+                  <Label htmlFor="email">Email akun terdaftar</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setError("");
+                    }}
+                    placeholder="nama@email.com"
+                    aria-invalid={!!error}
+                  />
+                  {error ? <p className="text-xs text-destructive">{error}</p> : null}
+                </div>
+                <Button type="submit" disabled={loading} className="uppercase tracking-wide">
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                  {loading ? "Mengirim…" : "Kirim Tautan Reset"}
+                </Button>
+              </form>
+            )
           ) : (
             <form className="grid gap-4" onSubmit={simpanSandi} noValidate>
               <div className="grid gap-2">
@@ -115,6 +168,7 @@ function LupaKataSandiPage() {
                   id="password"
                   type="password"
                   autoComplete="new-password"
+                  placeholder="Minimal 6 karakter"
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
@@ -128,6 +182,7 @@ function LupaKataSandiPage() {
                   id="confirm"
                   type="password"
                   autoComplete="new-password"
+                  placeholder="Ulangi kata sandi baru"
                   value={confirm}
                   onChange={(e) => {
                     setConfirm(e.target.value);
@@ -136,7 +191,7 @@ function LupaKataSandiPage() {
                 />
                 {error ? <p className="text-xs text-destructive">{error}</p> : null}
               </div>
-              <Button type="submit" disabled={loading}>
+              <Button type="submit" disabled={loading} className="uppercase tracking-wide">
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
                 {loading ? "Menyimpan…" : "Simpan Kata Sandi Baru"}
               </Button>

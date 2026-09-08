@@ -1,6 +1,9 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
+import type { User } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface GuruProfile {
+  id?: string;
   nama: string;
   email: string;
   nip: string;
@@ -9,47 +12,21 @@ export interface GuruProfile {
   kelas: string;
   telepon: string;
   bio: string;
+  role?: "guru" | "siswa" | string;
 }
 
-export type AccountStatus = "menunggu" | "aktif";
-
-export interface GuruAccount {
-  id: string;
-  role: "guru";
-  nama: string;
-  email: string;
-  telepon: string;
-  sekolah: string;
-  mapel: string;
-  nip: string;
-  password: string;
-  status: AccountStatus;
-}
-
-export interface SiswaAccount {
-  id: string;
-  role: "siswa";
-  nama: string;
-  email: string;
-  telepon: string;
-  sekolah: string;
-  jenjang: string; // mis. "XI"
-  nisn: string;
-  password: string;
-  status: AccountStatus; // "menunggu" | "aktif"
-}
-
-export type AnyAccount = GuruAccount | SiswaAccount;
+export type UserProfile = GuruProfile;
 
 export interface AuthState {
+  ready: boolean;
   signedIn: boolean;
-  remember: boolean;
+  user: User | null;
   profile: GuruProfile;
 }
 
 export type LoginResult =
   | { ok: true }
-  | { ok: false; reason: "invalid" | "pending" };
+  | { ok: false; message: string };
 
 export type RegisterGuruInput = {
   nama: string;
@@ -73,348 +50,417 @@ export type RegisterSiswaInput = {
 
 export type RegisterInput = RegisterGuruInput;
 
-export const AUTH_PUBLIC_PATHS = ["/login", "/daftar", "/lupa-kata-sandi", "/landing", "/gabung", "/auth"] as const;
+export const AUTH_PUBLIC_PATHS = [
+  "/login",
+  "/daftar",
+  "/lupa-kata-sandi",
+  "/landing",
+  "/gabung",
+] as const;
 
 export function isAuthPublicPath(pathname: string) {
   const clean = pathname.replace(/\/+$/, "") || "/";
   return (
-    (AUTH_PUBLIC_PATHS as readonly string[]).includes(clean) ||
+    (AUTH_PUBLIC_PATHS as readonly string[]).includes(clean as (typeof AUTH_PUBLIC_PATHS)[number]) ||
     clean.startsWith("/gabung/")
   );
 }
 
-const AUTH_KEY = "gurupro.auth";
-const ACCOUNTS_KEY = "gurupro.accounts";
-const RESET_KEY = "gurupro.password-reset";
-
-/** Akun demo prototipe (frontend-only, tanpa backend). */
-export const DEMO_AKUN = { email: "guru@gurupro.id", password: "gurupro123" };
-
 export const DEFAULT_PROFILE: GuruProfile = {
-  nama: "Bu Sari Wulandari",
-  email: DEMO_AKUN.email,
-  nip: "19850312 201001 2 004",
-  sekolah: "SMK Negeri 1 Nusantara",
-  mapel: "Matematika",
-  kelas: "X IPA 3, XI IPA 1, XI IPA 2",
-  telepon: "0812-3456-7890",
-  bio: "Guru matematika yang senang memanfaatkan teknologi untuk mengurangi beban administrasi.",
-};
-
-const DEMO_ACCOUNT: GuruAccount = {
-  id: "demo-guru",
+  id: "",
+  nama: "Pengguna GuruPro",
+  email: "",
+  nip: "",
+  sekolah: "",
+  mapel: "",
+  kelas: "",
+  telepon: "",
+  bio: "",
   role: "guru",
-  nama: DEFAULT_PROFILE.nama,
-  email: DEMO_AKUN.email,
-  telepon: DEFAULT_PROFILE.telepon,
-  sekolah: DEFAULT_PROFILE.sekolah,
-  mapel: DEFAULT_PROFILE.mapel,
-  nip: DEFAULT_PROFILE.nip,
-  password: DEMO_AKUN.password,
-  status: "aktif",
 };
 
-const LOGGED_OUT: AuthState = { signedIn: false, remember: true, profile: DEFAULT_PROFILE };
+const LOGGED_OUT: AuthState = {
+  ready: false,
+  signedIn: false,
+  user: null,
+  profile: DEFAULT_PROFILE,
+};
 
-let state: AuthState | null = null;
+let state: AuthState = { ...LOGGED_OUT };
 const listeners = new Set<() => void>();
 
 const emit = () => listeners.forEach((l) => l());
 
-function profileFromAccount(account: AnyAccount, prev?: GuruProfile): GuruProfile {
-  if (account.role === "guru") {
-    return {
-      nama: account.nama,
-      email: account.email,
-      nip: account.nip,
-      sekolah: account.sekolah,
-      mapel: account.mapel,
-      kelas: prev?.email === account.email ? prev.kelas : "",
-      telepon: account.telepon,
-      bio: prev?.email === account.email ? prev.bio : "",
-    };
-  }
-  return {
-    nama: account.nama,
-    email: account.email,
-    nip: account.nisn,
-    sekolah: account.sekolah,
-    mapel: "Siswa",
-    kelas: account.jenjang,
-    telepon: account.telepon,
-    bio: "",
-  };
-}
-
-function persistAuth() {
-  if (typeof window === "undefined" || !state) return;
-  try {
-    if (!state.signedIn) {
-      window.localStorage.removeItem(AUTH_KEY);
-      window.sessionStorage.removeItem(AUTH_KEY);
-      return;
-    }
-    const payload = JSON.stringify(state);
-    if (state.remember) {
-      window.localStorage.setItem(AUTH_KEY, payload);
-      window.sessionStorage.removeItem(AUTH_KEY);
-    } else {
-      window.sessionStorage.setItem(AUTH_KEY, payload);
-      window.localStorage.removeItem(AUTH_KEY);
-    }
-  } catch {
-    /* ignore */
-  }
-}
-
-type StoredAccount = Partial<Omit<GuruAccount, "role" | "status">> &
-  Partial<Omit<SiswaAccount, "role" | "status">> & {
-    role?: string;
-    status?: string;
-    kelas?: string;
-    nis?: string;
-  };
-
-function readAccounts(): AnyAccount[] {
-  if (typeof window === "undefined") return [DEMO_ACCOUNT];
-  try {
-    const raw = window.localStorage.getItem(ACCOUNTS_KEY);
-    const parsed = raw ? (JSON.parse(raw) as StoredAccount[]) : [];
-    const list: AnyAccount[] = (Array.isArray(parsed) ? parsed : []).map((acc) => {
-      if (!acc.role || acc.role === "guru") {
-        return {
-          id: acc.id ?? `guru-${Date.now()}`,
-          role: "guru" as const,
-          nama: acc.nama ?? "",
-          email: acc.email ?? "",
-          telepon: acc.telepon ?? "",
-          sekolah: acc.sekolah ?? "",
-          mapel: acc.mapel ?? "",
-          nip: acc.nip ?? "",
-          password: acc.password ?? "",
-          status: (acc.status as AccountStatus) ?? "aktif",
-        };
-      }
-      return {
-        id: acc.id ?? `siswa-${Date.now()}`,
-        role: "siswa" as const,
-        nama: acc.nama ?? "",
-        email: acc.email ?? "",
-        telepon: acc.telepon ?? "",
-        sekolah: acc.sekolah ?? "",
-        jenjang: acc.jenjang ?? acc.kelas ?? "XI",
-        nisn: acc.nisn ?? acc.nis ?? "",
-        password: acc.password ?? "",
-        status: (acc.status as AccountStatus) ?? "menunggu",
-      };
-    });
-    if (!list.some((a) => a.email.toLowerCase() === DEMO_AKUN.email)) {
-      list.unshift(DEMO_ACCOUNT);
-      window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(list));
-    }
-    return list;
-  } catch {
-    return [DEMO_ACCOUNT];
-  }
-}
-
-function writeAccounts(accounts: AnyAccount[]) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
-  } catch {
-    /* ignore */
-  }
-}
-
-function findAccount(email: string): AnyAccount | undefined {
-  return readAccounts().find((a) => a.email.toLowerCase() === email.trim().toLowerCase());
-}
-
-let isLoaded = false;
-
-function load() {
-  if (isLoaded || typeof window === "undefined") return;
-  try {
-    const raw = window.sessionStorage.getItem(AUTH_KEY) ?? window.localStorage.getItem(AUTH_KEY);
-    state = raw ? { ...LOGGED_OUT, ...(JSON.parse(raw) as AuthState) } : { ...LOGGED_OUT };
-  } catch {
-    state = { ...LOGGED_OUT };
-  }
-  isLoaded = true;
-  emit();
-}
-
-const get = () => state ?? LOGGED_OUT;
+const get = () => state;
 
 const subscribe = (l: () => void) => {
   listeners.add(l);
   return () => listeners.delete(l);
 };
 
-function set(next: AuthState) {
-  state = next;
-  isLoaded = true;
-  persistAuth();
+function setState(next: Partial<AuthState>) {
+  state = { ...state, ...next };
   emit();
 }
 
-/** null = belum diketahui (SSR / sebelum localStorage dibaca). */
-export function useAuth(): { ready: boolean; signedIn: boolean; profile: GuruProfile } {
-  const [mounted, setMounted] = useState(isLoaded);
+async function fetchProfileForUser(user: User): Promise<GuruProfile> {
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.warn("[Auth] Failed to load profile from DB:", error.message);
+    }
+
+    if (data) {
+      return {
+        id: data.id,
+        nama: data.nama || (user.user_metadata?.nama as string) || "Guru",
+        email: data.email || user.email || "",
+        nip: data.nip || "",
+        sekolah: data.sekolah || "",
+        mapel: data.mapel || "",
+        kelas: data.kelas || "",
+        telepon: data.telepon || "",
+        bio: data.bio || "",
+        role: data.role || (user.user_metadata?.role as string) || "guru",
+      };
+    }
+
+    // Fallback jika baris di tabel profiles belum ada
+    return {
+      id: user.id,
+      nama: (user.user_metadata?.nama as string) || user.email?.split("@")[0] || "Pengguna",
+      email: user.email || "",
+      nip: (user.user_metadata?.nip as string) || "",
+      sekolah: (user.user_metadata?.sekolah as string) || "",
+      mapel: (user.user_metadata?.mapel as string) || "",
+      kelas: (user.user_metadata?.kelas as string) || "",
+      telepon: (user.user_metadata?.telepon as string) || "",
+      bio: "",
+      role: (user.user_metadata?.role as string) || "guru",
+    };
+  } catch (err) {
+    console.error("[Auth] Unexpected error fetching profile:", err);
+    return {
+      id: user.id,
+      nama: user.email?.split("@")[0] || "Pengguna",
+      email: user.email || "",
+      nip: "",
+      sekolah: "",
+      mapel: "",
+      kelas: "",
+      telepon: "",
+      bio: "",
+      role: "guru",
+    };
+  }
+}
+
+let initialized = false;
+
+function initAuth() {
+  if (initialized || typeof window === "undefined") return;
+  initialized = true;
+
+  // Cek session saat pertama kali load
+  supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+    if (error || !session?.user) {
+      setState({ ready: true, signedIn: false, user: null, profile: DEFAULT_PROFILE });
+      return;
+    }
+
+    const profile = await fetchProfileForUser(session.user);
+    setState({
+      ready: true,
+      signedIn: true,
+      user: session.user,
+      profile,
+    });
+  });
+
+  // Listen perubahan auth state (misal login, logout, token refresh)
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    if (session?.user) {
+      const profile = await fetchProfileForUser(session.user);
+      setState({
+        ready: true,
+        signedIn: true,
+        user: session.user,
+        profile,
+      });
+    } else {
+      setState({
+        ready: true,
+        signedIn: false,
+        user: null,
+        profile: DEFAULT_PROFILE,
+      });
+    }
+  });
+}
+
+export function useAuth(): {
+  ready: boolean;
+  signedIn: boolean;
+  user: User | null;
+  profile: GuruProfile;
+} {
   const current = useSyncExternalStore(subscribe, get, () => LOGGED_OUT);
 
   useEffect(() => {
-    load();
-    setMounted(true);
+    initAuth();
   }, []);
 
-  const ready = mounted || isLoaded;
-  return { ready, signedIn: current.signedIn, profile: current.profile };
+  return {
+    ready: current.ready,
+    signedIn: current.signedIn,
+    user: current.user,
+    profile: current.profile,
+  };
 }
 
-export function login(email: string, password: string, remember = true): LoginResult {
-  load();
-  const account = findAccount(email);
-  if (!account || account.password !== password) {
-    return { ok: false, reason: "invalid" };
-  }
-  if (account.status !== "aktif") {
-    return { ok: false, reason: "pending" };
-  }
-  set({
-    signedIn: true,
-    remember,
-    profile: profileFromAccount(account, get().profile),
-  });
-  return { ok: true };
-}
-
-export function logout() {
-  load();
-  set({ signedIn: false, remember: true, profile: get().profile });
-}
-
-export function registerGuru(input: RegisterGuruInput): { ok: true } | { ok: false; reason: "duplicate" } {
-  load();
-  const accounts = readAccounts();
-  if (accounts.some((a) => a.email.toLowerCase() === input.email.trim().toLowerCase())) {
-    return { ok: false, reason: "duplicate" };
-  }
-  accounts.push({
-    id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `guru-${Date.now()}`,
-    role: "guru",
-    nama: input.nama.trim(),
-    email: input.email.trim().toLowerCase(),
-    telepon: input.telepon.trim(),
-    sekolah: input.sekolah.trim(),
-    mapel: input.mapel.trim(),
-    nip: input.nip.trim(),
-    password: input.password,
-    status: "menunggu",
-  });
-  writeAccounts(accounts);
-  return { ok: true };
-}
-
-export function registerSiswa(input: RegisterSiswaInput): { ok: true } | { ok: false; reason: "duplicate" } {
-  load();
-  const accounts = readAccounts();
-  if (accounts.some((a) => a.email.toLowerCase() === input.email.trim().toLowerCase())) {
-    return { ok: false, reason: "duplicate" };
-  }
-  accounts.push({
-    id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `siswa-${Date.now()}`,
-    role: "siswa",
-    nama: input.nama.trim(),
-    email: input.email.trim().toLowerCase(),
-    telepon: (input.telepon ?? "").trim(),
-    sekolah: input.sekolah.trim(),
-    jenjang: input.jenjang.trim(),
-    nisn: input.nisn.trim(),
-    password: input.password,
-    status: "menunggu",
-  });
-  writeAccounts(accounts);
-  return { ok: true };
-}
-
-/** Simulasi verifikasi Admin agar akun terdaftar bisa dipakai di prototipe. */
-export function activatePendingAccount(email: string): boolean {
-  const accounts = readAccounts();
-  const idx = accounts.findIndex((a) => a.email.toLowerCase() === email.trim().toLowerCase());
-  if (idx < 0) return false;
-  const target = accounts[idx];
-  if (!target) return false;
-  accounts[idx] = { ...target, status: "aktif" };
-  writeAccounts(accounts);
-  return true;
-}
-
-export function requestPasswordReset(email: string): boolean {
-  const account = findAccount(email);
-  if (!account || typeof window === "undefined") return false;
+export async function login(
+  email: string,
+  password: string,
+  _remember = true,
+): Promise<LoginResult> {
   try {
-    window.sessionStorage.setItem(
-      RESET_KEY,
-      JSON.stringify({ email: account.email, createdAt: Date.now() }),
-    );
-  } catch {
-    return false;
-  }
-  return true;
-}
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
 
-export function getPendingResetEmail(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.sessionStorage.getItem(RESET_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { email?: string };
-    return parsed.email ?? null;
-  } catch {
-    return null;
-  }
-}
-
-export function completePasswordReset(email: string, password: string): boolean {
-  const accounts = readAccounts();
-  const idx = accounts.findIndex((a) => a.email.toLowerCase() === email.trim().toLowerCase());
-  if (idx < 0) return false;
-  const target = accounts[idx];
-  if (!target) return false;
-  accounts[idx] = { ...target, password };
-  writeAccounts(accounts);
-  if (typeof window !== "undefined") {
-    try {
-      window.sessionStorage.removeItem(RESET_KEY);
-    } catch {
-      /* ignore */
+    if (error) {
+      return { ok: false, message: error.message };
     }
+
+    if (!data.user) {
+      return { ok: false, message: "Pengguna tidak ditemukan." };
+    }
+
+    const profile = await fetchProfileForUser(data.user);
+    setState({
+      ready: true,
+      signedIn: true,
+      user: data.user,
+      profile,
+    });
+
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat masuk.";
+    return { ok: false, message: msg };
   }
-  return true;
 }
 
-export function updateProfile(patch: Partial<GuruProfile>) {
-  load();
-  const nextProfile = { ...get().profile, ...patch };
-  set({ ...get(), profile: nextProfile });
-  if (!get().signedIn) return;
-  const accounts = readAccounts();
-  const idx = accounts.findIndex((a) => a.email.toLowerCase() === nextProfile.email.toLowerCase());
-  if (idx < 0) return;
-  const target = accounts[idx];
-  if (target && target.role === "guru") {
-    accounts[idx] = {
-      ...target,
-      nama: nextProfile.nama,
-      email: nextProfile.email,
-      nip: nextProfile.nip,
-      sekolah: nextProfile.sekolah,
-      mapel: nextProfile.mapel,
-      telepon: nextProfile.telepon,
-    };
-    writeAccounts(accounts);
+export async function logout(): Promise<void> {
+  try {
+    await supabase.auth.signOut();
+  } catch (err) {
+    console.error("[Auth] Sign out error:", err);
+  } finally {
+    setState({
+      ready: true,
+      signedIn: false,
+      user: null,
+      profile: DEFAULT_PROFILE,
+    });
+  }
+}
+
+export async function registerGuru(
+  input: RegisterGuruInput,
+): Promise<{ ok: true; user?: User } | { ok: false; message: string }> {
+  try {
+    const email = input.email.trim().toLowerCase();
+
+    // 1. Buat user di Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password: input.password,
+      options: {
+        data: {
+          nama: input.nama.trim(),
+          role: "guru",
+          sekolah: input.sekolah.trim(),
+          mapel: input.mapel.trim(),
+          nip: input.nip.trim(),
+          telepon: input.telepon.trim(),
+        },
+      },
+    });
+
+    if (authError) {
+      return { ok: false, message: authError.message };
+    }
+
+    const user = authData.user;
+    if (!user) {
+      return { ok: false, message: "Gagal membuat akun." };
+    }
+
+    // 2. Simpan profil di tabel profiles (menggunakan user.id, tanpa password)
+    const { error: profileError } = await supabase.from("profiles").upsert(
+      {
+        id: user.id,
+        nama: input.nama.trim(),
+        email,
+        nip: input.nip.trim(),
+        sekolah: input.sekolah.trim(),
+        mapel: input.mapel.trim(),
+        kelas: "",
+        telepon: input.telepon.trim(),
+        bio: "",
+        role: "guru",
+      },
+      { onConflict: "id" },
+    );
+
+    if (profileError) {
+      console.warn("[Auth] Failed to insert profile row:", profileError.message);
+    }
+
+    return { ok: true, user };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat mendaftar.";
+    return { ok: false, message: msg };
+  }
+}
+
+export async function registerSiswa(
+  input: RegisterSiswaInput,
+): Promise<{ ok: true; user?: User } | { ok: false; message: string }> {
+  try {
+    const email = input.email.trim().toLowerCase();
+
+    // 1. Buat user di Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password: input.password,
+      options: {
+        data: {
+          nama: input.nama.trim(),
+          role: "siswa",
+          sekolah: input.sekolah.trim(),
+          jenjang: input.jenjang.trim(),
+          nisn: input.nisn.trim(),
+          telepon: (input.telepon ?? "").trim(),
+        },
+      },
+    });
+
+    if (authError) {
+      return { ok: false, message: authError.message };
+    }
+
+    const user = authData.user;
+    if (!user) {
+      return { ok: false, message: "Gagal membuat akun siswa." };
+    }
+
+    // 2. Simpan profil di tabel profiles (menggunakan user.id, tanpa password)
+    const { error: profileError } = await supabase.from("profiles").upsert(
+      {
+        id: user.id,
+        nama: input.nama.trim(),
+        email,
+        nip: input.nisn.trim(), // NISN disimpan pada kolom nip
+        sekolah: input.sekolah.trim(),
+        mapel: "Siswa",
+        kelas: input.jenjang.trim(),
+        telepon: (input.telepon ?? "").trim(),
+        bio: "",
+        role: "siswa",
+      },
+      { onConflict: "id" },
+    );
+
+    if (profileError) {
+      console.warn("[Auth] Failed to insert student profile row:", profileError.message);
+    }
+
+    return { ok: true, user };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat mendaftar.";
+    return { ok: false, message: msg };
+  }
+}
+
+export async function updateProfile(
+  patch: Partial<GuruProfile>,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const current = get();
+  const nextProfile = { ...current.profile, ...patch };
+  setState({ profile: nextProfile });
+
+  if (!current.user) {
+    return { ok: true };
+  }
+
+  try {
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        nama: nextProfile.nama,
+        nip: nextProfile.nip,
+        sekolah: nextProfile.sekolah,
+        mapel: nextProfile.mapel,
+        kelas: nextProfile.kelas,
+        telepon: nextProfile.telepon,
+        bio: nextProfile.bio,
+      })
+      .eq("id", current.user.id);
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal memperbarui profil di database.";
+    return { ok: false, message: msg };
+  }
+}
+
+export async function requestPasswordReset(
+  email: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const redirectUrl =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/lupa-kata-sandi`
+        : undefined;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(
+      email.trim().toLowerCase(),
+      { redirectTo: redirectUrl },
+    );
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal mengirim permintaan reset kata sandi.";
+    return { ok: false, message: msg };
+  }
+}
+
+export async function completePasswordReset(
+  password: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal memperbarui kata sandi.";
+    return { ok: false, message: msg };
   }
 }
 

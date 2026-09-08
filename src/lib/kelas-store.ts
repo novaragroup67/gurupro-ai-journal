@@ -1,109 +1,40 @@
-import { useEffect, useSyncExternalStore } from "react";
-import { activatePendingAccount } from "./auth-store";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface Kelas {
   id: string;
-  namaKelas: string; // mis. "IPA 1"
-  tingkat: string; // mis. "XI"
+  namaKelas: string;
+  tingkat: string;
   mapel: string;
-  tahunAjaran: string; // mis. "2025/2026"
-  guruEmail: string; // email guru pemilik kelas
-  kodeKelas: string; // mis. "XI-MTK-8F3K" — unik, auto-generate
+  tahunAjaran: string;
+  guruId: string;
+  kodeKelas: string;
   createdAt: string;
 }
 
 export interface AnggotaKelas {
   id: string;
   kelasId: string;
+  siswaId: string;
   siswaEmail: string;
   siswaNama: string;
   siswaNisn: string;
   status: "menunggu" | "aktif" | "ditolak";
-  jenis: "akun-baru" | "tambah-kelas"; // untuk tampilan di verifikasi
-  diajukan: string; // ISO date
+  jenis: "akun-baru" | "tambah-kelas";
+  diajukan: string;
 }
 
-const KELAS_KEY = "gurupro.kelas";
-const ANGGOTA_KEY = "gurupro.kelas-anggota";
+export type AnggotaItem = AnggotaKelas & {
+  namaKelas: string;
+  mapel: string;
+  tingkat: string;
+};
 
-const DEMO_KELAS: Kelas[] = [
-  {
-    id: "demo-kelas-1",
-    namaKelas: "IPA 1",
-    tingkat: "XI",
-    mapel: "Matematika",
-    tahunAjaran: "2025/2026",
-    guruEmail: "guru@gurupro.id",
-    kodeKelas: "XI-MTK-8F3K",
-    createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
-  },
-];
-
-const DEMO_ANGGOTA: AnggotaKelas[] = [
-  {
-    id: "demo-anggota-1",
-    kelasId: "demo-kelas-1",
-    siswaEmail: "yusuf@siswa.id",
-    siswaNama: "Yusuf Kurniawan",
-    siswaNisn: "0071234567",
-    status: "menunggu",
-    jenis: "akun-baru",
-    diajukan: new Date(Date.now() - 3600000 * 4).toISOString(),
-  },
-];
-
+// Local cache for synchronous UI rendering with useSyncExternalStore
+let cachedKelasList: Kelas[] = [];
+let cachedAnggotaList: AnggotaKelas[] = [];
 const listeners = new Set<() => void>();
 const emitChange = () => listeners.forEach((l) => l());
-
-export function readKelasList(): Kelas[] {
-  if (typeof window === "undefined") return DEMO_KELAS;
-  try {
-    const raw = window.localStorage.getItem(KELAS_KEY);
-    if (!raw) {
-      window.localStorage.setItem(KELAS_KEY, JSON.stringify(DEMO_KELAS));
-      return DEMO_KELAS;
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : DEMO_KELAS;
-  } catch {
-    return DEMO_KELAS;
-  }
-}
-
-export function writeKelasList(data: Kelas[]) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(KELAS_KEY, JSON.stringify(data));
-    emitChange();
-  } catch {
-    /* ignore */
-  }
-}
-
-export function readAnggotaList(): AnggotaKelas[] {
-  if (typeof window === "undefined") return DEMO_ANGGOTA;
-  try {
-    const raw = window.localStorage.getItem(ANGGOTA_KEY);
-    if (!raw) {
-      window.localStorage.setItem(ANGGOTA_KEY, JSON.stringify(DEMO_ANGGOTA));
-      return DEMO_ANGGOTA;
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : DEMO_ANGGOTA;
-  } catch {
-    return DEMO_ANGGOTA;
-  }
-}
-
-export function writeAnggotaList(data: AnggotaKelas[]) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(ANGGOTA_KEY, JSON.stringify(data));
-    emitChange();
-  } catch {
-    /* ignore */
-  }
-}
 
 function singkatMapel(mapel: string): string {
   const map: Record<string, string> = {
@@ -144,220 +75,383 @@ export function generateKodeKelas(tingkat: string, mapel: string): string {
   return `${t}-${m}-${r}`;
 }
 
-export function buatKelas(data: {
+// Fetch all classes from Supabase
+export async function refreshKelasList(): Promise<Kelas[]> {
+  try {
+    const { data, error } = await supabase
+      .from("kelas")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.warn("[Kelas] Error fetching classes:", error.message);
+      return cachedKelasList;
+    }
+
+    cachedKelasList = (data || []).map((row) => ({
+      id: row.id,
+      namaKelas: row.nama_kelas,
+      tingkat: row.tingkat,
+      mapel: row.mapel,
+      tahunAjaran: row.tahun_ajaran,
+      guruId: row.guru_id,
+      kodeKelas: row.kode_kelas,
+      createdAt: row.created_at,
+    }));
+    emitChange();
+    return cachedKelasList;
+  } catch (err) {
+    console.error("[Kelas] Unexpected error:", err);
+    return cachedKelasList;
+  }
+}
+
+// Fetch all members from Supabase
+export async function refreshAnggotaList(): Promise<AnggotaKelas[]> {
+  try {
+    const { data, error } = await supabase
+      .from("kelas_anggota")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.warn("[Kelas] Error fetching members:", error.message);
+      return cachedAnggotaList;
+    }
+
+    cachedAnggotaList = (data || []).map((row) => ({
+      id: row.id,
+      kelasId: row.kelas_id,
+      siswaId: row.siswa_id,
+      siswaEmail: row.siswa_email,
+      siswaNama: row.siswa_nama,
+      siswaNisn: row.siswa_nisn,
+      status: (row.status as "menunggu" | "aktif" | "ditolak") || "menunggu",
+      jenis: (row.jenis as "akun-baru" | "tambah-kelas") || "tambah-kelas",
+      diajukan: row.created_at,
+    }));
+    emitChange();
+    return cachedAnggotaList;
+  } catch (err) {
+    console.error("[Kelas] Unexpected error:", err);
+    return cachedAnggotaList;
+  }
+}
+
+// Create new class in Supabase
+export async function buatKelas(data: {
   namaKelas: string;
   tingkat: string;
   mapel: string;
   tahunAjaran: string;
-  guruEmail: string;
-}): Kelas {
-  const list = readKelasList();
-  let kode = generateKodeKelas(data.tingkat, data.mapel);
-  while (list.some((k) => k.kodeKelas.toUpperCase() === kode.toUpperCase())) {
-    kode = generateKodeKelas(data.tingkat, data.mapel);
+  guruId: string;
+}): Promise<Kelas> {
+  const kode = generateKodeKelas(data.tingkat, data.mapel);
+
+  const { data: inserted, error } = await supabase
+    .from("kelas")
+    .insert({
+      nama_kelas: data.namaKelas.trim(),
+      tingkat: data.tingkat.trim(),
+      mapel: data.mapel.trim(),
+      tahun_ajaran: data.tahunAjaran.trim(),
+      guru_id: data.guruId,
+      kode_kelas: kode,
+    })
+    .select()
+    .single();
+
+  if (error || !inserted) {
+    throw new Error(error?.message || "Gagal membuat kelas di database.");
   }
 
   const newKelas: Kelas = {
-    id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `kelas-${Date.now()}`,
-    namaKelas: data.namaKelas.trim(),
-    tingkat: data.tingkat.trim(),
-    mapel: data.mapel.trim(),
-    tahunAjaran: data.tahunAjaran.trim(),
-    guruEmail: data.guruEmail.trim().toLowerCase(),
-    kodeKelas: kode,
-    createdAt: new Date().toISOString(),
+    id: inserted.id,
+    namaKelas: inserted.nama_kelas,
+    tingkat: inserted.tingkat,
+    mapel: inserted.mapel,
+    tahunAjaran: inserted.tahun_ajaran,
+    guruId: inserted.guru_id,
+    kodeKelas: inserted.kode_kelas,
+    createdAt: inserted.created_at,
   };
 
-  list.unshift(newKelas);
-  writeKelasList(list);
+  cachedKelasList = [newKelas, ...cachedKelasList.filter((k) => k.id !== newKelas.id)];
+  emitChange();
   return newKelas;
 }
 
-export function perbaruiKodeKelas(id: string): Kelas | null {
-  const list = readKelasList();
-  const idx = list.findIndex((k) => k.id === id);
-  if (idx < 0) return null;
-  const target = list[idx];
+// Regenerate class code in Supabase
+export async function perbaruiKodeKelas(id: string): Promise<Kelas | null> {
+  const target = cachedKelasList.find((k) => k.id === id);
   if (!target) return null;
 
-  let newKode = generateKodeKelas(target.tingkat, target.mapel);
-  while (list.some((k) => k.kodeKelas.toUpperCase() === newKode.toUpperCase())) {
-    newKode = generateKodeKelas(target.tingkat, target.mapel);
+  const newKode = generateKodeKelas(target.tingkat, target.mapel);
+
+  const { data: updated, error } = await supabase
+    .from("kelas")
+    .update({ kode_kelas: newKode })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error || !updated) {
+    throw new Error(error?.message || "Gagal memperbarui kode kelas.");
   }
 
-  const updated: Kelas = {
-    ...target,
-    kodeKelas: newKode,
+  const updatedKelas: Kelas = {
+    id: updated.id,
+    namaKelas: updated.nama_kelas,
+    tingkat: updated.tingkat,
+    mapel: updated.mapel,
+    tahunAjaran: updated.tahun_ajaran,
+    guruId: updated.guru_id,
+    kodeKelas: updated.kode_kelas,
+    createdAt: updated.created_at,
   };
-  list[idx] = updated;
-  writeKelasList(list);
-  return updated;
+
+  cachedKelasList = cachedKelasList.map((k) => (k.id === id ? updatedKelas : k));
+  emitChange();
+  return updatedKelas;
 }
 
-export function getKelasByGuru(guruEmail: string): Kelas[] {
-  const email = guruEmail.trim().toLowerCase();
-  return readKelasList().filter((k) => k.guruEmail.toLowerCase() === email);
+export async function getKelasByKode(kodeKelas: string): Promise<Kelas | null> {
+  const cleanKode = kodeKelas.trim().toUpperCase();
+  const { data, error } = await supabase
+    .from("kelas")
+    .select("*")
+    .ilike("kode_kelas", cleanKode)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  return {
+    id: data.id,
+    namaKelas: data.nama_kelas,
+    tingkat: data.tingkat,
+    mapel: data.mapel,
+    tahunAjaran: data.tahun_ajaran,
+    guruId: data.guru_id,
+    kodeKelas: data.kode_kelas,
+    createdAt: data.created_at,
+  };
 }
 
-export function getKelasByKode(kodeKelas: string): Kelas | undefined {
-  const kode = kodeKelas.trim().toUpperCase();
-  return readKelasList().find((k) => k.kodeKelas.toUpperCase() === kode);
-}
-
-export function hapusKelas(id: string) {
-  const list = readKelasList().filter((k) => k.id !== id);
-  writeKelasList(list);
-  const anggota = readAnggotaList().filter((a) => a.kelasId !== id);
-  writeAnggotaList(anggota);
-}
-
-export function ajukanGabung(data: {
-  kelasId: string;
+export async function ajukanGabung(data: {
+  kodeKelas: string;
+  siswaId: string;
   siswaEmail: string;
   siswaNama: string;
   siswaNisn: string;
-  jenis: "akun-baru" | "tambah-kelas";
-}): { ok: true } | { ok: false; reason: "already-requested" | "already-member" } {
-  const anggota = readAnggotaList();
-  const email = data.siswaEmail.trim().toLowerCase();
+  jenis?: "akun-baru" | "tambah-kelas";
+}): Promise<{ ok: true; kelas: Kelas } | { ok: false; reason: "invalid-code" | "already-member" | "error"; message: string }> {
+  try {
+    // 1. Validasi kode kelas di database Supabase
+    const cleanKode = data.kodeKelas.trim().toUpperCase();
+    const { data: kelasRow, error: kelasError } = await supabase
+      .from("kelas")
+      .select("*")
+      .ilike("kode_kelas", cleanKode)
+      .maybeSingle();
 
-  const existing = anggota.find(
-    (a) => a.kelasId === data.kelasId && a.siswaEmail.toLowerCase() === email,
-  );
-
-  if (existing) {
-    if (existing.status === "aktif") {
-      return { ok: false, reason: "already-member" };
-    }
-    if (existing.status === "menunggu") {
-      return { ok: false, reason: "already-requested" };
-    }
-    // Jika ditolak sebelumnya, ubah kembali menjadi menunggu
-    existing.status = "menunggu";
-    existing.diajukan = new Date().toISOString();
-    existing.jenis = data.jenis;
-    writeAnggotaList(anggota);
-    return { ok: true };
-  }
-
-  anggota.push({
-    id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `agt-${Date.now()}`,
-    kelasId: data.kelasId,
-    siswaEmail: email,
-    siswaNama: data.siswaNama.trim(),
-    siswaNisn: data.siswaNisn.trim(),
-    status: "menunggu",
-    jenis: data.jenis,
-    diajukan: new Date().toISOString(),
-  });
-
-  writeAnggotaList(anggota);
-  return { ok: true };
-}
-
-export function getAnggotaMenunggu(kelasId?: string): AnggotaKelas[] {
-  const anggota = readAnggotaList();
-  if (kelasId) {
-    return anggota.filter((a) => a.kelasId === kelasId && a.status === "menunggu");
-  }
-  return anggota.filter((a) => a.status === "menunggu");
-}
-
-export function getAnggotaByKelas(kelasId: string): AnggotaKelas[] {
-  return readAnggotaList().filter((a) => a.kelasId === kelasId);
-}
-
-export function getSemuaAnggotaByGuru(
-  guruEmail: string,
-): (AnggotaKelas & { namaKelas: string; mapel: string; tingkat: string })[] {
-  const kelasGuru = getKelasByGuru(guruEmail);
-  const kelasMap = new Map(kelasGuru.map((k) => [k.id, k]));
-  const anggota = readAnggotaList();
-
-  return anggota
-    .filter((a) => kelasMap.has(a.kelasId))
-    .map((a) => {
-      const k = kelasMap.get(a.kelasId);
+    if (kelasError || !kelasRow) {
       return {
-        ...a,
-        namaKelas: k ? `${k.tingkat} ${k.namaKelas}` : "Kelas",
-        mapel: k ? k.mapel : "-",
-        tingkat: k ? k.tingkat : "-",
+        ok: false,
+        reason: "invalid-code",
+        message: "Kode kelas tidak valid atau tidak ditemukan. Periksa kembali kode dari gurumu.",
+      };
+    }
+
+    // 2. Cegah duplikasi keanggotaan / permohonan kelas
+    const { data: existing, error: checkError } = await supabase
+      .from("kelas_anggota")
+      .select("*")
+      .eq("kelas_id", kelasRow.id)
+      .eq("siswa_id", data.siswaId)
+      .maybeSingle();
+
+    if (checkError && checkError.code !== "PGRST116") {
+      console.warn("[Kelas] Duplicate check warning:", checkError.message);
+    }
+
+    if (existing) {
+      const statusText =
+        existing.status === "aktif"
+          ? "Anda sudah menjadi anggota kelas ini."
+          : existing.status === "menunggu"
+            ? "Permintaan bergabung sedang menunggu verifikasi guru."
+            : "Permintaan Anda sebelumnya telah ditolak oleh guru.";
+
+      return {
+        ok: false,
+        reason: "already-member",
+        message: `Tidak dapat mengajukan kembali: ${statusText}`,
+      };
+    }
+
+    // 3. Masukkan record baru ke tabel kelas_anggota
+    const { data: inserted, error: insertError } = await supabase
+      .from("kelas_anggota")
+      .insert({
+        kelas_id: kelasRow.id,
+        siswa_id: data.siswaId,
+        status: "menunggu",
+        jenis: data.jenis || "tambah-kelas",
+        siswa_email: data.siswaEmail.trim().toLowerCase(),
+        siswa_nama: data.siswaNama.trim(),
+        siswa_nisn: data.siswaNisn.trim(),
+      })
+      .select()
+      .single();
+
+    if (insertError || !inserted) {
+      return {
+        ok: false,
+        reason: "error",
+        message: insertError?.message || "Gagal mengajukan permintaan gabung kelas.",
+      };
+    }
+
+    const targetKelas: Kelas = {
+      id: kelasRow.id,
+      namaKelas: kelasRow.nama_kelas,
+      tingkat: kelasRow.tingkat,
+      mapel: kelasRow.mapel,
+      tahunAjaran: kelasRow.tahun_ajaran,
+      guruId: kelasRow.guru_id,
+      kodeKelas: kelasRow.kode_kelas,
+      createdAt: kelasRow.created_at,
+    };
+
+    // Refresh cache
+    await refreshAnggotaList();
+
+    return { ok: true, kelas: targetKelas };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat memproses permintaan.";
+    return { ok: false, reason: "error", message: msg };
+  }
+}
+
+export async function setujuiAnggota(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("kelas_anggota")
+      .update({ status: "aktif" })
+      .eq("id", id);
+
+    if (error) {
+      console.error("[Kelas] Error approving member:", error.message);
+      return false;
+    }
+
+    cachedAnggotaList = cachedAnggotaList.map((a) =>
+      a.id === id ? { ...a, status: "aktif" } : a,
+    );
+    emitChange();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function tolakAnggota(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("kelas_anggota")
+      .update({ status: "ditolak" })
+      .eq("id", id);
+
+    if (error) {
+      console.error("[Kelas] Error rejecting member:", error.message);
+      return false;
+    }
+
+    cachedAnggotaList = cachedAnggotaList.map((a) =>
+      a.id === id ? { ...a, status: "ditolak" } : a,
+    );
+    emitChange();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function getKelasBySiswa(siswaId: string): Promise<
+  Array<{
+    anggotaId: string;
+    kelasId: string;
+    namaKelas: string;
+    tingkat: string;
+    mapel: string;
+    tahunAjaran: string;
+    status: "menunggu" | "aktif" | "ditolak";
+    diajukan: string;
+  }>
+> {
+  try {
+    const { data: anggotaRows, error: aErr } = await supabase
+      .from("kelas_anggota")
+      .select("*")
+      .eq("siswa_id", siswaId)
+      .order("created_at", { ascending: false });
+
+    if (aErr || !anggotaRows || anggotaRows.length === 0) return [];
+
+    const kelasIds = Array.from(new Set(anggotaRows.map((a) => a.kelas_id)));
+    const { data: kelasRows, error: kErr } = await supabase
+      .from("kelas")
+      .select("*")
+      .in("id", kelasIds);
+
+    if (kErr || !kelasRows) return [];
+
+    const kelasMap = new Map(kelasRows.map((k) => [k.id, k]));
+
+    return anggotaRows.map((a) => {
+      const k = kelasMap.get(a.kelas_id);
+      return {
+        anggotaId: a.id,
+        kelasId: a.kelas_id,
+        namaKelas: k?.nama_kelas || "Kelas",
+        tingkat: k?.tingkat || "-",
+        mapel: k?.mapel || "-",
+        tahunAjaran: k?.tahun_ajaran || "-",
+        status: (a.status as "menunggu" | "aktif" | "ditolak") || "menunggu",
+        diajukan: a.created_at,
       };
     });
-}
-
-export function setujuiAnggota(id: string): boolean {
-  const list = readAnggotaList();
-  const idx = list.findIndex((a) => a.id === id);
-  if (idx < 0) return false;
-  const target = list[idx];
-  if (!target) return false;
-
-  list[idx] = { ...target, status: "aktif" };
-  writeAnggotaList(list);
-
-  // Jika siswa mendaftar sebagai akun baru, aktifkan juga akun di auth-store
-  if (target.jenis === "akun-baru") {
-    activatePendingAccount(target.siswaEmail);
+  } catch {
+    return [];
   }
-  return true;
 }
-
-export function tolakAnggota(id: string): boolean {
-  const list = readAnggotaList();
-  const idx = list.findIndex((a) => a.id === id);
-  if (idx < 0) return false;
-  const target = list[idx];
-  if (!target) return false;
-
-  list[idx] = { ...target, status: "ditolak" };
-  writeAnggotaList(list);
-  return true;
-}
-
-export function getKelasBySiswa(siswaEmail: string): Kelas[] {
-  const email = siswaEmail.trim().toLowerCase();
-  const activeKelasIds = new Set(
-    readAnggotaList()
-      .filter((a) => a.siswaEmail.toLowerCase() === email && a.status === "aktif")
-      .map((a) => a.kelasId),
-  );
-  return readKelasList().filter((k) => activeKelasIds.has(k.id));
-}
-
-/**
- * getSnapshot harus mengembalikan referensi yang stabil, kalau tidak React
- * akan me-render ulang tanpa henti ("Maximum update depth exceeded").
- */
-let kelasSnapshot: Kelas[] | null = null;
-let anggotaSnapshot: AnggotaKelas[] | null = null;
-
-listeners.add(() => {
-  kelasSnapshot = null;
-  anggotaSnapshot = null;
-});
-
-function getKelasSnapshot(): Kelas[] {
-  if (!kelasSnapshot) kelasSnapshot = readKelasList();
-  return kelasSnapshot;
-}
-
-function getAnggotaSnapshot(): AnggotaKelas[] {
-  if (!anggotaSnapshot) anggotaSnapshot = readAnggotaList();
-  return anggotaSnapshot;
-}
-
-const subscribeKelas = (cb: () => void) => {
-  listeners.add(cb);
-  return () => {
-    listeners.delete(cb);
-  };
-};
 
 export function useKelas() {
-  const kelasList = useSyncExternalStore(subscribeKelas, getKelasSnapshot, () => DEMO_KELAS);
-  const anggotaList = useSyncExternalStore(subscribeKelas, getAnggotaSnapshot, () => DEMO_ANGGOTA);
+  const kelasList = useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    () => cachedKelasList,
+    () => cachedKelasList,
+  );
 
-  return { kelasList, anggotaList };
+  const anggotaList = useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    () => cachedAnggotaList,
+    () => cachedAnggotaList,
+  );
+
+  const [loading, setLoading] = useState(cachedKelasList.length === 0);
+
+  useEffect(() => {
+    Promise.all([refreshKelasList(), refreshAnggotaList()]).finally(() => {
+      setLoading(false);
+    });
+  }, []);
+
+  return { kelasList, anggotaList, loading, refresh: () => Promise.all([refreshKelasList(), refreshAnggotaList()]) };
 }
