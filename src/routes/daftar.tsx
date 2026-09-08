@@ -26,7 +26,6 @@ export const Route = createFileRoute("/daftar")({
   validateSearch: (search: Record<string, unknown>): DaftarSearchParams => {
     return {
       role: search["role"] === "siswa" ? "siswa" : search["role"] === "guru" ? "guru" : undefined,
-      kode: typeof search["kode"] === "string" ? (search["kode"] as string) : undefined,
     };
   },
   head: () => ({
@@ -73,34 +72,15 @@ function DaftarPage() {
   // Siswa fields
   const [nisn, setNisn] = useState("");
   const [jenjang, setJenjang] = useState("XI");
-  const [kodeKelasInput, setKodeKelasInput] = useState(search.kode ?? "");
 
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
 
-  // Cek jika ada pending kode di sessionStorage
-  useEffect(() => {
-    if (!kodeKelasInput && typeof window !== "undefined") {
-      try {
-        const pending = window.sessionStorage.getItem("gurupro.pending-kode");
-        if (pending) {
-          setKodeKelasInput(pending);
-          setRole("siswa");
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-  }, [kodeKelasInput]);
-
   // Sync role jika query param berubah
   useEffect(() => {
     if (search.role === "siswa") setRole("siswa");
-    if (search.kode) setKodeKelasInput(search.kode);
-  }, [search.role, search.kode]);
-
-  const kelasInfo = kodeKelasInput ? getKelasByKode(kodeKelasInput) : undefined;
+  }, [search.role]);
 
   const handleRoleChange = (nextRole: Role) => {
     setRole(nextRole);
@@ -174,29 +154,9 @@ function DaftarPage() {
           return;
         }
 
-        // Jika ada info kelas dari link atau kode manual
-        const targetKelas = kelasInfo ?? (kodeKelasInput.trim() ? getKelasByKode(kodeKelasInput.trim()) : undefined);
-
-        if (targetKelas) {
-          ajukanGabung({
-            kelasId: targetKelas.id,
-            siswaEmail: email,
-            siswaNama: nama,
-            siswaNisn: nisn,
-            jenis: "akun-baru",
-          });
-
-          if (typeof window !== "undefined") {
-            try {
-              window.sessionStorage.removeItem("gurupro.pending-kode");
-            } catch {
-              /* ignore */
-            }
-          }
-          toast.success("Pendaftaran tersimpan. Menunggu persetujuan guru kelas.");
-        } else {
-          toast.success("Akun berhasil dibuat. Menunggu verifikasi Admin.");
-        }
+        // Kode kelas tidak lagi diminta saat pendaftaran — siswa memasukkannya
+        // dari dashboard siswa setelah login.
+        toast.success("Akun berhasil dibuat. Silakan masuk, lalu gabung kelas dari dashboard siswa.");
 
         void navigate({ to: "/login", replace: true });
       }
@@ -274,21 +234,7 @@ function DaftarPage() {
         </button>
       </div>
 
-      {/* Banner Khusus Siswa dari Tautan Undangan */}
-      {role === "siswa" && kelasInfo ? (
-        <div className="mt-4 flex items-start gap-3 rounded-xl border border-primary/30 bg-primary-soft/60 p-3.5 text-sm text-navy">
-          <LinkIcon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-          <div className="min-w-0">
-            <p className="font-semibold text-primary">
-              Kamu tiba di sini lewat tautan undangan guru
-            </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Kelas: <strong className="text-navy">{kelasInfo.mapel}</strong> — {kelasInfo.tingkat}{" "}
-              {kelasInfo.namaKelas} (terisi otomatis)
-            </p>
-          </div>
-        </div>
-      ) : null}
+      
 
       <Card className="mt-4">
         <CardContent className="p-5 sm:p-6">
@@ -333,32 +279,11 @@ function DaftarPage() {
             ) : null}
 
             {/* Field khusus Siswa */}
-            {role === "siswa" ? (
-              <>
-                {renderField("jenjang", "Jenjang / Angkatan", jenjang, setJenjang, {
+            {role === "siswa"
+              ? renderField("jenjang", "Jenjang / Angkatan", jenjang, setJenjang, {
                   placeholder: "Misal: X, XI, XII",
-                })}
-
-                {kelasInfo ? (
-                  <div className="grid gap-2">
-                    <Label htmlFor="kelasOtomatis">Kelas (dari Tautan Undangan)</Label>
-                    <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-foreground">
-                      <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
-                      <span className="font-medium">
-                        {kelasInfo.tingkat} {kelasInfo.namaKelas} ({kelasInfo.mapel})
-                      </span>
-                      <code className="ml-auto text-xs font-mono text-muted-foreground">
-                        {kelasInfo.kodeKelas}
-                      </code>
-                    </div>
-                  </div>
-                ) : (
-                  renderField("kodeKelas", "Kode Kelas (dari guru)", kodeKelasInput, setKodeKelasInput, {
-                    placeholder: "Misal: XI-MTK-8F3K (opsional)",
-                  })
-                )}
-              </>
-            ) : null}
+                })
+              : null}
 
             <div className="grid gap-2">
               <Label htmlFor="password">Kata Sandi</Label>
