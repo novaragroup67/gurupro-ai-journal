@@ -1,10 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
-  CheckCircle2,
   Eye,
   EyeOff,
   GraduationCap,
-  Link as LinkIcon,
   Loader2,
   User,
   UserPlus,
@@ -18,12 +16,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { registerGuru, registerSiswa } from "@/lib/auth-store";
-import { ajukanGabung, getKelasByKode } from "@/lib/kelas-store";
 import { cn } from "@/lib/utils";
 
 interface DaftarSearchParams {
   role?: "guru" | "siswa" | undefined;
-  kode?: string | undefined;
 }
 
 export const Route = createFileRoute("/daftar")({
