@@ -14,6 +14,89 @@ export type Database = {
   }
   public: {
     Tables: {
+      kelas: {
+        Row: {
+          created_at: string
+          guru_id: string
+          id: string
+          kode_kelas: string
+          mapel: string
+          nama_kelas: string
+          tahun_ajaran: string
+          tingkat: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          guru_id: string
+          id?: string
+          kode_kelas: string
+          mapel?: string
+          nama_kelas?: string
+          tahun_ajaran?: string
+          tingkat?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          guru_id?: string
+          id?: string
+          kode_kelas?: string
+          mapel?: string
+          nama_kelas?: string
+          tahun_ajaran?: string
+          tingkat?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      kelas_anggota: {
+        Row: {
+          created_at: string
+          id: string
+          jenis: string
+          kelas_id: string
+          siswa_email: string
+          siswa_id: string
+          siswa_nama: string
+          siswa_nisn: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          jenis?: string
+          kelas_id: string
+          siswa_email?: string
+          siswa_id: string
+          siswa_nama?: string
+          siswa_nisn?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          jenis?: string
+          kelas_id?: string
+          siswa_email?: string
+          siswa_id?: string
+          siswa_nama?: string
+          siswa_nisn?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kelas_anggota_kelas_id_fkey"
+            columns: ["kelas_id"]
+            isOneToOne: false
+            referencedRelation: "kelas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       moduls: {
         Row: {
           created_at: string
@@ -128,6 +211,7 @@ export type Database = {
           mapel: string
           nama: string
           nip: string
+          role: string
           sekolah: string
           telepon: string
           updated_at: string
@@ -141,6 +225,7 @@ export type Database = {
           mapel?: string
           nama?: string
           nip?: string
+          role?: string
           sekolah?: string
           telepon?: string
           updated_at?: string
@@ -154,6 +239,7 @@ export type Database = {
           mapel?: string
           nama?: string
           nip?: string
+          role?: string
           sekolah?: string
           telepon?: string
           updated_at?: string
