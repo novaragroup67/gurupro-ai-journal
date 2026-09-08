@@ -30,7 +30,7 @@ function GabungKelasPage() {
     }
     void navigate({
       to: "/daftar",
-      search: { role: "siswa", kode: kodeKelas },
+      search: { role: "siswa" },
     });
   };
 

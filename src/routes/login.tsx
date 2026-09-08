@@ -222,11 +222,7 @@ function LoginPage() {
               Lupa kata sandi?
             </Link>
             <span className="px-1.5">·</span>
-            <Link
-              to="/daftar"
-              search={kodeKelas ? { kode: kodeKelas, role: "siswa" as const } : {}}
-              className="font-medium text-primary hover:underline"
-            >
+            <Link to="/daftar" className="font-medium text-primary hover:underline">
               Daftar akun baru
             </Link>
           </p>
