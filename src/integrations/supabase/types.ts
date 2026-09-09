@@ -4,269 +4,383 @@ export type Json =
   | boolean
   | null
   | { [key: string]: Json | undefined }
-  | Json[];
+  | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   public: {
     Tables: {
-      profiles: {
-        Row: {
-          id: string;
-          nama: string;
-          email: string;
-          nip: string;
-          sekolah: string;
-          mapel: string;
-          kelas: string;
-          telepon: string;
-          bio: string;
-          role: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id: string;
-          nama?: string;
-          email?: string;
-          nip?: string;
-          sekolah?: string;
-          mapel?: string;
-          kelas?: string;
-          telepon?: string;
-          bio?: string;
-          role?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          nama?: string;
-          email?: string;
-          nip?: string;
-          sekolah?: string;
-          mapel?: string;
-          kelas?: string;
-          telepon?: string;
-          bio?: string;
-          role?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
       kelas: {
         Row: {
-          id: string;
-          guru_id: string;
-          nama_kelas: string;
-          tingkat: string;
-          mapel: string;
-          tahun_ajaran: string;
-          kode_kelas: string;
-          created_at: string;
-          updated_at: string;
-        };
+          created_at: string
+          guru_id: string
+          id: string
+          kode_kelas: string
+          mapel: string
+          nama_kelas: string
+          tahun_ajaran: string
+          tingkat: string
+          updated_at: string
+        }
         Insert: {
-          id?: string;
-          guru_id: string;
-          nama_kelas?: string;
-          tingkat?: string;
-          mapel?: string;
-          tahun_ajaran?: string;
-          kode_kelas?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
+          created_at?: string
+          guru_id: string
+          id?: string
+          kode_kelas: string
+          mapel?: string
+          nama_kelas?: string
+          tahun_ajaran?: string
+          tingkat?: string
+          updated_at?: string
+        }
         Update: {
-          id?: string;
-          guru_id?: string;
-          nama_kelas?: string;
-          tingkat?: string;
-          mapel?: string;
-          tahun_ajaran?: string;
-          kode_kelas?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "kelas_guru_id_fkey";
-            columns: ["guru_id"];
-            isOneToOne: false;
-            referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
+          created_at?: string
+          guru_id?: string
+          id?: string
+          kode_kelas?: string
+          mapel?: string
+          nama_kelas?: string
+          tahun_ajaran?: string
+          tingkat?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       kelas_anggota: {
         Row: {
-          id: string;
-          kelas_id: string;
-          siswa_id: string;
-          status: string;
-          jenis: string;
-          siswa_email: string;
-          siswa_nama: string;
-          siswa_nisn: string;
-          created_at: string;
-          updated_at: string;
-        };
+          created_at: string
+          id: string
+          jenis: string
+          kelas_id: string
+          siswa_email: string
+          siswa_id: string
+          siswa_nama: string
+          siswa_nisn: string
+          status: string
+          updated_at: string
+        }
         Insert: {
-          id?: string;
-          kelas_id: string;
-          siswa_id: string;
-          status?: string;
-          jenis?: string;
-          siswa_email?: string;
-          siswa_nama?: string;
-          siswa_nisn?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
+          created_at?: string
+          id?: string
+          jenis?: string
+          kelas_id: string
+          siswa_email?: string
+          siswa_id: string
+          siswa_nama?: string
+          siswa_nisn?: string
+          status?: string
+          updated_at?: string
+        }
         Update: {
-          id?: string;
-          kelas_id?: string;
-          siswa_id?: string;
-          status?: string;
-          jenis?: string;
-          siswa_email?: string;
-          siswa_nama?: string;
-          siswa_nisn?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
+          created_at?: string
+          id?: string
+          jenis?: string
+          kelas_id?: string
+          siswa_email?: string
+          siswa_id?: string
+          siswa_nama?: string
+          siswa_nisn?: string
+          status?: string
+          updated_at?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "kelas_anggota_kelas_id_fkey";
-            columns: ["kelas_id"];
-            isOneToOne: false;
-            referencedRelation: "kelas";
-            referencedColumns: ["id"];
+            foreignKeyName: "kelas_anggota_kelas_id_fkey"
+            columns: ["kelas_id"]
+            isOneToOne: false
+            referencedRelation: "kelas"
+            referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "kelas_anggota_siswa_id_fkey";
-            columns: ["siswa_id"];
-            isOneToOne: false;
-            referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
+        ]
+      }
       moduls: {
         Row: {
-          id: string;
-          user_id: string;
-          judul: string;
-          kelas: string;
-          mapel: string;
-          status: string;
-          sumber_tipe: string;
-          sumber_input: string;
-          sumber_url: string | null;
-          sumber_judul: string | null;
-          sumber_kutipan: string | null;
-          ringkasan: string;
-          sections: Json;
-          slides: Json;
-          created_at: string;
-          updated_at: string;
-        };
+          created_at: string
+          id: string
+          judul: string
+          kelas: string
+          mapel: string
+          ringkasan: string
+          sections: Json
+          slides: Json
+          status: string
+          sumber_input: string
+          sumber_judul: string | null
+          sumber_kutipan: string | null
+          sumber_tipe: string
+          sumber_url: string | null
+          updated_at: string
+          user_id: string
+        }
         Insert: {
-          id?: string;
-          user_id: string;
-          judul?: string;
-          kelas?: string;
-          mapel?: string;
-          status?: string;
-          sumber_tipe?: string;
-          sumber_input?: string;
-          sumber_url?: string | null;
-          sumber_judul?: string | null;
-          sumber_kutipan?: string | null;
-          ringkasan?: string;
-          sections?: Json;
-          slides?: Json;
-          created_at?: string;
-          updated_at?: string;
-        };
+          created_at?: string
+          id?: string
+          judul?: string
+          kelas?: string
+          mapel?: string
+          ringkasan?: string
+          sections?: Json
+          slides?: Json
+          status?: string
+          sumber_input?: string
+          sumber_judul?: string | null
+          sumber_kutipan?: string | null
+          sumber_tipe?: string
+          sumber_url?: string | null
+          updated_at?: string
+          user_id: string
+        }
         Update: {
-          id?: string;
-          user_id?: string;
-          judul?: string;
-          kelas?: string;
-          mapel?: string;
-          status?: string;
-          sumber_tipe?: string;
-          sumber_input?: string;
-          sumber_url?: string | null;
-          sumber_judul?: string | null;
-          sumber_kutipan?: string | null;
-          ringkasan?: string;
-          sections?: Json;
-          slides?: Json;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
+          created_at?: string
+          id?: string
+          judul?: string
+          kelas?: string
+          mapel?: string
+          ringkasan?: string
+          sections?: Json
+          slides?: Json
+          status?: string
+          sumber_input?: string
+          sumber_judul?: string | null
+          sumber_kutipan?: string | null
+          sumber_tipe?: string
+          sumber_url?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       paket_soal: {
         Row: {
-          id: string;
-          user_id: string;
-          judul: string;
-          topik: string;
-          modul_id: string | null;
-          status: string;
-          kelas: string[];
-          soal: Json;
-          created_at: string;
-          updated_at: string;
-        };
+          created_at: string
+          id: string
+          judul: string
+          kelas: string[]
+          modul_id: string | null
+          soal: Json
+          status: string
+          topik: string
+          updated_at: string
+          user_id: string
+        }
         Insert: {
-          id?: string;
-          user_id: string;
-          judul?: string;
-          topik?: string;
-          modul_id?: string | null;
-          status?: string;
-          kelas?: string[];
-          soal?: Json;
-          created_at?: string;
-          updated_at?: string;
-        };
+          created_at?: string
+          id?: string
+          judul?: string
+          kelas?: string[]
+          modul_id?: string | null
+          soal?: Json
+          status?: string
+          topik?: string
+          updated_at?: string
+          user_id: string
+        }
         Update: {
-          id?: string;
-          user_id?: string;
-          judul?: string;
-          topik?: string;
-          modul_id?: string | null;
-          status?: string;
-          kelas?: string[];
-          soal?: Json;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
-    };
+          created_at?: string
+          id?: string
+          judul?: string
+          kelas?: string[]
+          modul_id?: string | null
+          soal?: Json
+          status?: string
+          topik?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paket_soal_modul_id_fkey"
+            columns: ["modul_id"]
+            isOneToOne: false
+            referencedRelation: "moduls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          bio: string
+          created_at: string
+          email: string
+          id: string
+          kelas: string
+          mapel: string
+          nama: string
+          nip: string
+          role: string
+          sekolah: string
+          telepon: string
+          updated_at: string
+        }
+        Insert: {
+          bio?: string
+          created_at?: string
+          email?: string
+          id: string
+          kelas?: string
+          mapel?: string
+          nama?: string
+          nip?: string
+          role?: string
+          sekolah?: string
+          telepon?: string
+          updated_at?: string
+        }
+        Update: {
+          bio?: string
+          created_at?: string
+          email?: string
+          id?: string
+          kelas?: string
+          mapel?: string
+          nama?: string
+          nip?: string
+          role?: string
+          sekolah?: string
+          telepon?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+    }
     Views: {
-      [_ in never]: never;
-    };
+      [_ in never]: never
+    }
     Functions: {
-      [_ in never]: never;
-    };
+      [_ in never]: never
+    }
     Enums: {
-      [_ in never]: never;
-    };
+      [_ in never]: never
+    }
     CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
-};
+      [_ in never]: never
+    }
+  }
+}
 
-export type Tables<T extends keyof Database["public"]["Tables"]> =
-  Database["public"]["Tables"][T]["Row"];
-export type TablesInsert<T extends keyof Database["public"]["Tables"]> =
-  Database["public"]["Tables"][T]["Insert"];
-export type TablesUpdate<T extends keyof Database["public"]["Tables"]> =
-  Database["public"]["Tables"][T]["Update"];
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never) = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never) = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const
