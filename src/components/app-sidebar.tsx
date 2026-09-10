@@ -7,6 +7,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   LogOut,
+  School,
   Sparkles,
   UserRound,
   UserCheck,
@@ -42,6 +43,7 @@ import { useState } from "react";
 
 const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
+  { title: "Kelas Saya", url: "/kelas", icon: School },
   { title: "Modul Ajar", url: "/modul-ajar", icon: BookOpen },
   { title: "Soal", url: "/soal", icon: FileQuestion },
   { title: "Penugasan", url: "/penugasan", icon: ClipboardList },
@@ -67,7 +69,9 @@ export function AppSidebar() {
     if (isMobile) setOpenMobile(false);
   };
 
-  const renderItems = (items: ReadonlyArray<(typeof mainItems)[number] | (typeof secondaryItems)[number]>) => (
+  const renderItems = (
+    items: ReadonlyArray<(typeof mainItems)[number] | (typeof secondaryItems)[number]>,
+  ) => (
     <SidebarMenu>
       {items.map((item) => (
         <SidebarMenuItem key={item.title}>
@@ -88,58 +92,58 @@ export function AppSidebar() {
 
   return (
     <>
-    <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
-        <Link to="/" onClick={closeOnMobile} className="flex min-w-0 items-center">
-          <GuruProLogo variant="light" className="group-data-[collapsible=icon]:gap-0" />
-        </Link>
-      </SidebarHeader>
+      <Sidebar collapsible="icon">
+        <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
+          <Link to="/" onClick={closeOnMobile} className="flex min-w-0 items-center">
+            <GuruProLogo variant="light" className="group-data-[collapsible=icon]:gap-0" />
+          </Link>
+        </SidebarHeader>
 
-      <SidebarContent className="px-1">
-        <SidebarGroup>
-          <SidebarGroupLabel>Menu Utama</SidebarGroupLabel>
-          <SidebarGroupContent>{renderItems(mainItems)}</SidebarGroupContent>
-        </SidebarGroup>
+        <SidebarContent className="px-1">
+          <SidebarGroup>
+            <SidebarGroupLabel>Menu Utama</SidebarGroupLabel>
+            <SidebarGroupContent>{renderItems(mainItems)}</SidebarGroupContent>
+          </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Lainnya</SidebarGroupLabel>
-          <SidebarGroupContent>
-            {renderItems(secondaryItems)}
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  tooltip="Log Out"
-                  className="gap-3 text-sidebar-foreground/80"
-                  onClick={() => {
-                    closeOnMobile();
-                    setConfirmLogout(true);
-                  }}
-                >
-                  <LogOut className="h-4 w-4 shrink-0" />
-                  <span className="truncate">Log Out</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Lainnya</SidebarGroupLabel>
+            <SidebarGroupContent>
+              {renderItems(secondaryItems)}
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    tooltip="Log Out"
+                    className="gap-3 text-sidebar-foreground/80"
+                    onClick={() => {
+                      closeOnMobile();
+                      setConfirmLogout(true);
+                    }}
+                  >
+                    <LogOut className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Log Out</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-3 group-data-[collapsible=icon]:hidden">
-        <Link
-          to="/modul-ajar"
-          onClick={closeOnMobile}
-          className="block rounded-xl bg-sidebar-accent p-3 transition-colors hover:bg-sidebar-primary/25"
-        >
-          <span className="flex items-center gap-2 text-sm font-semibold text-sidebar-accent-foreground">
-            <Sparkles className="h-4 w-4 text-accent" />
-            GuruPro AI
-          </span>
-          <span className="mt-1 block text-xs leading-relaxed text-sidebar-foreground/70">
-            Susun modul, ilustrasi, PPT, dan soal secara otomatis.
-          </span>
-        </Link>
-      </SidebarFooter>
-    </Sidebar>
+        <SidebarFooter className="border-t border-sidebar-border p-3 group-data-[collapsible=icon]:hidden">
+          <Link
+            to="/modul-ajar"
+            onClick={closeOnMobile}
+            className="block rounded-xl bg-sidebar-accent p-3 transition-colors hover:bg-sidebar-primary/25"
+          >
+            <span className="flex items-center gap-2 text-sm font-semibold text-sidebar-accent-foreground">
+              <Sparkles className="h-4 w-4 text-accent" />
+              GuruPro AI
+            </span>
+            <span className="mt-1 block text-xs leading-relaxed text-sidebar-foreground/70">
+              Susun modul, ilustrasi, PPT, dan soal secara otomatis.
+            </span>
+          </Link>
+        </SidebarFooter>
+      </Sidebar>
 
       <AlertDialog open={confirmLogout} onOpenChange={setConfirmLogout}>
         <AlertDialogContent>
@@ -153,8 +157,8 @@ export function AppSidebar() {
             <AlertDialogCancel>Batal</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                logout();
+              onClick={async () => {
+                await logout();
                 toast.success("Anda telah keluar dari GuruPro.");
                 void navigate({ to: "/login", replace: true });
               }}

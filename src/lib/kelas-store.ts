@@ -237,6 +237,97 @@ export async function getKelasByKode(kodeKelas: string): Promise<Kelas | null> {
   };
 }
 
+export async function getKelasById(id: string): Promise<Kelas | null> {
+  const cached = cachedKelasList.find((k) => k.id === id);
+  if (cached) return cached;
+
+  try {
+    const { data, error } = await supabase.from("kelas").select("*").eq("id", id).maybeSingle();
+
+    if (error || !data) return null;
+
+    return {
+      id: data.id,
+      namaKelas: data.nama_kelas,
+      tingkat: data.tingkat,
+      mapel: data.mapel,
+      tahunAjaran: data.tahun_ajaran,
+      guruId: data.guru_id,
+      kodeKelas: data.kode_kelas,
+      createdAt: data.created_at,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function getKelasByGuru(guruId: string): Promise<Kelas[]> {
+  try {
+    const { data, error } = await supabase
+      .from("kelas")
+      .select("*")
+      .eq("guru_id", guruId)
+      .order("created_at", { ascending: false });
+
+    if (error || !data) {
+      return cachedKelasList.filter((k) => k.guruId === guruId);
+    }
+
+    const list: Kelas[] = data.map((row) => ({
+      id: row.id,
+      namaKelas: row.nama_kelas,
+      tingkat: row.tingkat,
+      mapel: row.mapel,
+      tahunAjaran: row.tahun_ajaran,
+      guruId: row.guru_id,
+      kodeKelas: row.kode_kelas,
+      createdAt: row.created_at,
+    }));
+
+    const otherKelas = cachedKelasList.filter((k) => k.guruId !== guruId);
+    cachedKelasList = [...list, ...otherKelas];
+    emitChange();
+
+    return list;
+  } catch {
+    return cachedKelasList.filter((k) => k.guruId === guruId);
+  }
+}
+
+export async function getAnggotaByKelas(kelasId: string): Promise<AnggotaKelas[]> {
+  try {
+    const { data, error } = await supabase
+      .from("kelas_anggota")
+      .select("*")
+      .eq("kelas_id", kelasId)
+      .order("created_at", { ascending: false });
+
+    if (error || !data) {
+      return cachedAnggotaList.filter((a) => a.kelasId === kelasId);
+    }
+
+    const list: AnggotaKelas[] = data.map((row) => ({
+      id: row.id,
+      kelasId: row.kelas_id,
+      siswaId: row.siswa_id,
+      siswaEmail: row.siswa_email,
+      siswaNama: row.siswa_nama,
+      siswaNisn: row.siswa_nisn,
+      status: (row.status as "menunggu" | "aktif" | "ditolak") || "menunggu",
+      jenis: (row.jenis as "akun-baru" | "tambah-kelas") || "tambah-kelas",
+      diajukan: row.created_at,
+    }));
+
+    const otherAnggota = cachedAnggotaList.filter((a) => a.kelasId !== kelasId);
+    cachedAnggotaList = [...list, ...otherAnggota];
+    emitChange();
+
+    return list;
+  } catch {
+    return cachedAnggotaList.filter((a) => a.kelasId === kelasId);
+  }
+}
+
 export async function ajukanGabung(data: {
   kodeKelas: string;
   siswaId: string;
@@ -244,7 +335,10 @@ export async function ajukanGabung(data: {
   siswaNama: string;
   siswaNisn: string;
   jenis?: "akun-baru" | "tambah-kelas";
-}): Promise<{ ok: true; kelas: Kelas } | { ok: false; reason: "invalid-code" | "already-member" | "error"; message: string }> {
+}): Promise<
+  | { ok: true; kelas: Kelas }
+  | { ok: false; reason: "invalid-code" | "already-member" | "error"; message: string }
+> {
   try {
     // 1. Validasi kode kelas di database Supabase
     const cleanKode = data.kodeKelas.trim().toUpperCase();
@@ -335,19 +429,14 @@ export async function ajukanGabung(data: {
 
 export async function setujuiAnggota(id: string): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from("kelas_anggota")
-      .update({ status: "aktif" })
-      .eq("id", id);
+    const { error } = await supabase.from("kelas_anggota").update({ status: "aktif" }).eq("id", id);
 
     if (error) {
       console.error("[Kelas] Error approving member:", error.message);
       return false;
     }
 
-    cachedAnggotaList = cachedAnggotaList.map((a) =>
-      a.id === id ? { ...a, status: "aktif" } : a,
-    );
+    cachedAnggotaList = cachedAnggotaList.map((a) => (a.id === id ? { ...a, status: "aktif" } : a));
     emitChange();
     return true;
   } catch {
@@ -453,5 +542,10 @@ export function useKelas() {
     });
   }, []);
 
-  return { kelasList, anggotaList, loading, refresh: () => Promise.all([refreshKelasList(), refreshAnggotaList()]) };
+  return {
+    kelasList,
+    anggotaList,
+    loading,
+    refresh: () => Promise.all([refreshKelasList(), refreshAnggotaList()]),
+  };
 }

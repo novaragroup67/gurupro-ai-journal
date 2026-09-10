@@ -1,16 +1,5 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import {
-  Copy,
-  Link2,
-  LogOut,
-  Pencil,
-  Plus,
-  RefreshCw,
-  Save,
-  ShieldCheck,
-  Users,
-  X,
-} from "lucide-react";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { ArrowRight, LogOut, Pencil, Save, School, ShieldCheck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -25,22 +14,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { initials, logout, updateProfile, useAuth, type GuruProfile } from "@/lib/auth-store";
-import { buatKelas, perbaruiKodeKelas, useKelas, type Kelas } from "@/lib/kelas-store";
 
 export const Route = createFileRoute("/profil")({
   head: () => ({
@@ -49,12 +28,12 @@ export const Route = createFileRoute("/profil")({
       {
         name: "description",
         content:
-          "Atur data guru, sekolah, mata pelajaran, dan kelas yang diampu, lalu keluar dari akun GuruPro dengan aman.",
+          "Atur data guru, sekolah, mata pelajaran, dan identitas pengampu, lalu keluar dari akun GuruPro dengan aman.",
       },
       { property: "og:title", content: "Profil Guru — GuruPro" },
       {
         property: "og:description",
-        content: "Atur data guru, sekolah, mata pelajaran, dan kelas yang diampu di GuruPro.",
+        content: "Atur data guru, sekolah, mata pelajaran, dan profil pengampu di GuruPro.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -75,41 +54,15 @@ const FIELDS: Array<{ key: keyof GuruProfile; label: string; placeholder: string
 
 function ProfilPage() {
   const navigate = useNavigate();
-  const { profile, user } = useAuth();
-  const { kelasList, anggotaList } = useKelas();
+  const { profile } = useAuth();
 
   const [edit, setEdit] = useState(false);
   const [draft, setDraft] = useState<GuruProfile>(profile);
   const [confirmLogout, setConfirmLogout] = useState(false);
 
-  // Kelas state berdasarkan guru_id pengguna yang sedang login
-  const myKelasList = kelasList.filter((k) =>
-    user?.id ? k.guruId === user.id : profile.id ? k.guruId === profile.id : false,
-  );
-  const [selectedKelas, setSelectedKelas] = useState<Kelas | null>(null);
-  const [confirmPerbaruiKode, setConfirmPerbaruiKode] = useState(false);
-
-  // Form buat kelas baru
-  const [namaKelas, setNamaKelas] = useState("");
-  const [tingkat, setTingkat] = useState("XI");
-  const [mapelKelas, setMapelKelas] = useState(profile.mapel || "Matematika");
-  const [tahunAjaran, setTahunAjaran] = useState("2025/2026");
-  const [loadingBuatKelas, setLoadingBuatKelas] = useState(false);
-
   useEffect(() => {
     if (!edit) setDraft(profile);
   }, [profile, edit]);
-
-  // Set default selected kelas jika belum dipilih
-  useEffect(() => {
-    if (!selectedKelas && myKelasList.length > 0) {
-      const first = myKelasList[0];
-      if (first) setSelectedKelas(first);
-    } else if (selectedKelas) {
-      const fresh = myKelasList.find((k) => k.id === selectedKelas.id);
-      if (fresh) setSelectedKelas(fresh);
-    }
-  }, [myKelasList, selectedKelas]);
 
   const simpan = async () => {
     if (!draft.nama.trim() || !draft.email.trim()) {
@@ -123,86 +76,6 @@ function ProfilPage() {
     }
     setEdit(false);
     toast.success("Profil berhasil diperbarui.");
-  };
-
-  const handleBuatKelas = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!namaKelas.trim()) {
-      toast.error("Nama kelas wajib diisi (misal: IPA 1).");
-      return;
-    }
-    if (!tingkat.trim()) {
-      toast.error("Tingkat / jenjang wajib diisi (misal: XI).");
-      return;
-    }
-    if (!mapelKelas.trim()) {
-      toast.error("Mata pelajaran wajib diisi.");
-      return;
-    }
-
-    const guruId = user?.id || profile.id;
-    if (!guruId) {
-      toast.error("Akun belum terautentikasi.");
-      return;
-    }
-
-    setLoadingBuatKelas(true);
-    try {
-      const baru = await buatKelas({
-        namaKelas: namaKelas.trim(),
-        tingkat: tingkat.trim(),
-        mapel: mapelKelas.trim(),
-        tahunAjaran: tahunAjaran.trim() || "2025/2026",
-        guruId,
-      });
-
-      setSelectedKelas(baru);
-      setNamaKelas("");
-      toast.success(`Kelas ${baru.tingkat} ${baru.namaKelas} berhasil dibuat!`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Gagal membuat kelas.";
-      toast.error(msg);
-    } finally {
-      setLoadingBuatKelas(false);
-    }
-  };
-
-  const salinKode = (kode: string) => {
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(kode);
-      toast.success(`Kode kelas ${kode} disalin ke clipboard!`);
-    }
-  };
-
-  const getLinkUndangan = (kode: string) => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://gurupro.app";
-    return `${origin}/gabung/${kode}`;
-  };
-
-  const salinLink = (kode: string) => {
-    const link = getLinkUndangan(kode);
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(link);
-      toast.success("Tautan undangan berhasil disalin ke clipboard!");
-    }
-  };
-
-  const handlePerbaruiKode = async () => {
-    if (!selectedKelas) return;
-    try {
-      const updated = await perbaruiKodeKelas(selectedKelas.id);
-      if (updated) {
-        setSelectedKelas(updated);
-        toast.success("Kode & tautan undangan kelas berhasil diperbarui!");
-      }
-    } catch {
-      toast.error("Gagal memperbarui kode kelas.");
-    }
-    setConfirmPerbaruiKode(false);
-  };
-
-  const hitungJumlahSiswa = (kelasId: string) => {
-    return anggotaList.filter((a) => a.kelasId === kelasId && a.status === "aktif").length;
   };
 
   return (
@@ -255,235 +128,31 @@ function ProfilPage() {
         </CardContent>
       </Card>
 
-      {/* SECTION KELAS YANG DIAMPU */}
-      <div className="grid gap-6">
-        <div>
-          <h2 className="font-display text-xl font-bold text-navy">Kelas yang Diampu</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Kelola kelas, buat kode dan tautan undangan untuk siswa yang ingin bergabung.
-          </p>
-        </div>
-
-        {/* Card Kode Kelas Terpilih / Baru */}
-        {selectedKelas ? (
-          <Card className="border-2 border-primary/30 bg-primary-soft/30 shadow-sm">
-            <CardHeader className="pb-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle className="font-display text-base font-bold text-navy">
-                  Tautan & Kode Undangan: {selectedKelas.tingkat} {selectedKelas.namaKelas}
-                </CardTitle>
-                <Badge variant="outline" className="border-primary/40 bg-card text-primary">
-                  {selectedKelas.mapel} ({selectedKelas.tahunAjaran})
-                </Badge>
-              </div>
-              <CardDescription>
-                Bagikan kode atau tautan ini kepada siswa untuk mendaftar dan bergabung ke kelas Anda.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border bg-card p-3.5 shadow-xs">
-                  <p className="text-xs font-semibold text-muted-foreground">Kode Kelas</p>
-                  <p className="mt-1 font-mono text-2xl font-extrabold tracking-wider text-navy">
-                    {selectedKelas.kodeKelas}
-                  </p>
-                </div>
-                <div className="rounded-xl border bg-card p-3.5 shadow-xs">
-                  <p className="text-xs font-semibold text-muted-foreground">Tautan Undangan Siswa</p>
-                  <p className="mt-1 truncate font-mono text-sm text-primary">
-                    {getLinkUndangan(selectedKelas.kodeKelas)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <Button
-                  size="sm"
-                  onClick={() => salinKode(selectedKelas.kodeKelas)}
-                  className="gap-1.5 font-medium"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  Salin Kode
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => salinLink(selectedKelas.kodeKelas)}
-                  className="gap-1.5 font-medium"
-                >
-                  <Link2 className="h-3.5 w-3.5" />
-                  Salin Link
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setConfirmPerbaruiKode(true)}
-                  className="ml-auto text-xs text-muted-foreground hover:text-destructive"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Perbarui Kode & Link
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Form Buat Kelas Baru */}
-          <Card className="lg:col-span-1">
-            <CardHeader className="pb-3">
-              <CardTitle className="font-display text-base text-navy">Buat Kelas Baru</CardTitle>
-              <CardDescription>
-                Tambahkan kelas baru untuk menghasilkan kode & link undangan siswa.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleBuatKelas} className="grid gap-3.5">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="namaKelas">Nama Kelas</Label>
-                  <Input
-                    id="namaKelas"
-                    value={namaKelas}
-                    onChange={(e) => setNamaKelas(e.target.value)}
-                    placeholder="Misal: IPA 1, RPL 2"
-                    required
-                  />
-                </div>
-
-                <div className="grid gap-1.5">
-                  <Label htmlFor="tingkat">Tingkat / Jenjang</Label>
-                  <Input
-                    id="tingkat"
-                    value={tingkat}
-                    onChange={(e) => setTingkat(e.target.value)}
-                    placeholder="Misal: X, XI, XII"
-                    required
-                  />
-                </div>
-
-                <div className="grid gap-1.5">
-                  <Label htmlFor="mapelKelas">Mata Pelajaran</Label>
-                  <Input
-                    id="mapelKelas"
-                    value={mapelKelas}
-                    onChange={(e) => setMapelKelas(e.target.value)}
-                    placeholder="Misal: Matematika"
-                    required
-                  />
-                </div>
-
-                <div className="grid gap-1.5">
-                  <Label htmlFor="tahunAjaran">Tahun Ajaran</Label>
-                  <Input
-                    id="tahunAjaran"
-                    value={tahunAjaran}
-                    onChange={(e) => setTahunAjaran(e.target.value)}
-                    placeholder="Misal: 2025/2026"
-                  />
-                </div>
-
-                <Button type="submit" disabled={loadingBuatKelas} className="mt-2 w-full gap-1.5 font-medium">
-                  <Plus className="h-4 w-4" />
-                  {loadingBuatKelas ? "Membuat…" : "Buat Kelas"}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-
-          {/* Tabel Daftar Kelas yang Sudah Dibuat */}
-          <Card className="lg:col-span-2">
-            <CardHeader className="pb-3">
-              <CardTitle className="font-display text-base text-navy">
-                Daftar Kelas yang Sudah Dibuat
-              </CardTitle>
-              <CardDescription>
-                Total {myKelasList.length} kelas aktif yang Anda kelola di GuruPro.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="px-0 sm:px-6">
-              {myKelasList.length === 0 ? (
-                <div className="px-6 py-8 text-center text-sm text-muted-foreground">
-                  Belum ada kelas yang dibuat. Buat kelas pertama Anda melalui form di samping.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nama Kelas</TableHead>
-                        <TableHead>Tingkat</TableHead>
-                        <TableHead>Mata Pelajaran</TableHead>
-                        <TableHead className="text-center">Siswa</TableHead>
-                        <TableHead>Kode Kelas</TableHead>
-                        <TableHead className="text-right">Aksi</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {myKelasList.map((k) => {
-                        const jumlahSiswa = hitungJumlahSiswa(k.id);
-                        const isSelected = selectedKelas?.id === k.id;
-                        return (
-                          <TableRow
-                            key={k.id}
-                            className={isSelected ? "bg-primary-soft/20 font-medium" : undefined}
-                          >
-                            <TableCell className="font-semibold text-navy">
-                              {k.namaKelas}
-                            </TableCell>
-                            <TableCell>{k.tingkat}</TableCell>
-                            <TableCell>{k.mapel}</TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant="secondary" className="gap-1">
-                                <Users className="h-3 w-3" />
-                                {jumlahSiswa}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <code className="rounded bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-primary">
-                                {k.kodeKelas}
-                              </code>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => salinKode(k.kodeKelas)}
-                                  title="Salin Kode"
-                                  className="h-8 px-2 text-xs"
-                                >
-                                  Kode
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => salinLink(k.kodeKelas)}
-                                  title="Salin Link"
-                                  className="h-8 px-2 text-xs"
-                                >
-                                  Link
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => toast.info("Fitur segera hadir")}
-                                  className="h-8 px-2.5 text-xs"
-                                >
-                                  Kelola
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      {/* Card Shortcut Menuju Kelas Saya */}
+      <Card className="border-primary/25 bg-primary-soft/20 shadow-xs">
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-xs">
+              <School className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="font-display font-semibold text-navy">
+                Kelola & Pantau Kelas di Menu &quot;Kelas Saya&quot;
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Untuk mengelola kelas, membagikan kode atau tautan undangan ke siswa, serta memantau
+                aktivitas belajar, silakan buka menu <strong>Kelas Saya</strong> di sidebar.
+              </p>
+            </div>
+          </div>
+          <Button asChild size="sm" className="gap-1.5 shrink-0 font-medium">
+            <Link to="/kelas">
+              Buka Kelas Saya
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Data Guru Profil */}
       <Card>
@@ -532,7 +201,8 @@ function ProfilPage() {
           <div className="min-w-0">
             <p className="font-display font-semibold text-navy">Keluar dari akun</p>
             <p className="text-sm text-muted-foreground">
-              Anda akan diarahkan ke halaman login. Data modul dan soal tetap tersimpan di perangkat.
+              Anda akan diarahkan ke halaman login. Data modul dan soal tetap tersimpan di
+              perangkat.
             </p>
           </div>
           <Button
@@ -545,25 +215,6 @@ function ProfilPage() {
           </Button>
         </CardContent>
       </Card>
-
-      {/* Dialog Konfirmasi Perbarui Kode */}
-      <AlertDialog open={confirmPerbaruiKode} onOpenChange={setConfirmPerbaruiKode}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Perbarui Kode & Tautan Undangan?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Kode dan tautan lama akan langsung tidak berlaku. Siswa yang belum bergabung perlu
-              diberikan kode atau tautan baru.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Batal</AlertDialogCancel>
-            <AlertDialogAction onClick={handlePerbaruiKode}>
-              Ya, Perbarui
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Dialog Konfirmasi Logout */}
       <AlertDialog open={confirmLogout} onOpenChange={setConfirmLogout}>

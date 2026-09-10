@@ -24,6 +24,8 @@ import { Route as ProfilRouteImport } from './routes/profil'
 import { Route as SoalRouteImport } from './routes/soal'
 import { Route as VerifikasiRouteImport } from './routes/verifikasi'
 import { Route as GabungKodeKelasRouteImport } from './routes/gabung.$kodeKelas'
+import { Route as KelasIndexRouteImport } from './routes/kelas.index'
+import { Route as KelasKelasIdRouteImport } from './routes/kelas.$kelasId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -100,6 +102,16 @@ const GabungKodeKelasRoute = GabungKodeKelasRouteImport.update({
   path: '/gabung/$kodeKelas',
   getParentRoute: () => rootRouteImport,
 } as any)
+const KelasIndexRoute = KelasIndexRouteImport.update({
+  id: '/kelas/',
+  path: '/kelas/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KelasKelasIdRoute = KelasKelasIdRouteImport.update({
+  id: '/kelas/$kelasId',
+  path: '/kelas/$kelasId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -117,6 +129,8 @@ export interface FileRoutesByFullPath {
   '/soal': typeof SoalRoute
   '/verifikasi': typeof VerifikasiRoute
   '/gabung/$kodeKelas': typeof GabungKodeKelasRoute
+  '/kelas/$kelasId': typeof KelasKelasIdRoute
+  '/kelas/': typeof KelasIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -134,6 +148,8 @@ export interface FileRoutesByTo {
   '/soal': typeof SoalRoute
   '/verifikasi': typeof VerifikasiRoute
   '/gabung/$kodeKelas': typeof GabungKodeKelasRoute
+  '/kelas/$kelasId': typeof KelasKelasIdRoute
+  '/kelas': typeof KelasIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -152,6 +168,8 @@ export interface FileRoutesById {
   '/soal': typeof SoalRoute
   '/verifikasi': typeof VerifikasiRoute
   '/gabung/$kodeKelas': typeof GabungKodeKelasRoute
+  '/kelas/$kelasId': typeof KelasKelasIdRoute
+  '/kelas/': typeof KelasIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -171,6 +189,8 @@ export interface FileRouteTypes {
     | '/soal'
     | '/verifikasi'
     | '/gabung/$kodeKelas'
+    | '/kelas/$kelasId'
+    | '/kelas/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -188,6 +208,8 @@ export interface FileRouteTypes {
     | '/soal'
     | '/verifikasi'
     | '/gabung/$kodeKelas'
+    | '/kelas/$kelasId'
+    | '/kelas'
   id:
     | '__root__'
     | '/'
@@ -205,6 +227,8 @@ export interface FileRouteTypes {
     | '/soal'
     | '/verifikasi'
     | '/gabung/$kodeKelas'
+    | '/kelas/$kelasId'
+    | '/kelas/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -223,6 +247,8 @@ export interface RootRouteChildren {
   SoalRoute: typeof SoalRoute
   VerifikasiRoute: typeof VerifikasiRoute
   GabungKodeKelasRoute: typeof GabungKodeKelasRoute
+  KelasKelasIdRoute: typeof KelasKelasIdRoute
+  KelasIndexRoute: typeof KelasIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -332,6 +358,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GabungKodeKelasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/kelas/': {
+      id: '/kelas/'
+      path: '/kelas'
+      fullPath: '/kelas/'
+      preLoaderRoute: typeof KelasIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/kelas/$kelasId': {
+      id: '/kelas/$kelasId'
+      path: '/kelas/$kelasId'
+      fullPath: '/kelas/$kelasId'
+      preLoaderRoute: typeof KelasKelasIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -351,6 +391,8 @@ const rootRouteChildren: RootRouteChildren = {
   SoalRoute: SoalRoute,
   VerifikasiRoute: VerifikasiRoute,
   GabungKodeKelasRoute: GabungKodeKelasRoute,
+  KelasKelasIdRoute: KelasKelasIdRoute,
+  KelasIndexRoute: KelasIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
