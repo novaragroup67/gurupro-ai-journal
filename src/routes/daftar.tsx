@@ -19,7 +19,7 @@ import { registerGuru, registerSiswa } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
 
 interface DaftarSearchParams {
-  role?: "guru" | "siswa";
+  role?: "guru" | "siswa" | undefined;
 }
 
 export const Route = createFileRoute("/daftar")({

@@ -118,7 +118,7 @@ async function fetchProfileForUser(user: User): Promise<GuruProfile> {
     if (data) {
       return {
         id: data.id,
-        nama: data.nama || (user.user_metadata?.nama as string) || "Guru",
+        nama: data.nama || (user.user_metadata?.["nama"] as string) || "Guru",
         email: data.email || user.email || "",
         nip: data.nip || "",
         sekolah: data.sekolah || "",
@@ -126,22 +126,22 @@ async function fetchProfileForUser(user: User): Promise<GuruProfile> {
         kelas: data.kelas || "",
         telepon: data.telepon || "",
         bio: data.bio || "",
-        role: data.role || (user.user_metadata?.role as string) || "guru",
+        role: data.role || (user.user_metadata?.["role"] as string) || "guru",
       };
     }
 
     // Fallback jika baris di tabel profiles belum ada
     return {
       id: user.id,
-      nama: (user.user_metadata?.nama as string) || user.email?.split("@")[0] || "Pengguna",
+      nama: (user.user_metadata?.["nama"] as string) || user.email?.split("@")[0] || "Pengguna",
       email: user.email || "",
-      nip: (user.user_metadata?.nip as string) || "",
-      sekolah: (user.user_metadata?.sekolah as string) || "",
-      mapel: (user.user_metadata?.mapel as string) || "",
-      kelas: (user.user_metadata?.kelas as string) || "",
-      telepon: (user.user_metadata?.telepon as string) || "",
+      nip: (user.user_metadata?.["nip"] as string) || "",
+      sekolah: (user.user_metadata?.["sekolah"] as string) || "",
+      mapel: (user.user_metadata?.["mapel"] as string) || "",
+      kelas: (user.user_metadata?.["kelas"] as string) || "",
+      telepon: (user.user_metadata?.["telepon"] as string) || "",
       bio: "",
-      role: (user.user_metadata?.role as string) || "guru",
+      role: (user.user_metadata?.["role"] as string) || "guru",
     };
   } catch (err) {
     console.error("[Auth] Unexpected error fetching profile:", err);
@@ -429,14 +429,14 @@ export async function requestPasswordReset(
   email: string,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   try {
-    const redirectUrl =
+    const options =
       typeof window !== "undefined"
-        ? `${window.location.origin}/lupa-kata-sandi`
-        : undefined;
+        ? { redirectTo: `${window.location.origin}/lupa-kata-sandi` }
+        : {};
 
     const { error } = await supabase.auth.resetPasswordForEmail(
       email.trim().toLowerCase(),
-      { redirectTo: redirectUrl },
+      options,
     );
 
     if (error) {

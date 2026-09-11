@@ -222,7 +222,7 @@ function DetailKelasMonitoringPage() {
       { tugas: 92, kuis: 90, uts: 95, akhir: 93, predikat: "A" },
       { tugas: 76, kuis: 82, uts: 78, akhir: 79, predikat: "B" },
     ];
-    return seedNilai[index % seedNilai.length];
+    return seedNilai[index % seedNilai.length]!;
   };
 
   const handleEksporNilaiPDF = () => {
