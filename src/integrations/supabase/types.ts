@@ -251,7 +251,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cari_kelas_by_kode: {
+        Args: { _kode: string }
+        Returns: {
+          id: string
+          kode_kelas: string
+          mapel: string
+          nama_kelas: string
+          tahun_ajaran: string
+          tingkat: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

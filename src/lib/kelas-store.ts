@@ -217,23 +217,25 @@ export async function perbaruiKodeKelas(id: string): Promise<Kelas | null> {
 
 export async function getKelasByKode(kodeKelas: string): Promise<Kelas | null> {
   const cleanKode = kodeKelas.trim().toUpperCase();
-  const { data, error } = await supabase
-    .from("kelas")
-    .select("*")
-    .ilike("kode_kelas", cleanKode)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("cari_kelas_by_kode", { _kode: cleanKode });
 
-  if (error || !data) return null;
+  if (error) {
+    console.warn("[Kelas] Error looking up class code:", error.message);
+    return null;
+  }
+
+  const row = (data || [])[0];
+  if (!row) return null;
 
   return {
-    id: data.id,
-    namaKelas: data.nama_kelas,
-    tingkat: data.tingkat,
-    mapel: data.mapel,
-    tahunAjaran: data.tahun_ajaran,
-    guruId: data.guru_id,
-    kodeKelas: data.kode_kelas,
-    createdAt: data.created_at,
+    id: row.id,
+    namaKelas: row.nama_kelas,
+    tingkat: row.tingkat,
+    mapel: row.mapel,
+    tahunAjaran: row.tahun_ajaran,
+    guruId: "",
+    kodeKelas: row.kode_kelas,
+    createdAt: "",
   };
 }
 
@@ -341,14 +343,9 @@ export async function ajukanGabung(data: {
 > {
   try {
     // 1. Validasi kode kelas di database Supabase
-    const cleanKode = data.kodeKelas.trim().toUpperCase();
-    const { data: kelasRow, error: kelasError } = await supabase
-      .from("kelas")
-      .select("*")
-      .ilike("kode_kelas", cleanKode)
-      .maybeSingle();
+    const kelasRow = await getKelasByKode(data.kodeKelas);
 
-    if (kelasError || !kelasRow) {
+    if (!kelasRow) {
       return {
         ok: false,
         reason: "invalid-code",
@@ -406,16 +403,7 @@ export async function ajukanGabung(data: {
       };
     }
 
-    const targetKelas: Kelas = {
-      id: kelasRow.id,
-      namaKelas: kelasRow.nama_kelas,
-      tingkat: kelasRow.tingkat,
-      mapel: kelasRow.mapel,
-      tahunAjaran: kelasRow.tahun_ajaran,
-      guruId: kelasRow.guru_id,
-      kodeKelas: kelasRow.kode_kelas,
-      createdAt: kelasRow.created_at,
-    };
+    const targetKelas: Kelas = kelasRow;
 
     // Refresh cache
     await refreshAnggotaList();
