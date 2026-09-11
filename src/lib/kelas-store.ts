@@ -403,16 +403,7 @@ export async function ajukanGabung(data: {
       };
     }
 
-    const targetKelas: Kelas = {
-      id: kelasRow.id,
-      namaKelas: kelasRow.nama_kelas,
-      tingkat: kelasRow.tingkat,
-      mapel: kelasRow.mapel,
-      tahunAjaran: kelasRow.tahun_ajaran,
-      guruId: kelasRow.guru_id,
-      kodeKelas: kelasRow.kode_kelas,
-      createdAt: kelasRow.created_at,
-    };
+    const targetKelas: Kelas = kelasRow;
 
     // Refresh cache
     await refreshAnggotaList();
