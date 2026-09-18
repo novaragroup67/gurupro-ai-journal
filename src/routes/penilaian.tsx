@@ -84,17 +84,19 @@ function Page() {
 // ============================================================================
 function GuruRekapNilaiView() {
   const { profile, user } = useAuth();
-  const { list: myClasses, loading: loadingClasses } = useKelas();
+  const { kelasList, loading: loadingClasses } = useKelas();
 
   // Filter hanya kelas milik guru yang login
-  const currentUserId = user?.id || profile.id;
+  const currentUserId = user?.id || profile?.id;
   const teacherClasses = useMemo(() => {
-    return myClasses.filter((k) => k.guruId === currentUserId);
-  }, [myClasses, currentUserId]);
+    const list = Array.isArray(kelasList) ? kelasList : [];
+    return list.filter((k) => k && k.guruId === currentUserId);
+  }, [kelasList, currentUserId]);
 
   const [selectedKelasId, setSelectedKelasId] = useState<string>("");
   const [rekapData, setRekapData] = useState<KelasRekapData | null>(null);
   const [loadingRekap, setLoadingRekap] = useState(false);
+  const [rekapError, setRekapError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Default pilih kelas pertama
@@ -109,18 +111,24 @@ function GuruRekapNilaiView() {
     let isCancelled = false;
     if (!selectedKelasId) {
       setRekapData(null);
+      setRekapError(null);
       return;
     }
 
     async function loadRekap() {
       setLoadingRekap(true);
+      setRekapError(null);
       try {
         const data = await getKelasRekapData(selectedKelasId);
         if (!isCancelled) {
           setRekapData(data);
         }
       } catch (err) {
-        console.error("Gagal memuat rekap nilai kelas:", err);
+        if (!isCancelled) {
+          const msg = err instanceof Error ? err.message : "Gagal memuat rekap nilai kelas.";
+          setRekapError(msg);
+          console.error("Gagal memuat rekap nilai kelas:", err);
+        }
       } finally {
         if (!isCancelled) {
           setLoadingRekap(false);
@@ -136,15 +144,20 @@ function GuruRekapNilaiView() {
 
   // Filter siswa berdasarkan input pencarian
   const filteredSiswaRows = useMemo(() => {
-    if (!rekapData) return [];
+    if (!rekapData || !Array.isArray(rekapData.siswaRows)) return [];
     const query = searchQuery.toLowerCase().trim();
     if (!query) return rekapData.siswaRows;
     return rekapData.siswaRows.filter(
       (s) =>
-        s.siswaNama.toLowerCase().includes(query) ||
-        (s.siswaNisn && s.siswaNisn.toLowerCase().includes(query)),
+        s &&
+        ((s.siswaNama && s.siswaNama.toLowerCase().includes(query)) ||
+          (s.siswaNisn && s.siswaNisn.toLowerCase().includes(query))),
     );
   }, [rekapData, searchQuery]);
+
+  const daftarPenugasanSafe = useMemo(() => {
+    return Array.isArray(rekapData?.daftarPenugasan) ? rekapData.daftarPenugasan : [];
+  }, [rekapData]);
 
   if (loadingClasses) {
     return (
@@ -213,6 +226,28 @@ function GuruRekapNilaiView() {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="mt-3 text-sm text-muted-foreground">Menghitung rekapitulasi nilai kelas…</p>
         </div>
+      ) : rekapError ? (
+        <Card className="py-10 text-center border-destructive/20 bg-destructive/5">
+          <CardContent className="space-y-3">
+            <AlertCircle className="mx-auto h-10 w-10 text-destructive" />
+            <p className="font-semibold text-foreground">Gagal Memuat Rekapitulasi Nilai</p>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+              {rekapError}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => {
+                const cur = selectedKelasId;
+                setSelectedKelasId("");
+                setTimeout(() => setSelectedKelasId(cur), 50);
+              }}
+            >
+              Coba Lagi
+            </Button>
+          </CardContent>
+        </Card>
       ) : !rekapData ? (
         <Card className="py-10 text-center">
           <CardContent>
@@ -251,7 +286,7 @@ function GuruRekapNilaiView() {
                 </span>
                 <div className="min-w-0">
                   <p className="font-display text-2xl font-bold leading-tight text-navy">
-                    {rekapData.daftarPenugasan.length}
+                    {daftarPenugasanSafe.length}
                   </p>
                   <p className="text-sm font-medium">Tugas Terbit</p>
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -332,7 +367,7 @@ function GuruRekapNilaiView() {
                     Verifikasi siswa yang mendaftar pada tab Anggota di menu Kelas Saya.
                   </p>
                 </div>
-              ) : rekapData.daftarPenugasan.length === 0 ? (
+              ) : daftarPenugasanSafe.length === 0 ? (
                 <div className="py-12 text-center">
                   <ClipboardList className="mx-auto h-10 w-10 text-muted-foreground/30" />
                   <p className="mt-3 font-display text-base font-semibold text-navy">
@@ -357,7 +392,7 @@ function GuruRekapNilaiView() {
                         <TableHead className="w-28">NISN</TableHead>
 
                         {/* Assignment Columns */}
-                        {rekapData.daftarPenugasan.map((tugas) => (
+                        {daftarPenugasanSafe.map((tugas) => (
                           <TableHead
                             key={tugas.id}
                             className="text-center min-w-[120px] max-w-[160px] truncate"
@@ -375,7 +410,7 @@ function GuruRekapNilaiView() {
                     </TableHeader>
                     <TableBody>
                       {filteredSiswaRows.map((siswa, idx) => {
-                        const totalTugas = rekapData.daftarPenugasan.length;
+                        const totalTugas = daftarPenugasanSafe.length;
                         const isLengkap =
                           totalTugas > 0 && siswa.totalTugasDinilai === totalTugas;
                         const isSebagian =
@@ -394,8 +429,8 @@ function GuruRekapNilaiView() {
                             </TableCell>
 
                             {/* Nilai Per Tugas */}
-                            {rekapData.daftarPenugasan.map((tugas) => {
-                              const nilaiItem = siswa.nilaiPerTugas[tugas.id];
+                            {daftarPenugasanSafe.map((tugas) => {
+                              const nilaiItem = siswa?.nilaiPerTugas?.[tugas.id];
 
                               if (!nilaiItem || nilaiItem.statusPengumpulan === "belum_mengumpulkan") {
                                 return (
@@ -509,23 +544,30 @@ function GuruRekapNilaiView() {
 // ============================================================================
 function SiswaRiwayatNilaiView() {
   const { profile, user } = useAuth();
-  const currentUserId = user?.id || profile.id;
+  const currentUserId = user?.id || profile?.id;
 
   const [riwayatList, setRiwayatList] = useState<SiswaRiwayatNilaiItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [riwayatError, setRiwayatError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let isCancelled = false;
     async function loadData() {
       if (!currentUserId) return;
       setLoading(true);
+      setRiwayatError(null);
       try {
         const items = await getSiswaRiwayatNilai(currentUserId);
         if (!isCancelled) {
-          setRiwayatList(items);
+          setRiwayatList(Array.isArray(items) ? items : []);
         }
       } catch (err) {
         console.error("Gagal memuat riwayat nilai siswa:", err);
+        if (!isCancelled) {
+          const msg = err instanceof Error ? err.message : "Gagal memuat riwayat nilai siswa.";
+          setRiwayatError(msg);
+        }
       } finally {
         if (!isCancelled) {
           setLoading(false);
@@ -537,17 +579,25 @@ function SiswaRiwayatNilaiView() {
     return () => {
       isCancelled = true;
     };
-  }, [currentUserId]);
+  }, [currentUserId, retryKey]);
+
+  const safeRiwayatList = useMemo(() => {
+    return Array.isArray(riwayatList) ? riwayatList : [];
+  }, [riwayatList]);
 
   const gradedList = useMemo(() => {
-    return riwayatList.filter((r) => r.statusPenilaian === "dinilai" && r.nilaiAkhir !== null);
-  }, [riwayatList]);
+    return safeRiwayatList.filter((r) => r && r.statusPenilaian === "dinilai" && r.nilaiAkhir !== null);
+  }, [safeRiwayatList]);
 
   const studentAverage = useMemo(() => {
     if (gradedList.length === 0) return null;
     const sum = gradedList.reduce((acc, curr) => acc + (curr.nilaiAkhir || 0), 0);
     return Math.round((sum / gradedList.length) * 10) / 10;
   }, [gradedList]);
+
+  const submittedCount = useMemo(() => {
+    return safeRiwayatList.filter((r) => r && r.statusPengumpulan === "submitted").length;
+  }, [safeRiwayatList]);
 
   if (loading) {
     return (
@@ -565,181 +615,203 @@ function SiswaRiwayatNilaiView() {
         subtitle="Lihat hasil evaluasi, perolehan nilai tugas, dan catatan umpan balik dari guru Anda."
       />
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card className="transition-shadow hover:shadow-lift">
-          <CardContent className="flex items-start gap-3 p-5">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-600">
-              <Award className="h-5 w-5" />
-            </span>
-            <div className="min-w-0">
-              <p className="font-display text-2xl font-bold leading-tight text-navy">
-                {gradedList.length}
-              </p>
-              <p className="text-sm font-medium">Tugas Selesai Dinilai</p>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                Hasil evaluasi tersedia
-              </p>
-            </div>
+      {riwayatError ? (
+        <Card className="py-10 text-center border-destructive/20 bg-destructive/5">
+          <CardContent className="space-y-3">
+            <AlertCircle className="mx-auto h-10 w-10 text-destructive" />
+            <p className="font-semibold text-foreground">Gagal Memuat Riwayat Nilai</p>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+              {riwayatError}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => setRetryKey((k) => k + 1)}
+            >
+              Coba Lagi
+            </Button>
           </CardContent>
         </Card>
+      ) : (
+        <>
+          {/* Summary Cards */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Card className="transition-shadow hover:shadow-lift">
+              <CardContent className="flex items-start gap-3 p-5">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-600">
+                  <Award className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-display text-2xl font-bold leading-tight text-navy">
+                    {gradedList.length}
+                  </p>
+                  <p className="text-sm font-medium">Tugas Selesai Dinilai</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    Hasil evaluasi tersedia
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="transition-shadow hover:shadow-lift">
-          <CardContent className="flex items-start gap-3 p-5">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
-              <Sparkles className="h-5 w-5" />
-            </span>
-            <div className="min-w-0">
-              <p className="font-display text-2xl font-bold leading-tight text-navy">
-                {formatNilai(studentAverage)}
-              </p>
-              <p className="text-sm font-medium">Rata-Rata Nilai</p>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                {studentAverage !== null ? "Akumulasi tugas dinilai" : "Belum ada nilai"}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+            <Card className="transition-shadow hover:shadow-lift">
+              <CardContent className="flex items-start gap-3 p-5">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
+                  <Sparkles className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-display text-2xl font-bold leading-tight text-navy">
+                    {formatNilai(studentAverage)}
+                  </p>
+                  <p className="text-sm font-medium">Rata-Rata Nilai</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {studentAverage !== null ? "Akumulasi tugas dinilai" : "Belum ada nilai"}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="transition-shadow hover:shadow-lift">
-          <CardContent className="flex items-start gap-3 p-5">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
-              <ClipboardList className="h-5 w-5" />
-            </span>
-            <div className="min-w-0">
-              <p className="font-display text-2xl font-bold leading-tight text-navy">
-                {riwayatList.filter((r) => r.statusPengumpulan === "submitted").length}
-              </p>
-              <p className="text-sm font-medium">Total Tugas Terkumpul</p>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                Terkumpul di sistem
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            <Card className="transition-shadow hover:shadow-lift">
+              <CardContent className="flex items-start gap-3 p-5">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
+                  <ClipboardList className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-display text-2xl font-bold leading-tight text-navy">
+                    {submittedCount}
+                  </p>
+                  <p className="text-sm font-medium">Total Tugas Terkumpul</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    Terkumpul di sistem
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-      {/* History Table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="font-display text-base text-navy">
-            Daftar Nilai & Evaluasi Tugas
-          </CardTitle>
-          <CardDescription>
-            Rekap nilai resmi dari penugasan yang telah Anda kerjakan dan kumpulkan.
-          </CardDescription>
-        </CardHeader>
+          {/* History Table */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="font-display text-base text-navy">
+                Daftar Nilai & Evaluasi Tugas
+              </CardTitle>
+              <CardDescription>
+                Rekap nilai resmi dari penugasan yang telah Anda kerjakan dan kumpulkan.
+              </CardDescription>
+            </CardHeader>
 
-        <CardContent className="px-0 sm:px-6">
-          {riwayatList.length === 0 ? (
-            <div className="py-12 text-center">
-              <GraduationCap className="mx-auto h-12 w-12 text-muted-foreground/30" />
-              <p className="mt-3 font-display text-base font-semibold text-navy">
-                Belum Ada Riwayat Nilai
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground max-w-md mx-auto">
-                Nilai akan muncul di sini secara otomatis setelah tugas yang Anda kumpulkan selesai
-                diperiksa dan dinilai oleh bapak/ibu guru.
-              </p>
-              <Button asChild className="mt-6 gap-2" variant="outline">
-                <Link to="/penugasan">
-                  Lihat Tugas Tersedia
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12 text-center">No</TableHead>
-                    <TableHead>Judul Tugas</TableHead>
-                    <TableHead>Kelas & Mapel</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    <TableHead className="text-center">Nilai Akhir</TableHead>
-                    <TableHead>Catatan / Umpan Balik Guru</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {riwayatList.map((item, idx) => {
-                    const isGraded =
-                      item.statusPenilaian === "dinilai" && item.nilaiAkhir !== null;
-                    const isReview = item.statusPenilaian === "perlu_penilaian_manual";
+            <CardContent className="px-0 sm:px-6">
+              {safeRiwayatList.length === 0 ? (
+                <div className="py-12 text-center">
+                  <GraduationCap className="mx-auto h-12 w-12 text-muted-foreground/30" />
+                  <p className="mt-3 font-display text-base font-semibold text-navy">
+                    Belum Ada Riwayat Nilai
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground max-w-md mx-auto">
+                    Nilai akan muncul di sini secara otomatis setelah tugas yang Anda kumpulkan selesai
+                    diperiksa dan dinilai oleh bapak/ibu guru.
+                  </p>
+                  <Button asChild className="mt-6 gap-2" variant="outline">
+                    <Link to="/penugasan">
+                      Lihat Tugas Tersedia
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12 text-center">No</TableHead>
+                        <TableHead>Judul Tugas</TableHead>
+                        <TableHead>Kelas & Mapel</TableHead>
+                        <TableHead className="text-center">Status</TableHead>
+                        <TableHead className="text-center">Nilai Akhir</TableHead>
+                        <TableHead>Catatan / Umpan Balik Guru</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {safeRiwayatList.map((item, idx) => {
+                        const isGraded =
+                          item.statusPenilaian === "dinilai" && item.nilaiAkhir !== null;
+                        const isReview = item.statusPenilaian === "perlu_penilaian_manual";
 
-                    return (
-                      <TableRow key={item.pengumpulanId}>
-                        <TableCell className="text-center font-mono text-xs text-muted-foreground">
-                          {idx + 1}
-                        </TableCell>
-                        <TableCell>
-                          <p className="font-semibold text-navy">{item.penugasanJudul}</p>
-                          {item.submittedAt && (
-                            <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                              <Calendar className="h-3 w-3" />
-                              Disubmit: {new Date(item.submittedAt).toLocaleDateString("id-ID")}
-                            </p>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {item.kelasNama} · {item.kelasMapel}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {isGraded ? (
-                            <Badge className="bg-emerald-600 hover:bg-emerald-700 text-[11px]">
-                              Dinilai
-                            </Badge>
-                          ) : isReview ? (
-                            <Badge
-                              variant="outline"
-                              className="border-amber-300 bg-amber-50 text-[11px] text-amber-800"
-                            >
-                              Sedang Dikoreksi
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary" className="text-[11px]">
-                              Menunggu Penilaian
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {isGraded ? (
-                            <div className="inline-flex flex-col items-center">
-                              <span className="font-mono text-base font-bold text-navy">
-                                {formatNilai(item.nilaiAkhir)}
-                              </span>
-                              {(item.nilaiPg !== null || item.nilaiEssay !== null) && (
-                                <span className="text-[10px] text-muted-foreground font-mono">
-                                  PG: {formatNilai(item.nilaiPg)} | Esai:{" "}
-                                  {formatNilai(item.nilaiEssay)}
+                        return (
+                          <TableRow key={item.pengumpulanId}>
+                            <TableCell className="text-center font-mono text-xs text-muted-foreground">
+                              {idx + 1}
+                            </TableCell>
+                            <TableCell>
+                              <p className="font-semibold text-navy">{item.penugasanJudul}</p>
+                              {item.submittedAt && (
+                                <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                                  <Calendar className="h-3 w-3" />
+                                  Disubmit: {new Date(item.submittedAt).toLocaleDateString("id-ID")}
+                                </p>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {item.kelasNama} · {item.kelasMapel}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {isGraded ? (
+                                <Badge className="bg-emerald-600 hover:bg-emerald-700 text-[11px]">
+                                  Dinilai
+                                </Badge>
+                              ) : isReview ? (
+                                <Badge
+                                  variant="outline"
+                                  className="border-amber-300 bg-amber-50 text-[11px] text-amber-800"
+                                >
+                                  Sedang Dikoreksi
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-[11px]">
+                                  Menunggu Penilaian
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {isGraded ? (
+                                <div className="inline-flex flex-col items-center">
+                                  <span className="font-mono text-base font-bold text-navy">
+                                    {formatNilai(item.nilaiAkhir)}
+                                  </span>
+                                  {(item.nilaiPg !== null || item.nilaiEssay !== null) && (
+                                    <span className="text-[10px] text-muted-foreground font-mono">
+                                      PG: {formatNilai(item.nilaiPg)} | Esai:{" "}
+                                      {formatNilai(item.nilaiEssay)}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="font-mono text-xs text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {item.catatanGuru ? (
+                                <div className="flex items-start gap-1.5 text-xs text-navy bg-muted/40 p-2 rounded-lg border border-border/60 max-w-sm">
+                                  <MessageSquare className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+                                  <span className="italic">{item.catatanGuru}</span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground italic">
+                                  Tidak ada catatan khusus
                                 </span>
                               )}
-                            </div>
-                          ) : (
-                            <span className="font-mono text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {item.catatanGuru ? (
-                            <div className="flex items-start gap-1.5 text-xs text-navy bg-muted/40 p-2 rounded-lg border border-border/60 max-w-sm">
-                              <MessageSquare className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
-                              <span className="italic">{item.catatanGuru}</span>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground italic">
-                              Tidak ada catatan khusus
-                            </span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }

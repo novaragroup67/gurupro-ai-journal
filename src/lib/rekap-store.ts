@@ -77,6 +77,7 @@ export async function currentUserId(): Promise<string> {
  * Menghasilkan null jika tidak ada tugas yang selesai dinilai sama sekali.
  */
 export function calculateStudentAverage(scores: (number | null | undefined)[]): number | null {
+  if (!Array.isArray(scores)) return null;
   const validScores = scores.filter(
     (s): s is number => typeof s === "number" && !isNaN(s) && s !== null,
   );
@@ -92,6 +93,7 @@ export function calculateStudentAverage(scores: (number | null | undefined)[]): 
 export function calculateClassAverage(
   studentAverages: (number | null | undefined)[],
 ): number | null {
+  if (!Array.isArray(studentAverages)) return null;
   const valid = studentAverages.filter(
     (a): a is number => typeof a === "number" && !isNaN(a) && a !== null,
   );
@@ -117,171 +119,176 @@ export function formatNilai(val: number | null | undefined): string {
  * Memvalidasi hak kepemilikan guru agar tidak dapat mengakses kelas guru lain.
  */
 export async function getKelasRekapData(kelasId: string): Promise<KelasRekapData | null> {
-  try {
-    const userId = await currentUserId();
+  const userId = await currentUserId();
 
-    // 1. Ambil info kelas dan pastikan kelas milik guru ini
-    const { data: kelas, error: kelasErr } = await supabase
-      .from("kelas")
-      .select("id, nama_kelas, tingkat, mapel, tahun_ajaran, guru_id")
-      .eq("id", kelasId)
-      .maybeSingle();
+  // 1. Ambil info kelas dan pastikan kelas milik guru ini
+  const { data: kelas, error: kelasErr } = await supabase
+    .from("kelas")
+    .select("id, nama_kelas, tingkat, mapel, tahun_ajaran, guru_id")
+    .eq("id", kelasId)
+    .maybeSingle();
 
-    if (kelasErr || !kelas) {
-      console.warn("[RekapStore] Kelas tidak ditemukan:", kelasErr?.message);
-      return null;
-    }
+  if (kelasErr) {
+    console.warn("[RekapStore] Kelas query error:", kelasErr.message);
+    throw new Error(`Gagal memuat data kelas: ${kelasErr.message}`);
+  }
 
-    // Teacher isolation check
-    if (kelas.guru_id && kelas.guru_id !== userId) {
-      console.warn("[RekapStore] Akses diblokir: bukan pemilik kelas");
-      return null;
-    }
+  if (!kelas) {
+    return null;
+  }
 
-    // 2. Ambil siswa aktif kelas
-    const { data: anggotaList, error: anggotaErr } = await supabase
-      .from("kelas_anggota")
-      .select("id, siswa_id, siswa_nama, siswa_nisn, status")
-      .eq("kelas_id", kelasId)
-      .eq("status", "aktif")
-      .order("siswa_nama", { ascending: true });
+  // Teacher isolation check
+  if (kelas.guru_id && kelas.guru_id !== userId) {
+    console.warn("[RekapStore] Akses diblokir: bukan pemilik kelas");
+    return null;
+  }
 
-    if (anggotaErr) {
-      console.warn("[RekapStore] Gagal memuat anggota kelas:", anggotaErr.message);
-    }
+  // 2. Ambil siswa aktif kelas
+  const { data: anggotaList, error: anggotaErr } = await supabase
+    .from("kelas_anggota")
+    .select("id, siswa_id, siswa_nama, siswa_nisn, status")
+    .eq("kelas_id", kelasId)
+    .eq("status", "aktif")
+    .order("siswa_nama", { ascending: true });
 
-    const activeStudents = (anggotaList || []).map((a) => ({
-      siswaId: a.siswa_id,
-      siswaNama: a.siswa_nama || "Siswa",
-      siswaNisn: a.siswa_nisn || "",
-    }));
+  if (anggotaErr) {
+    console.warn("[RekapStore] Gagal memuat anggota kelas:", anggotaErr.message);
+    throw new Error(`Gagal memuat anggota kelas: ${anggotaErr.message}`);
+  }
 
-    // 3. Ambil seluruh penugasan untuk kelas ini (published & closed)
-    const { data: tugasList, error: tugasErr } = await supabase
-      .from("penugasan")
-      .select("id, judul, deadline, status, created_at")
-      .eq("kelas_id", kelasId)
-      .in("status", ["published", "closed"])
-      .order("created_at", { ascending: true });
+  const safeAnggotaList = Array.isArray(anggotaList) ? anggotaList : [];
+  const activeStudents = safeAnggotaList.map((a) => ({
+    siswaId: a.siswa_id,
+    siswaNama: a.siswa_nama || "Siswa",
+    siswaNisn: a.siswa_nisn || "",
+  }));
 
-    if (tugasErr) {
-      console.warn("[RekapStore] Gagal memuat penugasan kelas:", tugasErr.message);
-    }
+  // 3. Ambil seluruh penugasan untuk kelas ini (published & closed)
+  const { data: tugasList, error: tugasErr } = await supabase
+    .from("penugasan")
+    .select("id, judul, deadline, status, created_at")
+    .eq("kelas_id", kelasId)
+    .in("status", ["published", "closed"])
+    .order("created_at", { ascending: true });
 
-    const daftarPenugasan: PenugasanColumnItem[] = (tugasList || []).map((t) => ({
-      id: t.id,
-      judul: t.judul,
-      deadline: t.deadline,
-      status: t.status as "draft" | "published" | "closed",
-    }));
+  if (tugasErr) {
+    console.warn("[RekapStore] Gagal memuat penugasan kelas:", tugasErr.message);
+    throw new Error(`Gagal memuat penugasan kelas: ${tugasErr.message}`);
+  }
 
-    const assignmentIds = daftarPenugasan.map((p) => p.id);
+  const safeTugasList = Array.isArray(tugasList) ? tugasList : [];
+  const daftarPenugasan: PenugasanColumnItem[] = safeTugasList.map((t) => ({
+    id: t.id,
+    judul: t.judul,
+    deadline: t.deadline,
+    status: t.status as "draft" | "published" | "closed",
+  }));
 
-    // 4. Ambil seluruh pengumpulan untuk penugasan-penugasan kelas ini
-    let pengumpulanMap: Record<string, any> = {};
-    if (assignmentIds.length > 0) {
-      const { data: submissions, error: subErr } = await supabase
-        .from("penugasan_pengumpulan")
-        .select(
-          "id, penugasan_id, siswa_id, status, submitted_at, nilai_pg, nilai_essay, nilai_akhir, status_penilaian, catatan_guru, graded_at",
-        )
-        .in("penugasan_id", assignmentIds);
+  const assignmentIds = daftarPenugasan.map((p) => p.id);
 
-      if (subErr) {
-        console.warn("[RekapStore] Gagal memuat pengumpulan:", subErr.message);
-      } else if (submissions) {
-        for (const sub of submissions) {
-          // Key gabungan: `${penugasan_id}:${siswa_id}`
+  // 4. Ambil seluruh pengumpulan untuk penugasan-penugasan kelas ini
+  let pengumpulanMap: Record<string, any> = {};
+  if (assignmentIds.length > 0) {
+    const { data: submissions, error: subErr } = await supabase
+      .from("penugasan_pengumpulan")
+      .select(
+        "id, penugasan_id, siswa_id, status, submitted_at, nilai_pg, nilai_essay, nilai_akhir, status_penilaian, catatan_guru, graded_at",
+      )
+      .in("penugasan_id", assignmentIds);
+
+    if (subErr) {
+      console.warn("[RekapStore] Gagal memuat pengumpulan:", subErr.message);
+      throw new Error(`Gagal memuat pengumpulan siswa: ${subErr.message}`);
+    } else if (Array.isArray(submissions)) {
+      for (const sub of submissions) {
+        if (sub && sub.penugasan_id && sub.siswa_id) {
           const key = `${sub.penugasan_id}:${sub.siswa_id}`;
           pengumpulanMap[key] = sub;
         }
       }
     }
+  }
 
-    // 5. Bangun baris data per siswa
-    let totalSubmissionsDinilai = 0;
-    const siswaRows: SiswaRekapRow[] = activeStudents.map((siswa) => {
-      const nilaiPerTugas: Record<string, SiswaPenugasanNilai> = {};
-      const gradedScores: (number | null)[] = [];
-      let totalTugasDinilai = 0;
-      let totalTugasSelesai = 0;
+  // 5. Bangun baris data per siswa
+  let totalSubmissionsDinilai = 0;
+  const siswaRows: SiswaRekapRow[] = activeStudents.map((siswa) => {
+    const nilaiPerTugas: Record<string, SiswaPenugasanNilai> = {};
+    const gradedScores: (number | null)[] = [];
+    let totalTugasDinilai = 0;
+    let totalTugasSelesai = 0;
 
-      for (const tugas of daftarPenugasan) {
-        const sub = pengumpulanMap[`${tugas.id}:${siswa.siswaId}`];
-        if (sub) {
-          const isGraded = sub.status_penilaian === "dinilai" && sub.nilai_akhir !== null;
-          const nilaiAkhirNum = isGraded ? Number(sub.nilai_akhir) : null;
+    for (const tugas of daftarPenugasan) {
+      const sub = pengumpulanMap[`${tugas.id}:${siswa.siswaId}`];
+      if (sub) {
+        const isGraded = sub.status_penilaian === "dinilai" && sub.nilai_akhir !== null;
+        const nilaiAkhirNum = isGraded ? Number(sub.nilai_akhir) : null;
 
-          if (isGraded) {
-            gradedScores.push(nilaiAkhirNum);
-            totalTugasDinilai++;
-            totalSubmissionsDinilai++;
-          }
-
-          if (sub.status === "submitted") {
-            totalTugasSelesai++;
-          }
-
-          nilaiPerTugas[tugas.id] = {
-            pengumpulanId: sub.id,
-            statusPengumpulan: sub.status as "draft" | "submitted",
-            statusPenilaian: sub.status_penilaian || "belum_dinilai",
-            nilaiAkhir: nilaiAkhirNum,
-            nilaiPg: sub.nilai_pg !== null ? Number(sub.nilai_pg) : null,
-            nilaiEssay: sub.nilai_essay !== null ? Number(sub.nilai_essay) : null,
-            catatanGuru: sub.catatan_guru || null,
-            submittedAt: sub.submitted_at,
-            gradedAt: sub.graded_at,
-          };
-        } else {
-          // Siswa belum memulai/mengumpulkan tugas ini
-          nilaiPerTugas[tugas.id] = {
-            statusPengumpulan: "belum_mengumpulkan",
-            statusPenilaian: null,
-            nilaiAkhir: null,
-            nilaiPg: null,
-            nilaiEssay: null,
-            catatanGuru: null,
-            submittedAt: null,
-            gradedAt: null,
-          };
+        if (isGraded) {
+          gradedScores.push(nilaiAkhirNum);
+          totalTugasDinilai++;
+          totalSubmissionsDinilai++;
         }
+
+        if (sub.status === "submitted") {
+          totalTugasSelesai++;
+        }
+
+        nilaiPerTugas[tugas.id] = {
+          pengumpulanId: sub.id,
+          statusPengumpulan: sub.status as "draft" | "submitted",
+          statusPenilaian: sub.status_penilaian || "belum_dinilai",
+          nilaiAkhir: nilaiAkhirNum,
+          nilaiPg: sub.nilai_pg !== null ? Number(sub.nilai_pg) : null,
+          nilaiEssay: sub.nilai_essay !== null ? Number(sub.nilai_essay) : null,
+          catatanGuru: sub.catatan_guru || null,
+          submittedAt: sub.submitted_at,
+          gradedAt: sub.graded_at,
+        };
+      } else {
+        // Siswa belum memulai/mengumpulkan tugas ini
+        nilaiPerTugas[tugas.id] = {
+          statusPengumpulan: "belum_mengumpulkan",
+          statusPenilaian: null,
+          nilaiAkhir: null,
+          nilaiPg: null,
+          nilaiEssay: null,
+          catatanGuru: null,
+          submittedAt: null,
+          gradedAt: null,
+        };
       }
+    }
 
-      const rataRata = calculateStudentAverage(gradedScores);
-
-      return {
-        siswaId: siswa.siswaId,
-        siswaNama: siswa.siswaNama,
-        siswaNisn: siswa.siswaNisn,
-        nilaiPerTugas,
-        rataRata,
-        totalTugasDinilai,
-        totalTugasSelesai,
-      };
-    });
-
-    // 6. Hitung rata-rata kelas
-    const allStudentAverages = siswaRows.map((s) => s.rataRata);
-    const rataRataKelas = calculateClassAverage(allStudentAverages);
+    const rataRata = calculateStudentAverage(gradedScores);
 
     return {
-      kelasId: kelas.id,
-      namaKelas: kelas.nama_kelas,
-      tingkat: kelas.tingkat,
-      mapel: kelas.mapel,
-      tahunAjaran: kelas.tahun_ajaran,
-      guruId: kelas.guru_id,
-      daftarPenugasan,
-      siswaRows,
-      totalSiswa: activeStudents.length,
-      totalSubmissionsDinilai,
-      rataRataKelas,
+      siswaId: siswa.siswaId,
+      siswaNama: siswa.siswaNama,
+      siswaNisn: siswa.siswaNisn,
+      nilaiPerTugas,
+      rataRata,
+      totalTugasDinilai,
+      totalTugasSelesai,
     };
-  } catch (err) {
-    console.error("[RekapStore] Error getKelasRekapData:", err);
-    return null;
-  }
+  });
+
+  // 6. Hitung rata-rata kelas
+  const allStudentAverages = (siswaRows || []).map((s) => s.rataRata);
+  const rataRataKelas = calculateClassAverage(allStudentAverages);
+
+  return {
+    kelasId: kelas.id,
+    namaKelas: kelas.nama_kelas,
+    tingkat: kelas.tingkat,
+    mapel: kelas.mapel,
+    tahunAjaran: kelas.tahun_ajaran,
+    guruId: kelas.guru_id,
+    daftarPenugasan,
+    siswaRows,
+    totalSiswa: activeStudents.length,
+    totalSubmissionsDinilai,
+    rataRataKelas,
+  };
 }
 
 /**
@@ -289,66 +296,62 @@ export async function getKelasRekapData(kelasId: string): Promise<KelasRekapData
  * Murni hanya membaca hasil pengumpulan milik siswa sendiri (isolasi data siswa).
  */
 export async function getSiswaRiwayatNilai(siswaIdParam?: string): Promise<SiswaRiwayatNilaiItem[]> {
-  try {
-    const userId = siswaIdParam || (await currentUserId());
+  const userId = siswaIdParam || (await currentUserId());
 
-    const { data, error } = await supabase
-      .from("penugasan_pengumpulan")
-      .select(
-        `
+  const { data, error } = await supabase
+    .from("penugasan_pengumpulan")
+    .select(
+      `
+      id,
+      penugasan_id,
+      status,
+      submitted_at,
+      nilai_pg,
+      nilai_essay,
+      nilai_akhir,
+      status_penilaian,
+      catatan_guru,
+      graded_at,
+      penugasan:penugasan_id (
         id,
-        penugasan_id,
-        status,
-        submitted_at,
-        nilai_pg,
-        nilai_essay,
-        nilai_akhir,
-        status_penilaian,
-        catatan_guru,
-        graded_at,
-        penugasan:penugasan_id (
+        judul,
+        kelas_id,
+        kelas:kelas_id (
           id,
-          judul,
-          kelas_id,
-          kelas:kelas_id (
-            id,
-            nama_kelas,
-            mapel
-          )
+          nama_kelas,
+          mapel
         )
-      `,
       )
-      .eq("siswa_id", userId)
-      .order("submitted_at", { ascending: false });
+    `,
+    )
+    .eq("siswa_id", userId)
+    .order("submitted_at", { ascending: false });
 
-    if (error) {
-      console.warn("[RekapStore] Gagal memuat riwayat nilai siswa:", error.message);
-      return [];
-    }
-
-    return (data || []).map((row: any) => {
-      const penugasan = row.penugasan;
-      const kelas = penugasan?.kelas;
-
-      return {
-        pengumpulanId: row.id,
-        penugasanId: row.penugasan_id,
-        penugasanJudul: penugasan?.judul || "Tugas",
-        kelasId: penugasan?.kelas_id || "",
-        kelasNama: kelas?.nama_kelas || "Kelas",
-        kelasMapel: kelas?.mapel || "Mata Pelajaran",
-        statusPengumpulan: row.status as "draft" | "submitted",
-        submittedAt: row.submitted_at,
-        statusPenilaian: (row.status_penilaian as any) || "belum_dinilai",
-        nilaiPg: row.nilai_pg !== null ? Number(row.nilai_pg) : null,
-        nilaiEssay: row.nilai_essay !== null ? Number(row.nilai_essay) : null,
-        nilaiAkhir: row.nilai_akhir !== null ? Number(row.nilai_akhir) : null,
-        catatanGuru: row.catatan_guru || null,
-        gradedAt: row.graded_at,
-      };
-    });
-  } catch (err) {
-    console.error("[RekapStore] Error getSiswaRiwayatNilai:", err);
-    return [];
+  if (error) {
+    console.warn("[RekapStore] Gagal memuat riwayat nilai siswa:", error.message);
+    throw new Error(`Gagal memuat riwayat nilai siswa: ${error.message}`);
   }
+
+  const safeData = Array.isArray(data) ? data : [];
+  return safeData.map((row: any) => {
+    const penugasan = row?.penugasan;
+    const kelas = penugasan?.kelas;
+
+    return {
+      pengumpulanId: row.id,
+      penugasanId: row.penugasan_id,
+      penugasanJudul: penugasan?.judul || "Tugas",
+      kelasId: penugasan?.kelas_id || "",
+      kelasNama: kelas?.nama_kelas || "Kelas",
+      kelasMapel: kelas?.mapel || "Mata Pelajaran",
+      statusPengumpulan: row.status as "draft" | "submitted",
+      submittedAt: row.submitted_at,
+      statusPenilaian: (row.status_penilaian as any) || "belum_dinilai",
+      nilaiPg: row.nilai_pg !== null ? Number(row.nilai_pg) : null,
+      nilaiEssay: row.nilai_essay !== null ? Number(row.nilai_essay) : null,
+      nilaiAkhir: row.nilai_akhir !== null ? Number(row.nilai_akhir) : null,
+      catatanGuru: row.catatan_guru || null,
+      gradedAt: row.graded_at,
+    };
+  });
 }
