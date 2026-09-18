@@ -20,11 +20,15 @@ export interface GuruProfile {
 
 export type UserProfile = GuruProfile;
 
+export type ProfileStatus = "idle" | "loading" | "loaded" | "missing" | "error";
+
 export interface AuthState {
   ready: boolean;
   signedIn: boolean;
   user: User | null;
   profile: GuruProfile;
+  profileStatus: ProfileStatus;
+  profileError: string | null;
 }
 
 export type LoginResult = { ok: true } | { ok: false; message: string };
@@ -88,6 +92,8 @@ const LOGGED_OUT: AuthState = {
   signedIn: false,
   user: null,
   profile: DEFAULT_PROFILE,
+  profileStatus: "idle",
+  profileError: null,
 };
 
 let state: AuthState = { ...LOGGED_OUT };
@@ -119,7 +125,27 @@ export function isAdmin(profile: GuruProfile): boolean {
   return profile?.role === "admin";
 }
 
-async function fetchProfileForUser(user: User): Promise<GuruProfile> {
+export type FetchProfileResult =
+  | { status: "loaded"; profile: GuruProfile }
+  | { status: "missing"; profile: GuruProfile }
+  | { status: "error"; message: string; profile: GuruProfile };
+
+export async function fetchProfileForUser(user: User): Promise<FetchProfileResult> {
+  const fallbackProfile: GuruProfile = {
+    id: user.id,
+    nama: user.email?.split("@")[0] || "Pengguna",
+    email: user.email || "",
+    nip: "",
+    nisn: "",
+    sekolah: "",
+    mapel: "",
+    kelas: "",
+    telepon: "",
+    bio: "",
+    role: "",
+    status_verifikasi: "menunggu",
+  };
+
   try {
     const { data, error } = await supabase
       .from("profiles")
@@ -129,22 +155,35 @@ async function fetchProfileForUser(user: User): Promise<GuruProfile> {
 
     if (error) {
       console.warn("[Auth] Failed to load profile from DB:", error.message);
+      return {
+        status: "error",
+        message: error.message || "Gagal memuat profil akun dari basis data.",
+        profile: fallbackProfile,
+      };
+    }
+
+    if (!data) {
+      return {
+        status: "missing",
+        profile: fallbackProfile,
+      };
     }
 
     // Fail-safe role validation: strictly from DB, never trust client user_metadata for role elevation
-    const rawRole = data?.role || "";
+    const rawRole = data.role || "";
     const validatedRole =
       rawRole === "guru" || rawRole === "siswa" || rawRole === "admin" ? rawRole : "";
 
-    if (data) {
-      const resolvedNisn =
-        data.nisn ||
-        (validatedRole === "siswa" ? data.nip : "") ||
-        "";
-      const resolvedNip =
-        validatedRole === "siswa" ? "" : data.nip || "";
+    const resolvedNisn =
+      data.nisn ||
+      (validatedRole === "siswa" ? data.nip : "") ||
+      "";
+    const resolvedNip =
+      validatedRole === "siswa" ? "" : data.nip || "";
 
-      return {
+    return {
+      status: "loaded",
+      profile: {
         id: data.id,
         nama: data.nama || "Pengguna",
         email: data.email || user.email || "",
@@ -157,40 +196,69 @@ async function fetchProfileForUser(user: User): Promise<GuruProfile> {
         bio: data.bio || "",
         role: validatedRole,
         status_verifikasi: data.status_verifikasi || (validatedRole === "guru" ? "menunggu" : "terverifikasi"),
-      };
-    }
-
-    // Fallback jika baris di tabel profiles belum ada (tidak ada akses role guru/admin tanpa baris DB)
-    return {
-      id: user.id,
-      nama: user.email?.split("@")[0] || "Pengguna",
-      email: user.email || "",
-      nip: "",
-      nisn: "",
-      sekolah: "",
-      mapel: "",
-      kelas: "",
-      telepon: "",
-      bio: "",
-      role: "",
-      status_verifikasi: "menunggu",
+      },
     };
   } catch (err) {
+    const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat memuat data profil.";
     console.error("[Auth] Unexpected error fetching profile:", err);
     return {
-      id: user.id,
-      nama: user.email?.split("@")[0] || "Pengguna",
-      email: user.email || "",
-      nip: "",
-      nisn: "",
-      sekolah: "",
-      mapel: "",
-      kelas: "",
-      telepon: "",
-      bio: "",
-      role: "",
+      status: "error",
+      message: msg,
+      profile: fallbackProfile,
     };
   }
+}
+
+let authRequestId = 0;
+
+async function syncProfile(user: User | null): Promise<FetchProfileResult | null> {
+  const reqId = ++authRequestId;
+  if (!user) {
+    setState({
+      ready: true,
+      signedIn: false,
+      user: null,
+      profile: DEFAULT_PROFILE,
+      profileStatus: "idle",
+      profileError: null,
+    });
+    return null;
+  }
+
+  // Set loading status jika profil belum loaded
+  if (state.profileStatus !== "loaded" || state.user?.id !== user.id) {
+    setState({
+      ready: true,
+      signedIn: true,
+      user,
+      profileStatus: "loading",
+      profileError: null,
+    });
+  }
+
+  const result = await fetchProfileForUser(user);
+
+  // Jika ada request auth yang lebih baru saat query berjalan, abaikan hasil usang
+  if (reqId !== authRequestId) {
+    return result;
+  }
+
+  setState({
+    ready: true,
+    signedIn: true,
+    user,
+    profile: result.profile,
+    profileStatus: result.status,
+    profileError: result.status === "error" ? result.message : null,
+  });
+
+  return result;
+}
+
+export async function refreshProfile(): Promise<FetchProfileResult | null> {
+  const current = get();
+  if (!current.user) return null;
+  return syncProfile(current.user);
 }
 
 let initialized = false;
@@ -200,38 +268,27 @@ function initAuth() {
   initialized = true;
 
   // Cek session saat pertama kali load
-  supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+  supabase.auth.getSession().then(({ data: { session }, error }) => {
     if (error || !session?.user) {
-      setState({ ready: true, signedIn: false, user: null, profile: DEFAULT_PROFILE });
-      return;
-    }
-
-    const profile = await fetchProfileForUser(session.user);
-    setState({
-      ready: true,
-      signedIn: true,
-      user: session.user,
-      profile,
-    });
-  });
-
-  // Listen perubahan auth state (misal login, logout, token refresh)
-  supabase.auth.onAuthStateChange(async (event, session) => {
-    if (session?.user) {
-      const profile = await fetchProfileForUser(session.user);
-      setState({
-        ready: true,
-        signedIn: true,
-        user: session.user,
-        profile,
-      });
-    } else {
       setState({
         ready: true,
         signedIn: false,
         user: null,
         profile: DEFAULT_PROFILE,
+        profileStatus: "idle",
+        profileError: null,
       });
+      return;
+    }
+    void syncProfile(session.user);
+  });
+
+  // Listen perubahan auth state (misal login, logout, token refresh)
+  supabase.auth.onAuthStateChange(async (_event, session) => {
+    if (session?.user) {
+      void syncProfile(session.user);
+    } else {
+      void syncProfile(null);
     }
   });
 }
@@ -241,6 +298,9 @@ export function useAuth(): {
   signedIn: boolean;
   user: User | null;
   profile: GuruProfile;
+  profileStatus: ProfileStatus;
+  profileError: string | null;
+  refreshProfile: () => Promise<FetchProfileResult | null>;
 } {
   const current = useSyncExternalStore(subscribe, get, () => LOGGED_OUT);
 
@@ -253,6 +313,9 @@ export function useAuth(): {
     signedIn: current.signedIn,
     user: current.user,
     profile: current.profile,
+    profileStatus: current.profileStatus,
+    profileError: current.profileError,
+    refreshProfile,
   };
 }
 
@@ -281,13 +344,15 @@ export async function login(
       return { ok: false, message: "Pengguna tidak ditemukan." };
     }
 
-    const profile = await fetchProfileForUser(data.user);
-    setState({
-      ready: true,
-      signedIn: true,
-      user: data.user,
-      profile,
-    });
+    // Explicitly synchronize and await validated database profile
+    const profileResult = await syncProfile(data.user);
+
+    if (profileResult?.status === "error") {
+      return {
+        ok: false,
+        message: `Terhubung ke akun, namun gagal memuat profil: ${profileResult.message}. Silakan coba lagi.`,
+      };
+    }
 
     return { ok: true };
   } catch (err) {
@@ -306,10 +371,8 @@ export async function logout(): Promise<void> {
     console.error("[Auth] Sign out error:", err);
   } finally {
     setState({
+      ...LOGGED_OUT,
       ready: true,
-      signedIn: false,
-      user: null,
-      profile: DEFAULT_PROFILE,
     });
   }
 }

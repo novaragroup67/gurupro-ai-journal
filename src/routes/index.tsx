@@ -90,12 +90,53 @@ export const Route = createFileRoute("/")({
 });
 
 function DashboardSwitcher() {
-  const { profile, ready } = useAuth();
+  const { profile, profileStatus, profileError, ready, refreshProfile } = useAuth();
+  const [retrying, setRetrying] = useState(false);
 
-  if (!ready) {
+  if (!ready || profileStatus === "loading") {
     return (
       <div className="grid min-h-[50vh] place-items-center text-sm text-muted-foreground">
-        Memuat dashboard…
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span>Memuat dashboard…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (profileStatus === "error") {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-md space-y-4 rounded-xl border border-destructive/30 bg-card p-6 shadow-sm">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <AlertTriangle className="h-6 w-6" />
+          </div>
+          <h2 className="text-lg font-semibold text-foreground">Gagal Memuat Profil Akun</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Terjadi kendala saat mengambil data profil akun Anda dari server:
+          </p>
+          <p className="rounded-md bg-muted/60 p-2.5 font-mono text-xs text-destructive">
+            {profileError || "Kesalahan koneksi basis data."}
+          </p>
+          <div className="pt-2 flex justify-center gap-3">
+            <Button
+              variant="default"
+              disabled={retrying}
+              onClick={async () => {
+                setRetrying(true);
+                await refreshProfile();
+                setRetrying(false);
+              }}
+            >
+              {retrying ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Coba Muat Ulang
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -120,7 +161,7 @@ function DashboardSwitcher() {
         </div>
         <h2 className="text-lg font-semibold text-foreground">Peran Akun Belum Terdaftar</h2>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          Akun Anda belum memiliki peran aktif (Guru atau Siswa) yang valid. Untuk menjaga keamanan
+          Akun Anda belum memiliki peran aktif (Guru atau Siswa) yang valid di sistem. Untuk menjaga keamanan
           sistem, akses fitur Guru tidak diberikan secara otomatis.
         </p>
         <div className="pt-2 flex justify-center gap-3">

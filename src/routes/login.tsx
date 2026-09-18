@@ -50,7 +50,7 @@ function LoginPage() {
     try {
       const result = await login(email, password, ingat);
       if (!result.ok) {
-        setErrors({ password: "Email atau kata sandi salah." });
+        setErrors({ password: result.message || "Email atau kata sandi salah." });
         toast.error(result.message || "Gagal masuk. Periksa email dan kata sandi Anda.");
         return;
       }
