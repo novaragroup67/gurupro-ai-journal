@@ -210,7 +210,7 @@ function DaftarPage() {
           )}
         >
           <GraduationCap className="h-4 w-4" />
-          👩‍🏫 Saya Guru
+          Saya Guru
         </button>
         <button
           type="button"
@@ -223,7 +223,7 @@ function DaftarPage() {
           )}
         >
           <User className="h-4 w-4" />
-          🎓 Saya Siswa
+          Saya Siswa
         </button>
       </div>
 
@@ -244,7 +244,7 @@ function DaftarPage() {
             {renderField("email", "Email", email, setEmail, {
               type: "email",
               autoComplete: "email",
-              placeholder: "alamat.email@sekolah.sch.id",
+              placeholder: "nama@gmail.com",
             })}
 
             {renderField("telepon", "No. HP", telepon, setTelepon, {
