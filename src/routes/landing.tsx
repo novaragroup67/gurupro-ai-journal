@@ -36,7 +36,12 @@ function LandingPage() {
           </Link>
 
           <nav className="flex items-center gap-2 sm:gap-3">
-            <Button asChild variant="ghost" size="sm" className="font-medium text-navy hover:text-primary">
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="font-medium text-navy hover:text-primary"
+            >
               <Link to="/login">Masuk</Link>
             </Button>
             <Button asChild size="sm" className="font-medium shadow-sm">
@@ -64,8 +69,8 @@ function LandingPage() {
             </h1>
 
             <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Platform administrasi pembelajaran cerdas untuk guru SMK. Susun modul, buat soal, dan kelola
-              kelas — dibantu AI.
+              Platform administrasi pembelajaran cerdas untuk guru SMK. Susun modul, buat soal, dan
+              kelola kelas — dibantu AI.
             </p>
 
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
@@ -75,7 +80,12 @@ function LandingPage() {
                   <ArrowRight className="ml-1 h-4 w-4" />
                 </Link>
               </Button>
-              <Button asChild variant="outline" size="lg" className="w-full border-navy/20 font-semibold text-navy hover:bg-navy/5 sm:w-auto">
+              <Button
+                asChild
+                variant="outline"
+                size="lg"
+                className="w-full border-navy/20 font-semibold text-navy hover:bg-navy/5 sm:w-auto"
+              >
                 <Link to="/login">Masuk</Link>
               </Button>
             </div>
@@ -129,7 +139,8 @@ function LandingPage() {
                   </div>
                   <h3 className="mt-5 font-display text-lg font-bold text-navy">Kelola Kelas</h3>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    Bagi kode atau link undangan kelas, dan kelola siswa yang bergabung dengan mudah.
+                    Bagi kode atau link undangan kelas, dan kelola siswa yang bergabung dengan
+                    mudah.
                   </p>
                 </CardContent>
               </Card>

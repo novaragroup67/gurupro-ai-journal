@@ -70,15 +70,30 @@ export async function addPaket(data: Omit<PaketSoal, "id" | "createdAt">) {
 }
 
 export async function updatePaket(id: string, patch: Partial<PaketSoal>) {
-  store.set(store.get().map((p) => (p.id === id ? { ...p, ...patch } : p)));
-  const { error } = await supabase.from("paket_soal").update(toRow(patch) as never).eq("id", id);
-  if (error) throw error;
+  const previous = store.get();
+  store.set(previous.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  try {
+    const { error } = await supabase
+      .from("paket_soal")
+      .update(toRow(patch) as never)
+      .eq("id", id);
+    if (error) throw error;
+  } catch (err) {
+    store.set(previous);
+    throw err;
+  }
 }
 
 export async function deletePaket(id: string) {
-  store.set(store.get().filter((p) => p.id !== id));
-  const { error } = await supabase.from("paket_soal").delete().eq("id", id);
-  if (error) throw error;
+  const previous = store.get();
+  store.set(previous.filter((p) => p.id !== id));
+  try {
+    const { error } = await supabase.from("paket_soal").delete().eq("id", id);
+    if (error) throw error;
+  } catch (err) {
+    store.set(previous);
+    throw err;
+  }
 }
 
 export async function publishPaket(id: string) {

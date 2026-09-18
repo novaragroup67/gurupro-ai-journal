@@ -109,9 +109,7 @@ function GabungKelasPage() {
                 <div className="mt-3 rounded-2xl border border-primary/20 bg-primary-soft/50 p-4">
                   <div className="flex items-center justify-center gap-2 text-primary">
                     <BookOpen className="h-5 w-5" />
-                    <span className="font-display text-lg font-bold text-navy">
-                      {kelas.mapel}
-                    </span>
+                    <span className="font-display text-lg font-bold text-navy">{kelas.mapel}</span>
                   </div>
                   <p className="mt-1 font-semibold text-primary">
                     Kelas {kelas.tingkat} {kelas.namaKelas}

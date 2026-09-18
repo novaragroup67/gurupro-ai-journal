@@ -1,12 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import {
-  Eye,
-  EyeOff,
-  GraduationCap,
-  Loader2,
-  User,
-  UserPlus,
-} from "lucide-react";
+import { Eye, EyeOff, GraduationCap, Loader2, User, UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -314,7 +307,9 @@ function DaftarPage() {
                   {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              {errors.password ? <p className="text-xs text-destructive">{errors.password}</p> : null}
+              {errors.password ? (
+                <p className="text-xs text-destructive">{errors.password}</p>
+              ) : null}
             </div>
 
             <div className="grid gap-2">
@@ -339,7 +334,11 @@ function DaftarPage() {
             </div>
 
             <Button type="submit" disabled={loading} className="uppercase tracking-wide">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <UserPlus className="h-4 w-4" />
+              )}
               {loading ? "Menyimpan…" : `Daftar sebagai ${role === "guru" ? "Guru" : "Siswa"}`}
             </Button>
           </form>

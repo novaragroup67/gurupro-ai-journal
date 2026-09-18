@@ -40,7 +40,6 @@ export function ComingSoon({
           <Button asChild>
             <Link to="/modul-ajar">Kelola Modul Ajar</Link>
           </Button>
-
         </div>
       </CardContent>
     </Card>

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { Check, Clock, UserCheck, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -27,12 +27,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { initials, useAuth } from "@/lib/auth-store";
-import {
-  setujuiAnggota,
-  tolakAnggota,
-  useKelas,
-  type AnggotaItem,
-} from "@/lib/kelas-store";
+import { setujuiAnggota, tolakAnggota, useKelas, type AnggotaItem } from "@/lib/kelas-store";
 
 export const Route = createFileRoute("/verifikasi")({
   head: () => ({
@@ -69,11 +64,29 @@ function formatTanggal(isoDate: string) {
 }
 
 function VerifikasiPage() {
-  const { profile, user } = useAuth();
+  const { profile, user, ready } = useAuth();
   const { kelasList, anggotaList } = useKelas();
 
   const [activeTab, setActiveTab] = useState("menunggu");
   const [targetTolak, setTargetTolak] = useState<AnggotaItem | null>(null);
+
+  if (ready && profile.role !== "guru") {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-md space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-foreground">Akses Khusus Guru</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Halaman Verifikasi Siswa hanya dapat diakses oleh akun Guru terdaftar.
+          </p>
+          <div className="pt-2 flex justify-center">
+            <Button asChild variant="outline">
+              <Link to="/">Kembali ke Dashboard</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Ambil semua permintaan siswa untuk kelas guru ini berdasarkan guru_id
   const guruId = user?.id || profile.id;

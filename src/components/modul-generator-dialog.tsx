@@ -25,7 +25,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { generateModulAi } from "@/lib/ai.functions";
 import { uid } from "@/lib/cloud-store";
@@ -182,27 +188,30 @@ export function ModulGeneratorDialog({
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent className="max-h-[90dvh] w-[min(42rem,calc(100vw-2rem))] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="font-display text-navy">Susun Modul Baru</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="max-h-[90dvh] w-[calc(100vw-2rem)] sm:max-w-2xl overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+        <DialogHeader className="min-w-0">
+          <DialogTitle className="font-display text-navy break-words">Susun Modul Baru</DialogTitle>
+          <DialogDescription className="break-words">
             GuruPro membaca isi sumber terlebih dahulu, lalu menyusun modul berdasar isi tersebut.
           </DialogDescription>
         </DialogHeader>
 
         {loading ? (
-          <div className="grid place-items-center gap-3 py-14 text-center">
+          <div className="grid place-items-center gap-3 py-14 text-center min-w-0 px-2">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="font-display font-semibold text-navy">GuruPro AI sedang menyusun modul…</p>
-            <p className="max-w-sm text-sm text-muted-foreground">
-              Menyusun tujuan pembelajaran, bab, poin kunci, penjelasan, dan kesimpulan dari isi sumber.
+            <p className="font-display font-semibold text-navy">
+              GuruPro AI sedang menyusun modul…
+            </p>
+            <p className="max-w-sm text-sm text-muted-foreground break-words">
+              Menyusun tujuan pembelajaran, bab, poin kunci, penjelasan, dan kesimpulan dari isi
+              sumber.
             </p>
           </div>
         ) : (
-          <div className="grid gap-4">
-            <div className="grid gap-2">
+          <div className="grid gap-4 min-w-0">
+            <div className="grid gap-2 min-w-0">
               <Label>Jenis Sumber</Label>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-2 min-w-0">
                 {SUMBER_TIPE.map((tipe) => {
                   const Icon = ICONS[tipe];
                   const active = sumberTipe === tipe;
@@ -214,12 +223,12 @@ export function ModulGeneratorDialog({
                         setSumberTipe(tipe);
                         reset();
                       }}
-                      className={`flex items-center gap-2 rounded-xl border p-3 text-left text-sm transition-colors ${
+                      className={`flex items-center gap-2 rounded-xl border p-3 text-left text-sm transition-colors min-w-0 ${
                         active ? "border-primary bg-primary-soft text-primary" : "hover:bg-muted/60"
                       }`}
                     >
                       <Icon className="h-4 w-4 shrink-0" />
-                      <span className="truncate font-medium">{tipe}</span>
+                      <span className="truncate font-medium min-w-0">{tipe}</span>
                       {tipe === "Link Luar" ? (
                         <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase text-accent-foreground">
                           utama
@@ -232,10 +241,10 @@ export function ModulGeneratorDialog({
             </div>
 
             {sumberTipe === "Link Luar" ? (
-              <div className="grid gap-3">
-                <div className="grid gap-2">
+              <div className="grid gap-3 min-w-0">
+                <div className="grid gap-2 min-w-0">
                   <Label htmlFor="sumber">Link Sumber Materi</Label>
-                  <div className="flex flex-col gap-2 sm:flex-row">
+                  <div className="flex flex-col gap-2 sm:flex-row min-w-0">
                     <Input
                       id="sumber"
                       value={sumberInput}
@@ -244,13 +253,14 @@ export function ModulGeneratorDialog({
                         reset();
                       }}
                       placeholder={PLACEHOLDER["Link Luar"]}
+                      className="min-w-0 flex-1"
                     />
                     <Button
                       type="button"
                       variant="secondary"
                       onClick={handleAnalisis}
                       disabled={analyzing}
-                      className="shrink-0"
+                      className="shrink-0 w-full sm:w-auto"
                     >
                       {analyzing ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -265,31 +275,36 @@ export function ModulGeneratorDialog({
                 </div>
 
                 {sumberError ? (
-                  <div className="flex gap-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                  <div className="flex gap-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive min-w-0 overflow-hidden">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <p className="font-medium">Sumber tidak dapat dibaca</p>
-                      <p className="mt-0.5 text-xs">{sumberError}</p>
+                      <p className="mt-0.5 text-xs break-words [overflow-wrap:anywhere]">
+                        {sumberError}
+                      </p>
                     </div>
                   </div>
                 ) : null}
 
                 {preview ? (
-                  <div className="grid gap-2 rounded-xl border bg-muted/40 p-3">
-                    <div className="flex items-start gap-2">
+                  <div className="grid gap-2 rounded-xl border bg-muted/40 p-3 min-w-0 max-w-full overflow-hidden">
+                    <div className="flex items-start gap-2 min-w-0">
                       <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                      <div className="min-w-0">
-                        <p className="truncate font-display text-sm font-semibold text-navy">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-display text-sm font-semibold text-navy break-words">
                           {preview.judul}
                         </p>
-                        <p className="truncate text-xs text-muted-foreground">{preview.url}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {preview.situs} · {preview.jumlahKata.toLocaleString("id-ID")} kata terbaca
+                        <p className="text-xs text-muted-foreground break-all truncate">
+                          {preview.url}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground break-words">
+                          {preview.situs} · {preview.jumlahKata.toLocaleString("id-ID")} kata
+                          terbaca
                           {preview.cukup ? "" : " · isi terbatas"}
                         </p>
                       </div>
                     </div>
-                    <p className="max-h-40 overflow-y-auto whitespace-pre-line rounded-lg bg-background p-2 text-xs leading-relaxed text-muted-foreground">
+                    <p className="max-h-40 overflow-y-auto overflow-x-hidden whitespace-pre-line break-words [overflow-wrap:anywhere] rounded-lg bg-background p-2 text-xs leading-relaxed text-muted-foreground max-w-full">
                       {preview.konten.slice(0, 1200)}
                       {preview.konten.length > 1200 ? "…" : ""}
                     </p>
@@ -297,12 +312,14 @@ export function ModulGeneratorDialog({
                 ) : null}
               </div>
             ) : (
-              <div className="grid gap-2">
+              <div className="grid gap-2 min-w-0">
                 <Label htmlFor="sumber">{sumberTipe}</Label>
                 {sumberTipe === "eBook / Dokumen" ? (
-                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed p-3 text-sm text-muted-foreground hover:bg-muted/50">
-                    <FileUp className="h-4 w-4" />
-                    {fileName || "Tandai nama file eBook (isi materi tetap ditempel di bawah)"}
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed p-3 text-sm text-muted-foreground hover:bg-muted/50 min-w-0">
+                    <FileUp className="h-4 w-4 shrink-0" />
+                    <span className="truncate">
+                      {fileName || "Tandai nama file eBook (isi materi tetap ditempel di bawah)"}
+                    </span>
                     <input
                       type="file"
                       className="hidden"
@@ -311,7 +328,9 @@ export function ModulGeneratorDialog({
                         const f = e.target.files?.[0];
                         if (f) {
                           setFileName(f.name);
-                          toast.info("Tempel bagian isi dokumen di bawah agar AI berdasar isi aslinya.");
+                          toast.info(
+                            "Tempel bagian isi dokumen di bawah agar AI berdasar isi aslinya.",
+                          );
                         }
                       }}
                     />
@@ -323,27 +342,30 @@ export function ModulGeneratorDialog({
                   value={sumberInput}
                   onChange={(e) => setSumberInput(e.target.value)}
                   placeholder={PLACEHOLDER[sumberTipe]}
+                  className="min-w-0 max-w-full break-words"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Isi yang ditempel menjadi satu-satunya rujukan AI, jadi tempel materi selengkap mungkin.
+                <p className="text-xs text-muted-foreground break-words">
+                  Isi yang ditempel menjadi satu-satunya rujukan AI, jadi tempel materi selengkap
+                  mungkin.
                 </p>
               </div>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="grid gap-2 sm:col-span-3">
+            <div className="grid gap-4 sm:grid-cols-3 min-w-0">
+              <div className="grid gap-2 sm:col-span-3 min-w-0">
                 <Label htmlFor="topik">Topik / Materi</Label>
                 <Input
                   id="topik"
                   value={topik}
                   onChange={(e) => setTopik(e.target.value)}
                   placeholder="Misal: Sistem Persamaan Linear"
+                  className="min-w-0"
                 />
               </div>
-              <div className="grid gap-2">
+              <div className="grid gap-2 min-w-0">
                 <Label>Mata Pelajaran</Label>
                 <Select value={mapel} onValueChange={setMapel}>
-                  <SelectTrigger>
+                  <SelectTrigger className="min-w-0 w-full">
                     <SelectValue placeholder="Pilih" />
                   </SelectTrigger>
                   <SelectContent>
@@ -355,10 +377,10 @@ export function ModulGeneratorDialog({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2">
+              <div className="grid gap-2 min-w-0">
                 <Label>Kelas</Label>
                 <Select value={kelas} onValueChange={setKelas}>
-                  <SelectTrigger>
+                  <SelectTrigger className="min-w-0 w-full">
                     <SelectValue placeholder="Pilih" />
                   </SelectTrigger>
                   <SelectContent>
@@ -375,13 +397,19 @@ export function ModulGeneratorDialog({
         )}
 
         {!loading ? (
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => close(false)} disabled={busy}>
+          <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-2 w-full pt-2">
+            <Button
+              variant="ghost"
+              onClick={() => close(false)}
+              disabled={busy}
+              className="w-full sm:w-auto"
+            >
               Batal
             </Button>
             <Button
               onClick={handleGenerate}
               disabled={busy || (sumberTipe === "Link Luar" && !preview)}
+              className="w-full sm:w-auto"
             >
               <Sparkles className="h-4 w-4" />
               Generate Modul dengan AI

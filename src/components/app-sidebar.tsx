@@ -38,7 +38,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { logout } from "@/lib/auth-store";
+import { logout, useAuth } from "@/lib/auth-store";
 import { useState } from "react";
 
 const mainItems = [
@@ -58,9 +58,34 @@ const secondaryItems = [
 
 export function AppSidebar() {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const { isMobile, setOpenMobile } = useSidebar();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [confirmLogout, setConfirmLogout] = useState(false);
+
+  const isTeacher = profile.role === "guru";
+  const isStudent = profile.role === "siswa";
+  const isAdminUser = profile.role === "admin";
+
+  const visibleMainItems = isTeacher
+    ? mainItems
+    : isStudent
+      ? mainItems
+          .filter(
+            (item) =>
+              item.url === "/" ||
+              item.url === "/modul-ajar" ||
+              item.url === "/penugasan" ||
+              item.url === "/penilaian",
+          )
+          .map((item) =>
+            item.url === "/penilaian" ? { ...item, title: "Nilai" } : item,
+          )
+      : mainItems.filter((item) => item.url === "/");
+
+  const visibleSecondaryItems = isTeacher
+    ? secondaryItems
+    : secondaryItems.filter((item) => item.url === "/profil");
 
   const isActive = (url: string, exact?: boolean) =>
     exact ? pathname === url : pathname === url || pathname.startsWith(url + "/");
@@ -102,13 +127,13 @@ export function AppSidebar() {
         <SidebarContent className="px-1">
           <SidebarGroup>
             <SidebarGroupLabel>Menu Utama</SidebarGroupLabel>
-            <SidebarGroupContent>{renderItems(mainItems)}</SidebarGroupContent>
+            <SidebarGroupContent>{renderItems(visibleMainItems)}</SidebarGroupContent>
           </SidebarGroup>
 
           <SidebarGroup>
             <SidebarGroupLabel>Lainnya</SidebarGroupLabel>
             <SidebarGroupContent>
-              {renderItems(secondaryItems)}
+              {renderItems(visibleSecondaryItems)}
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton
@@ -128,21 +153,23 @@ export function AppSidebar() {
           </SidebarGroup>
         </SidebarContent>
 
-        <SidebarFooter className="border-t border-sidebar-border p-3 group-data-[collapsible=icon]:hidden">
-          <Link
-            to="/modul-ajar"
-            onClick={closeOnMobile}
-            className="block rounded-xl bg-sidebar-accent p-3 transition-colors hover:bg-sidebar-primary/25"
-          >
-            <span className="flex items-center gap-2 text-sm font-semibold text-sidebar-accent-foreground">
-              <Sparkles className="h-4 w-4 text-accent" />
-              GuruPro AI
-            </span>
-            <span className="mt-1 block text-xs leading-relaxed text-sidebar-foreground/70">
-              Susun modul, ilustrasi, PPT, dan soal secara otomatis.
-            </span>
-          </Link>
-        </SidebarFooter>
+        {isTeacher && (
+          <SidebarFooter className="border-t border-sidebar-border p-3 group-data-[collapsible=icon]:hidden">
+            <Link
+              to="/modul-ajar"
+              onClick={closeOnMobile}
+              className="block rounded-xl bg-sidebar-accent p-3 transition-colors hover:bg-sidebar-primary/25"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold text-sidebar-accent-foreground">
+                <Sparkles className="h-4 w-4 text-accent" />
+                GuruPro AI
+              </span>
+              <span className="mt-1 block text-xs leading-relaxed text-sidebar-foreground/70">
+                Susun modul, ilustrasi, PPT, dan soal secara otomatis.
+              </span>
+            </Link>
+          </SidebarFooter>
+        )}
       </Sidebar>
 
       <AlertDialog open={confirmLogout} onOpenChange={setConfirmLogout}>

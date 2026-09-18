@@ -68,12 +68,8 @@ export const Route = createFileRoute("/kelas/")({
 
 function KelasListPage() {
   const navigate = useNavigate();
-  const { profile, user } = useAuth();
+  const { profile, user, ready } = useAuth();
   const { kelasList, anggotaList, refresh } = useKelas();
-
-  // Filter kelas milik guru yang sedang login
-  const guruId = user?.id || profile.id;
-  const myKelasList = kelasList.filter((k) => (guruId ? k.guruId === guruId : true));
 
   // Dialog buat kelas baru
   const [openCreateModal, setOpenCreateModal] = useState(false);
@@ -86,6 +82,28 @@ function KelasListPage() {
   // Status copy feedback per kelas id
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
+
+  if (ready && profile.role !== "guru") {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-md space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-foreground">Akses Khusus Guru</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Halaman Manajemen Kelas hanya dapat diakses oleh akun Guru terdaftar.
+          </p>
+          <div className="pt-2 flex justify-center">
+            <Button asChild variant="outline">
+              <Link to="/">Kembali ke Dashboard</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Filter kelas milik guru yang sedang login
+  const guruId = user?.id || profile.id;
+  const myKelasList = kelasList.filter((k) => (guruId ? k.guruId === guruId : true));
 
   const getLinkUndangan = (kode: string) => {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://gurupro.app";

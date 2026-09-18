@@ -217,24 +217,49 @@ export async function perbaruiKodeKelas(id: string): Promise<Kelas | null> {
 
 export async function getKelasByKode(kodeKelas: string): Promise<Kelas | null> {
   const cleanKode = kodeKelas.trim().toUpperCase();
-  const { data, error } = await supabase
-    .from("kelas")
-    .select("*")
-    .ilike("kode_kelas", cleanKode)
-    .maybeSingle();
+  if (!cleanKode) return null;
 
-  if (error || !data) return null;
+  try {
+    // 1. Coba RPC khusus cari_kelas_by_kode terlebih dahulu (Lovable Cloud)
+    const { data: rpcData, error: rpcError } = await supabase.rpc("cari_kelas_by_kode", {
+      _kode: cleanKode,
+    });
+    if (!rpcError && rpcData && Array.isArray(rpcData) && rpcData.length > 0) {
+      const row = rpcData[0];
+      return {
+        id: row.id,
+        namaKelas: row.nama_kelas,
+        tingkat: row.tingkat,
+        mapel: row.mapel,
+        tahunAjaran: row.tahun_ajaran,
+        guruId: "", // Obfuscated for class code lookup privacy
+        kodeKelas: row.kode_kelas,
+        createdAt: "",
+      };
+    }
 
-  return {
-    id: data.id,
-    namaKelas: data.nama_kelas,
-    tingkat: data.tingkat,
-    mapel: data.mapel,
-    tahunAjaran: data.tahun_ajaran,
-    guruId: data.guru_id,
-    kodeKelas: data.kode_kelas,
-    createdAt: data.created_at,
-  };
+    // 2. Fallback query langsung dengan batasan kolom minimum non-sensitif
+    const { data, error } = await supabase
+      .from("kelas")
+      .select("id, nama_kelas, tingkat, mapel, tahun_ajaran, kode_kelas")
+      .ilike("kode_kelas", cleanKode)
+      .maybeSingle();
+
+    if (error || !data) return null;
+
+    return {
+      id: data.id,
+      namaKelas: data.nama_kelas,
+      tingkat: data.tingkat,
+      mapel: data.mapel,
+      tahunAjaran: data.tahun_ajaran,
+      guruId: "", // Obfuscated for class code lookup privacy
+      kodeKelas: data.kode_kelas,
+      createdAt: "",
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function getKelasById(id: string): Promise<Kelas | null> {
@@ -340,15 +365,48 @@ export async function ajukanGabung(data: {
   | { ok: false; reason: "invalid-code" | "already-member" | "error"; message: string }
 > {
   try {
-    // 1. Validasi kode kelas di database Supabase
-    const cleanKode = data.kodeKelas.trim().toUpperCase();
-    const { data: kelasRow, error: kelasError } = await supabase
-      .from("kelas")
-      .select("*")
-      .ilike("kode_kelas", cleanKode)
+    // 0. Proteksi identitas siswa: Sesi autentikasi aktif wajib ada dan siswaId harus cocok
+    const { data: authData } = await supabase.auth.getSession();
+    const currentUserId = authData?.session?.user?.id;
+    if (!currentUserId) {
+      return {
+        ok: false,
+        reason: "error",
+        message: "Sesi autentikasi tidak ditemukan. Silakan login terlebih dahulu.",
+      };
+    }
+    if (data.siswaId && data.siswaId !== currentUserId) {
+      return {
+        ok: false,
+        reason: "error",
+        message: "Identitas siswa tidak cocok dengan sesi login saat ini.",
+      };
+    }
+    const resolvedSiswaId = currentUserId;
+
+    // Pastikan caller memiliki peran 'siswa' dan ambil data identitas valid dari profiles
+    const { data: profileRow, error: pError } = await supabase
+      .from("profiles")
+      .select("nama, email, nisn, role")
+      .eq("id", resolvedSiswaId)
       .maybeSingle();
 
-    if (kelasError || !kelasRow) {
+    if (pError || !profileRow || profileRow.role !== "siswa") {
+      return {
+        ok: false,
+        reason: "error",
+        message: "Hanya akun dengan peran siswa yang dapat mengajukan bergabung ke kelas.",
+      };
+    }
+
+    // 1. Validasi kode kelas di database Supabase via RPC cari_kelas_by_kode (privasi terlindungi)
+    const cleanKode = data.kodeKelas.trim().toUpperCase();
+    const { data: rpcRows, error: rpcError } = await supabase.rpc("cari_kelas_by_kode", {
+      _kode: cleanKode,
+    });
+
+    const kelasRow = rpcRows && rpcRows.length > 0 ? rpcRows[0] : null;
+    if (rpcError || !kelasRow) {
       return {
         ok: false,
         reason: "invalid-code",
@@ -361,7 +419,7 @@ export async function ajukanGabung(data: {
       .from("kelas_anggota")
       .select("*")
       .eq("kelas_id", kelasRow.id)
-      .eq("siswa_id", data.siswaId)
+      .eq("siswa_id", resolvedSiswaId)
       .maybeSingle();
 
     if (checkError && checkError.code !== "PGRST116") {
@@ -383,17 +441,17 @@ export async function ajukanGabung(data: {
       };
     }
 
-    // 3. Masukkan record baru ke tabel kelas_anggota
+    // 3. Masukkan record baru ke tabel kelas_anggota (selalu berstatus 'menunggu' dengan identitas profil)
     const { data: inserted, error: insertError } = await supabase
       .from("kelas_anggota")
       .insert({
         kelas_id: kelasRow.id,
-        siswa_id: data.siswaId,
+        siswa_id: resolvedSiswaId,
         status: "menunggu",
         jenis: data.jenis || "tambah-kelas",
-        siswa_email: data.siswaEmail.trim().toLowerCase(),
-        siswa_nama: data.siswaNama.trim(),
-        siswa_nisn: data.siswaNisn.trim(),
+        siswa_email: profileRow.email || data.siswaEmail.trim().toLowerCase(),
+        siswa_nama: profileRow.nama || data.siswaNama.trim(),
+        siswa_nisn: profileRow.nisn || data.siswaNisn.trim(),
       })
       .select()
       .single();
@@ -412,9 +470,9 @@ export async function ajukanGabung(data: {
       tingkat: kelasRow.tingkat,
       mapel: kelasRow.mapel,
       tahunAjaran: kelasRow.tahun_ajaran,
-      guruId: kelasRow.guru_id,
+      guruId: "", // Obfuscated for class code lookup privacy
       kodeKelas: kelasRow.kode_kelas,
-      createdAt: kelasRow.created_at,
+      createdAt: "",
     };
 
     // Refresh cache
@@ -548,4 +606,8 @@ export function useKelas() {
     loading,
     refresh: () => Promise.all([refreshKelasList(), refreshAnggotaList()]),
   };
+}
+
+export function useKelasList(): Kelas[] {
+  return useKelas().kelasList;
 }

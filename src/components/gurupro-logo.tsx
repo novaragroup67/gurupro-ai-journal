@@ -2,18 +2,9 @@ import { cn } from "@/lib/utils";
 
 export function GuruProMark({ className }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 48 48"
-      fill="none"
-      className={cn("h-8 w-8", className)}
-      aria-hidden="true"
-    >
+    <svg viewBox="0 0 48 48" fill="none" className={cn("h-8 w-8", className)} aria-hidden="true">
       {/* panel belakang (terintegrasi) */}
-      <path
-        d="M31 8 L43 14 V38 L31 33 Z"
-        fill="var(--sky)"
-        opacity="0.55"
-      />
+      <path d="M31 8 L43 14 V38 L31 33 Z" fill="var(--sky)" opacity="0.55" />
       <path d="M27 10 L37 15 V36 L27 32 Z" fill="var(--primary)" />
       {/* bar fokus */}
       <rect x="21.5" y="19" width="4.5" height="14" rx="2" fill="var(--accent)" />

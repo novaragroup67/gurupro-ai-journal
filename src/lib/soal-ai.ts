@@ -14,7 +14,8 @@ const STEM_SEDANG = [
 ];
 
 const STEM_SULIT = [
-  (t: string) => `Analisis kasus berikut dan tentukan penyelesaian paling efisien menggunakan ${t}.`,
+  (t: string) =>
+    `Analisis kasus berikut dan tentukan penyelesaian paling efisien menggunakan ${t}.`,
   (t: string) => `Evaluasi kesalahan pada penyelesaian ${t} berikut, lalu perbaiki dengan alasan.`,
   (t: string) => `Rancang persoalan baru bertema ${t} beserta penyelesaiannya.`,
 ];
@@ -65,7 +66,10 @@ export function generateSoal(input: GenerateSoalInput): Soal[] {
       pertanyaan,
       jenis: "Pilihan Ganda" as JenisSoal,
       opsi,
-      kunci: opsi.findIndex((o) => o.startsWith(`Konsep utama`)) === 0 ? "A" : String.fromCharCode(65 + opsi.findIndex((o) => o.startsWith("Konsep utama"))),
+      kunci:
+        opsi.findIndex((o) => o.startsWith(`Konsep utama`)) === 0
+          ? "A"
+          : String.fromCharCode(65 + opsi.findIndex((o) => o.startsWith("Konsep utama"))),
     };
   });
 }
@@ -84,7 +88,9 @@ export function reviseSoalWithAi(soal: Soal, instruksi: string): Soal {
   let opsi = [...soal.opsi];
 
   if (/mudah/.test(ins)) {
-    pertanyaan = pertanyaan.replace(/^Analisis|^Evaluasi|^Rancang/, "Jelaskan secara sederhana") + " (versi lebih mudah)";
+    pertanyaan =
+      pertanyaan.replace(/^Analisis|^Evaluasi|^Rancang/, "Jelaskan secara sederhana") +
+      " (versi lebih mudah)";
   } else if (/sulit|susah/.test(ins)) {
     pertanyaan = `Analisis lebih mendalam: ${pertanyaan.replace(/\s*\(versi lebih mudah\)/, "")} Sertakan alasan tiap langkah.`;
   } else if (/angka|nilai/.test(ins)) {
@@ -96,7 +102,13 @@ export function reviseSoalWithAi(soal: Soal, instruksi: string): Soal {
     if (soal.jenis === "Pilihan Ganda") {
       opsi = [];
       kunci = `Jawaban uraian: ${soal.opsi[0] ?? "uraikan konsep utama"}.`;
-      return { ...soal, jenis: "Esai", pertanyaan: pertanyaan.replace(/^Manakah[^?]*\?/, "Uraikan"), opsi, kunci };
+      return {
+        ...soal,
+        jenis: "Esai",
+        pertanyaan: pertanyaan.replace(/^Manakah[^?]*\?/, "Uraikan"),
+        opsi,
+        kunci,
+      };
     }
     const baru = opsiFor(soal.pertanyaan.split(" ").slice(-2).join(" "), 1, "Sedang");
     return { ...soal, jenis: "Pilihan Ganda", opsi: baru, kunci: "A", pertanyaan };

@@ -1,6 +1,17 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { BookOpen, MoreVertical, Pencil, Plus, Search, Send, Sparkles, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  ArrowLeft,
+  BookOpen,
+  Eye,
+  MoreVertical,
+  Pencil,
+  Plus,
+  Search,
+  Send,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { ModulEditor } from "@/components/modul-editor";
@@ -27,7 +38,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { addModul, deleteModul, saveModul, useModuls } from "@/lib/modul-store";
+import { useAuth } from "@/lib/auth-store";
+import {
+  addModul,
+  deleteModul,
+  getPublishedModulsForSiswa,
+  saveModul,
+  useModuls,
+} from "@/lib/modul-store";
 import { formatTanggal, type Modul } from "@/lib/modul-types";
 
 export const Route = createFileRoute("/modul-ajar")({
@@ -54,6 +72,7 @@ export const Route = createFileRoute("/modul-ajar")({
 type TabValue = "semua" | "draft" | "terbit";
 
 function ModulAjarPage() {
+  const { profile, ready } = useAuth();
   const moduls = useModuls();
   const [tab, setTab] = useState<TabValue>("semua");
   const [query, setQuery] = useState("");
@@ -74,6 +93,28 @@ function ModulAjarPage() {
       return byTab && byQuery;
     });
   }, [moduls, tab, query]);
+
+  if (ready && profile.role === "siswa") {
+    return <SiswaModulAjarView />;
+  }
+
+  if (ready && profile.role !== "guru") {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-md space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-foreground">Akses Khusus Guru</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Halaman penyusunan modul ajar hanya dapat diakses oleh akun Guru terdaftar.
+          </p>
+          <div className="pt-2 flex justify-center">
+            <Button asChild variant="outline">
+              <Link to="/">Kembali ke Dashboard</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (editing) {
     return (
@@ -139,9 +180,12 @@ function ModulAjarPage() {
               <span className="grid h-14 w-14 place-items-center rounded-2xl bg-primary-soft text-primary">
                 <BookOpen className="h-7 w-7" />
               </span>
-              <p className="font-display font-semibold text-navy">Belum ada modul di tampilan ini</p>
+              <p className="font-display font-semibold text-navy">
+                Belum ada modul di tampilan ini
+              </p>
               <p className="max-w-sm text-sm text-muted-foreground">
-                Susun modul pertama Anda dari CP/ATP, eBook, teks, atau link luar — dibantu GuruPro AI.
+                Susun modul pertama Anda dari CP/ATP, eBook, teks, atau link luar — dibantu GuruPro
+                AI.
               </p>
               <Button onClick={() => setOpenGenerator(true)}>
                 <Sparkles className="h-4 w-4" />
@@ -211,7 +255,9 @@ function ModulAjarPage() {
                         onSelect={() => {
                           saveModul({ ...m, status: m.status === "Terbit" ? "Draft" : "Terbit" });
                           toast.success(
-                            m.status === "Terbit" ? "Modul dikembalikan ke draft." : "Modul dipublikasikan.",
+                            m.status === "Terbit"
+                              ? "Modul dikembalikan ke draft."
+                              : "Modul dipublikasikan.",
                           );
                         }}
                       >
@@ -275,3 +321,217 @@ function ModulAjarPage() {
     </div>
   );
 }
+
+// ==================== SISWA MODULE VIEW (READ-ONLY) ====================
+
+function SiswaModulAjarView() {
+  const [moduls, setModuls] = useState<Modul[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [activeModul, setActiveModul] = useState<Modul | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    getPublishedModulsForSiswa().then((data) => {
+      if (mounted) {
+        setModuls(data);
+        setLoading(false);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return moduls;
+    return moduls.filter(
+      (m) =>
+        m.judul.toLowerCase().includes(q) ||
+        m.mapel.toLowerCase().includes(q) ||
+        m.kelas.toLowerCase().includes(q),
+    );
+  }, [moduls, query]);
+
+  if (activeModul) {
+    return (
+      <div className="mx-auto max-w-4xl space-y-6">
+        <div className="flex items-center justify-between border-b pb-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setActiveModul(null)}
+            className="gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Kembali ke Daftar Modul
+          </Button>
+          <Badge className="bg-emerald-600 text-white hover:bg-emerald-700">Modul Terbit</Badge>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="font-semibold text-primary">{activeModul.mapel}</span>
+            <span>•</span>
+            <span>{activeModul.kelas}</span>
+            <span>•</span>
+            <span>Diperbarui: {formatTanggal(activeModul.updatedAt)}</span>
+          </div>
+          <h1 className="font-display text-2xl font-bold text-navy sm:text-3xl">
+            {activeModul.judul}
+          </h1>
+          {activeModul.ringkasan && (
+            <div className="rounded-xl border border-primary/20 bg-primary-soft/30 p-4 text-sm text-foreground leading-relaxed">
+              <p className="font-semibold text-primary mb-1">Ringkasan Materi:</p>
+              {activeModul.ringkasan}
+            </div>
+          )}
+        </div>
+
+        {/* Bagian-Bagian Pembelajaran */}
+        <div className="space-y-6">
+          {activeModul.sections.map((sec, idx) => (
+            <Card key={sec.id || idx} className="overflow-hidden">
+              <CardContent className="p-5 sm:p-6 space-y-4">
+                <h3 className="font-display text-lg font-semibold text-navy">
+                  {idx + 1}. {sec.judul}
+                </h3>
+                {sec.poin && sec.poin.length > 0 && (
+                  <ul className="list-disc pl-5 text-sm space-y-1 text-muted-foreground">
+                    {sec.poin.map((p, pIdx) => (
+                      <li key={pIdx}>{p}</li>
+                    ))}
+                  </ul>
+                )}
+                {sec.isi && (
+                  <div className="prose prose-sm max-w-none text-foreground leading-relaxed whitespace-pre-wrap">
+                    {sec.isi}
+                  </div>
+                )}
+                {sec.ilustrasi && (
+                  <div className="rounded-lg overflow-hidden border">
+                    <img
+                      src={sec.ilustrasi}
+                      alt={sec.judul}
+                      className="max-h-80 w-full object-cover"
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Slide Ringkas */}
+        {activeModul.slides && activeModul.slides.length > 0 && (
+          <div className="space-y-4 pt-4 border-t">
+            <h2 className="font-display text-lg font-semibold text-navy">
+              Slide Materi Ringkas
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {activeModul.slides.map((s, idx) => (
+                <div
+                  key={s.id || idx}
+                  className="rounded-xl border p-4 bg-card shadow-xs space-y-2"
+                >
+                  <span className="text-xs font-bold text-primary">Slide {idx + 1}</span>
+                  <h4 className="font-semibold text-sm text-navy">{s.judul}</h4>
+                  <ul className="list-disc pl-4 text-xs space-y-1 text-muted-foreground">
+                    {s.bullets.map((b, bIdx) => (
+                      <li key={bIdx}>{b}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-center pt-4">
+          <Button variant="outline" onClick={() => setActiveModul(null)} className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Kembali ke Daftar Modul
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-6">
+      <PageHeader
+        title="Modul Pembelajaran Siswa 📚"
+        subtitle="Pelajari modul ajar dan materi pembelajaran yang diterbitkan oleh bapak/ibu guru untuk kelasmu."
+      />
+
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Cari judul modul, mata pelajaran, atau kelas…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="py-16 text-center text-sm text-muted-foreground">
+          Memuat modul pembelajaran…
+        </div>
+      ) : filtered.length === 0 ? (
+        <Card className="p-12 text-center">
+          <BookOpen className="mx-auto h-12 w-12 text-muted-foreground/30" />
+          <h3 className="mt-3 font-display text-base font-semibold text-navy">
+            {query
+              ? "Tidak ada modul yang cocok dengan pencarian"
+              : "Belum Ada Modul Ajar Terbit"}
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
+            {query
+              ? "Coba gunakan kata kunci lain untuk mencari materi modul."
+              : "Bapak/ibu guru belum menerbitkan modul ajar untuk kelas yang kamu ikuti. Periksa kembali nanti."}
+          </p>
+        </Card>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((m) => (
+            <Card
+              key={m.id}
+              className="flex flex-col justify-between transition-shadow hover:shadow-lift"
+            >
+              <CardContent className="p-5 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <Badge variant="outline" className="font-semibold text-primary">
+                    {m.mapel}
+                  </Badge>
+                  <span className="text-muted-foreground">{m.kelas}</span>
+                </div>
+                <div>
+                  <h3 className="font-display font-semibold text-navy line-clamp-2">{m.judul}</h3>
+                  <p className="mt-1 text-xs text-muted-foreground line-clamp-3">
+                    {m.ringkasan || "Klik tombol baca modul untuk melihat rangkuman materi lengkap."}
+                  </p>
+                </div>
+                <div className="pt-2 flex items-center justify-between border-t text-[11px] text-muted-foreground">
+                  <span>{formatTanggal(m.updatedAt)}</span>
+                  <Button
+                    size="sm"
+                    onClick={() => setActiveModul(m)}
+                    className="gap-1.5 h-8 text-xs font-medium"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    Baca Modul
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+

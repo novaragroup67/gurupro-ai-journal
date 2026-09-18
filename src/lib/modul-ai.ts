@@ -2,22 +2,56 @@ import { uid } from "./cloud-store";
 import type { Modul, ModulSection, Slide, SumberTipe } from "./modul-types";
 
 const KEYWORD_MAP: Array<{ match: RegExp; konteks: string; contoh: string }> = [
-  { match: /(persamaan|linear|aljabar|matematika)/i, konteks: "pemecahan masalah kuantitatif", contoh: "menyelesaikan sistem persamaan dua variabel dari kasus belanja koperasi sekolah" },
-  { match: /(trigonometri|sudut|sinus|cosinus)/i, konteks: "perbandingan sudut dan sisi", contoh: "mengukur tinggi tiang bendera memakai perbandingan trigonometri" },
-  { match: /(turunan|limit|integral|kalkulus)/i, konteks: "laju perubahan fungsi", contoh: "menghitung kecepatan sesaat dari grafik posisi terhadap waktu" },
-  { match: /(database|basis data|sql|query)/i, konteks: "pengelolaan data terstruktur", contoh: "merancang tabel siswa lalu menampilkan datanya dengan query SELECT" },
-  { match: /(web|html|css|javascript)/i, konteks: "pengembangan antarmuka web", contoh: "membuat halaman profil sekolah yang responsif" },
-  { match: /(jaringan|network|ip|router)/i, konteks: "komunikasi antarperangkat", contoh: "mengonfigurasi pengalamatan IP pada dua PC dalam satu switch" },
-  { match: /(biologi|sel|ekosistem)/i, konteks: "sistem kehidupan", contoh: "mengamati komponen ekosistem di lingkungan sekolah" },
-  { match: /(sejarah|kemerdekaan|kerajaan)/i, konteks: "hubungan sebab-akibat peristiwa", contoh: "menyusun garis waktu peristiwa penting beserta dampaknya" },
+  {
+    match: /(persamaan|linear|aljabar|matematika)/i,
+    konteks: "pemecahan masalah kuantitatif",
+    contoh: "menyelesaikan sistem persamaan dua variabel dari kasus belanja koperasi sekolah",
+  },
+  {
+    match: /(trigonometri|sudut|sinus|cosinus)/i,
+    konteks: "perbandingan sudut dan sisi",
+    contoh: "mengukur tinggi tiang bendera memakai perbandingan trigonometri",
+  },
+  {
+    match: /(turunan|limit|integral|kalkulus)/i,
+    konteks: "laju perubahan fungsi",
+    contoh: "menghitung kecepatan sesaat dari grafik posisi terhadap waktu",
+  },
+  {
+    match: /(database|basis data|sql|query)/i,
+    konteks: "pengelolaan data terstruktur",
+    contoh: "merancang tabel siswa lalu menampilkan datanya dengan query SELECT",
+  },
+  {
+    match: /(web|html|css|javascript)/i,
+    konteks: "pengembangan antarmuka web",
+    contoh: "membuat halaman profil sekolah yang responsif",
+  },
+  {
+    match: /(jaringan|network|ip|router)/i,
+    konteks: "komunikasi antarperangkat",
+    contoh: "mengonfigurasi pengalamatan IP pada dua PC dalam satu switch",
+  },
+  {
+    match: /(biologi|sel|ekosistem)/i,
+    konteks: "sistem kehidupan",
+    contoh: "mengamati komponen ekosistem di lingkungan sekolah",
+  },
+  {
+    match: /(sejarah|kemerdekaan|kerajaan)/i,
+    konteks: "hubungan sebab-akibat peristiwa",
+    contoh: "menyusun garis waktu peristiwa penting beserta dampaknya",
+  },
 ];
 
 function konteksOf(topik: string) {
   const found = KEYWORD_MAP.find((k) => k.match.test(topik));
-  return found ?? {
-    konteks: "konsep dasar dan penerapannya",
-    contoh: `menerapkan konsep ${topik.toLowerCase() || "materi ini"} pada situasi nyata di sekitar siswa`,
-  };
+  return (
+    found ?? {
+      konteks: "konsep dasar dan penerapannya",
+      contoh: `menerapkan konsep ${topik.toLowerCase() || "materi ini"} pada situasi nyata di sekitar siswa`,
+    }
+  );
 }
 
 export interface GenerateModulInput {
@@ -27,16 +61,47 @@ export interface GenerateModulInput {
 }
 
 const BAB_TEMPLATE = [
-  { judul: (t: string) => `Pengantar ${t}`, poin: (t: string, k: string) => [`Definisi dan cakupan ${t}`, `Mengapa ${t} penting dipelajari`, `Kaitan ${t} dengan ${k}`] },
-  { judul: (t: string) => `Konsep Inti ${t}`, poin: (t: string) => [`Istilah kunci pada ${t}`, `Langkah kerja/prosedur utama`, `Kesalahan umum yang perlu dihindari`] },
-  { judul: (t: string) => `Penerapan ${t}`, poin: (_t: string, _k: string, c: string) => [`Studi kasus: ${c}`, "Latihan terbimbing bersama guru", "Latihan mandiri berjenjang"] },
-  { judul: (t: string) => `Evaluasi & Refleksi ${t}`, poin: (t: string) => [`Rangkuman capaian pembelajaran ${t}`, "Soal evaluasi ketercapaian", "Refleksi & rencana tindak lanjut"] },
+  {
+    judul: (t: string) => `Pengantar ${t}`,
+    poin: (t: string, k: string) => [
+      `Definisi dan cakupan ${t}`,
+      `Mengapa ${t} penting dipelajari`,
+      `Kaitan ${t} dengan ${k}`,
+    ],
+  },
+  {
+    judul: (t: string) => `Konsep Inti ${t}`,
+    poin: (t: string) => [
+      `Istilah kunci pada ${t}`,
+      `Langkah kerja/prosedur utama`,
+      `Kesalahan umum yang perlu dihindari`,
+    ],
+  },
+  {
+    judul: (t: string) => `Penerapan ${t}`,
+    poin: (_t: string, _k: string, c: string) => [
+      `Studi kasus: ${c}`,
+      "Latihan terbimbing bersama guru",
+      "Latihan mandiri berjenjang",
+    ],
+  },
+  {
+    judul: (t: string) => `Evaluasi & Refleksi ${t}`,
+    poin: (t: string) => [
+      `Rangkuman capaian pembelajaran ${t}`,
+      "Soal evaluasi ketercapaian",
+      "Refleksi & rencana tindak lanjut",
+    ],
+  },
 ];
 
 function paragraf(bab: string, poin: string[], topik: string, konteks: string) {
   return [
     `${bab} membahas ${topik.toLowerCase()} dengan penekanan pada ${konteks}. Bagian ini disusun agar siswa bergerak dari pemahaman konsep menuju penerapan nyata.`,
-    ...poin.map((p, i) => `${i + 1}. ${p}. Guru memandu diskusi singkat, siswa mencatat temuan, lalu hasilnya dibahas bersama.`),
+    ...poin.map(
+      (p, i) =>
+        `${i + 1}. ${p}. Guru memandu diskusi singkat, siswa mencatat temuan, lalu hasilnya dibahas bersama.`,
+    ),
     `Di akhir bagian ini siswa diminta menyimpulkan ${topik.toLowerCase()} dengan bahasa sendiri sebagai bukti pemahaman.`,
   ].join("\n\n");
 }
@@ -56,13 +121,24 @@ function sumberLabel(tipe: SumberTipe, input: string) {
 }
 
 export function extractTopik(input: string) {
-  const clean = input.replace(/https?:\/\/\S*/g, " ").replace(/[\n\r]+/g, " ").trim();
-  const words = clean.split(/\s+/).filter((w) => w.length > 3 && !/^(untuk|dengan|dalam|yang|pada|siswa|kelas|materi|modul|tentang)$/i.test(w));
+  const clean = input
+    .replace(/https?:\/\/\S*/g, " ")
+    .replace(/[\n\r]+/g, " ")
+    .trim();
+  const words = clean
+    .split(/\s+/)
+    .filter(
+      (w) =>
+        w.length > 3 &&
+        !/^(untuk|dengan|dalam|yang|pada|siswa|kelas|materi|modul|tentang)$/i.test(w),
+    );
   const picked = words.slice(0, 4).join(" ");
   return (picked || "Materi Ajar").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function generateModul(input: GenerateModulInput): Omit<Modul, "id" | "createdAt" | "updatedAt"> {
+export function generateModul(
+  input: GenerateModulInput,
+): Omit<Modul, "id" | "createdAt" | "updatedAt"> {
   const topik = (input.topik.trim() || extractTopik(input.sumberInput)).trim();
   const { konteks, contoh } = konteksOf(topik + " " + input.sumberInput);
 
@@ -89,11 +165,20 @@ export function reviseModulWithAi(modul: Modul, instruksi: string): Modul {
   const ins = instruksi.toLowerCase();
   const tweak = (text: string) => {
     if (/sederhana|mudah|ringkas/.test(ins))
-      return text.replace(/\n\n/g, "\n\n").split("\n\n").slice(0, 3).join("\n\n") + "\n\nCatatan AI: bahasa disederhanakan agar mudah dipahami siswa.";
+      return (
+        text.replace(/\n\n/g, "\n\n").split("\n\n").slice(0, 3).join("\n\n") +
+        "\n\nCatatan AI: bahasa disederhanakan agar mudah dipahami siswa."
+      );
     if (/detail|lengkap|dalam|perluas/.test(ins))
-      return text + `\n\nPenjelasan tambahan (AI): bagian ini diperluas dengan contoh bertingkat, pertanyaan pemandu, serta latihan tambahan untuk siswa yang butuh penguatan.`;
+      return (
+        text +
+        `\n\nPenjelasan tambahan (AI): bagian ini diperluas dengan contoh bertingkat, pertanyaan pemandu, serta latihan tambahan untuk siswa yang butuh penguatan.`
+      );
     if (/praktik|proyek|aktivitas/.test(ins))
-      return text + `\n\nAktivitas praktik (AI): siswa bekerja dalam kelompok 3-4 orang menyelesaikan tugas terapan, lalu mempresentasikan hasilnya 5 menit.`;
+      return (
+        text +
+        `\n\nAktivitas praktik (AI): siswa bekerja dalam kelompok 3-4 orang menyelesaikan tugas terapan, lalu mempresentasikan hasilnya 5 menit.`
+      );
     return text + `\n\nRevisi AI sesuai instruksi "${instruksi}".`;
   };
 
@@ -129,11 +214,17 @@ export function buatIlustrasi(judul: string, poin: string[], nonce = 0) {
     const x = 40 + i * (520 / count);
     const h = 60 + ((seed >> (i + 1)) % 90);
     if ((seed + i) % 3 === 0) {
-      shapes.push(`<circle cx="${x + 40}" cy="${240 - h / 2}" r="${28 + (h % 26)}" fill="${c}" opacity="0.85"/>`);
+      shapes.push(
+        `<circle cx="${x + 40}" cy="${240 - h / 2}" r="${28 + (h % 26)}" fill="${c}" opacity="0.85"/>`,
+      );
     } else if ((seed + i) % 3 === 1) {
-      shapes.push(`<rect x="${x}" y="${250 - h}" width="72" height="${h}" rx="12" fill="${c}" opacity="0.9"/>`);
+      shapes.push(
+        `<rect x="${x}" y="${250 - h}" width="72" height="${h}" rx="12" fill="${c}" opacity="0.9"/>`,
+      );
     } else {
-      shapes.push(`<polygon points="${x},250 ${x + 40},${250 - h} ${x + 80},250" fill="${c}" opacity="0.88"/>`);
+      shapes.push(
+        `<polygon points="${x},250 ${x + 40},${250 - h} ${x + 80},250" fill="${c}" opacity="0.88"/>`,
+      );
     }
   }
   const label = judul.length > 44 ? judul.slice(0, 41) + "…" : judul;
@@ -152,8 +243,9 @@ ${shapes.join("")}
 }
 
 export function escapeXml(text: string) {
-  return text.replace(/[<>&'"]/g, (c) =>
-    ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[c] as string,
+  return text.replace(
+    /[<>&'"]/g,
+    (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[c] as string,
   );
 }
 
@@ -161,11 +253,20 @@ export function buatSlides(modul: Modul): Slide[] {
   const intro: Slide = {
     id: uid(),
     judul: modul.judul,
-    bullets: [modul.kelas || "Kelas/mapel diisi di editor", "Disusun otomatis oleh GuruPro AI", `${modul.sections.length} bagian materi`],
+    bullets: [
+      modul.kelas || "Kelas/mapel diisi di editor",
+      "Disusun otomatis oleh GuruPro AI",
+      `${modul.sections.length} bagian materi`,
+    ],
     ilustrasi: buatIlustrasi(modul.judul, ["Slide pembuka"]),
   };
   const body = modul.sections.flatMap<Slide>((s) => [
-    { id: uid(), judul: s.judul, bullets: s.poin, ilustrasi: s.ilustrasi ?? buatIlustrasi(s.judul, s.poin) },
+    {
+      id: uid(),
+      judul: s.judul,
+      bullets: s.poin,
+      ilustrasi: s.ilustrasi ?? buatIlustrasi(s.judul, s.poin),
+    },
   ]);
   const closing: Slide = {
     id: uid(),

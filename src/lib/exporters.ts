@@ -2,11 +2,13 @@ import type { Modul } from "./modul-types";
 import { escapeXml } from "./modul-ai";
 
 function slug(text: string) {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
-    .slice(0, 60) || "modul";
+  return (
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "")
+      .slice(0, 60) || "modul"
+  );
 }
 
 function download(filename: string, mime: string, content: string) {
@@ -65,7 +67,11 @@ export function unduhPdf(modul: Modul, withIlustrasi = false) {
 }
 
 export function unduhWord(modul: Modul, withIlustrasi = false) {
-  download(`${slug(modul.judul)}${withIlustrasi ? "-ilustrasi" : ""}.doc`, "application/msword", modulHtml(modul, withIlustrasi));
+  download(
+    `${slug(modul.judul)}${withIlustrasi ? "-ilustrasi" : ""}.doc`,
+    "application/msword",
+    modulHtml(modul, withIlustrasi),
+  );
 }
 
 export function unduhPpt(modul: Modul) {

@@ -2,12 +2,12 @@
 
 Dokumen ini membandingkan kondisi project GuruPro saat ini dengan tiga sumber rancangan resmi, lalu menetapkan tahapan lanjutan sampai produk final (terhubung database, dengan tiga peran: Guru, Siswa, Admin).
 
-| Item | Keterangan |
-| --- | --- |
-| Versi dokumen | 1.0 |
-| Tanggal | 4 September 2026 |
+| Item             | Keterangan                                                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Versi dokumen    | 1.0                                                                                                                 |
+| Tanggal          | 4 September 2026                                                                                                    |
 | Sumber rancangan | `Proposal_Produk_1_2.pptx`, `GuruPro_Product_Blueprint_v4_2.pptx`, wireframe `https://guruprowireframe.netlify.app` |
-| Status project | Prototipe frontend-only (React + TypeScript + Tailwind + shadcn/ui, data di `localStorage`) |
+| Status project   | Prototipe frontend-only (React + TypeScript + Tailwind + shadcn/ui, data di `localStorage`)                         |
 
 ---
 
@@ -17,14 +17,14 @@ GuruPro saat ini adalah **prototipe frontend peran Guru**. Alur inti Guru untuk 
 
 ### Skor Kesesuaian
 
-| Cakupan | Kesesuaian |
-| --- | --- |
-| Fitur Guru | **± 39 %** |
-| Fitur Siswa | **0 %** |
-| Fitur Admin | **0 %** |
-| **Total MVP (17 fitur)** | **± 20 %** |
-| Struktur UI & navigasi vs wireframe | ± 55 % |
-| Alur BPMN (Guru + Siswa + Admin) | ± 15 % |
+| Cakupan                             | Kesesuaian |
+| ----------------------------------- | ---------- |
+| Fitur Guru                          | **± 39 %** |
+| Fitur Siswa                         | **0 %**    |
+| Fitur Admin                         | **0 %**    |
+| **Total MVP (17 fitur)**            | **± 20 %** |
+| Struktur UI & navigasi vs wireframe | ± 55 %     |
+| Alur BPMN (Guru + Siswa + Admin)    | ± 15 %     |
 
 ### Tiga Gap Terbesar
 
@@ -55,7 +55,7 @@ GuruPro saat ini adalah **prototipe frontend peran Guru**. Alur inti Guru untuk 
 
 ### 2.3 Wireframe
 
-Wireframe menjadi *source of truth* struktur UI: layout sidebar + header + konten, dashboard statistik + tabel tugas perlu dikoreksi, dan urutan menu Guru (Dashboard, Modul Ajar, Soal, Penugasan, Penilaian, Verifikasi Akun Siswa, Arsip Data, Profil, Log Out).
+Wireframe menjadi _source of truth_ struktur UI: layout sidebar + header + konten, dashboard statistik + tabel tugas perlu dikoreksi, dan urutan menu Guru (Dashboard, Modul Ajar, Soal, Penugasan, Penilaian, Verifikasi Akun Siswa, Arsip Data, Profil, Log Out).
 
 ---
 
@@ -63,18 +63,18 @@ Wireframe menjadi *source of truth* struktur UI: layout sidebar + header + konte
 
 ### 3.1 Sudah Ada
 
-| Area | Bukti di kode | Catatan |
-| --- | --- | --- |
-| Shell aplikasi | `src/routes/__root.tsx`, `src/components/app-sidebar.tsx` | Sidebar collapsible + header sticky + avatar menu, responsif mobile |
-| Design system | `src/styles.css` | Token navy / biru / sky / oranye sesuai logo |
-| Dashboard Guru | `src/routes/index.tsx` (224 baris) | 4 statistik, tabel "Tugas Perlu Dikoreksi", akses cepat |
-| Notifikasi | `src/lib/notifications.ts`, `src/components/notification-menu.tsx` | Dropdown lonceng berfungsi (data mock) |
-| Modul Ajar | `src/routes/modul-ajar.tsx`, `modul-editor.tsx`, `modul-generator-dialog.tsx`, `src/lib/modul-ai.ts` | 4 sumber (CP/ATP, eBook, Teks, Link), editor per bagian, ilustrasi, slide PPT |
-| Ekspor | `src/lib/exporters.ts` | PDF (print), Word (.doc), PPT (.ppt) |
-| Soal | `src/routes/soal.tsx` (882 baris), `src/lib/soal-ai.ts`, `soal-store.ts` | Bank soal, generate AI mock, revisi instruksi AI, publikasi ke kelas |
-| Login / Logout | `src/routes/login.tsx`, `src/lib/auth-store.ts` | Akun demo `guru@gurupro.id` / `gurupro123`, gate redirect ke `/login` |
-| Profil | `src/routes/profil.tsx` | Edit data guru, persist `localStorage` |
-| Persistensi | `src/lib/local-store.ts` | Store `localStorage` SSR-safe |
+| Area           | Bukti di kode                                                                                        | Catatan                                                                       |
+| -------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Shell aplikasi | `src/routes/__root.tsx`, `src/components/app-sidebar.tsx`                                            | Sidebar collapsible + header sticky + avatar menu, responsif mobile           |
+| Design system  | `src/styles.css`                                                                                     | Token navy / biru / sky / oranye sesuai logo                                  |
+| Dashboard Guru | `src/routes/index.tsx` (224 baris)                                                                   | 4 statistik, tabel "Tugas Perlu Dikoreksi", akses cepat                       |
+| Notifikasi     | `src/lib/notifications.ts`, `src/components/notification-menu.tsx`                                   | Dropdown lonceng berfungsi (data mock)                                        |
+| Modul Ajar     | `src/routes/modul-ajar.tsx`, `modul-editor.tsx`, `modul-generator-dialog.tsx`, `src/lib/modul-ai.ts` | 4 sumber (CP/ATP, eBook, Teks, Link), editor per bagian, ilustrasi, slide PPT |
+| Ekspor         | `src/lib/exporters.ts`                                                                               | PDF (print), Word (.doc), PPT (.ppt)                                          |
+| Soal           | `src/routes/soal.tsx` (882 baris), `src/lib/soal-ai.ts`, `soal-store.ts`                             | Bank soal, generate AI mock, revisi instruksi AI, publikasi ke kelas          |
+| Login / Logout | `src/routes/login.tsx`, `src/lib/auth-store.ts`                                                      | Akun demo `guru@gurupro.id` / `gurupro123`, gate redirect ke `/login`         |
+| Profil         | `src/routes/profil.tsx`                                                                              | Edit data guru, persist `localStorage`                                        |
+| Persistensi    | `src/lib/local-store.ts`                                                                             | Store `localStorage` SSR-safe                                                 |
 
 ### 3.2 Belum Ada
 
@@ -97,35 +97,35 @@ Wireframe menjadi *source of truth* struktur UI: layout sidebar + header + konte
 
 Rumus penilaian: setiap fitur berbobot sama. **100 %** = selesai sesuai rancangan; **5–75 %** = sebagian (proporsional terhadap kelengkapan peran & alur); **0 %** = belum ada. Nilai di kolom "%" adalah kesesuaian fitur mencakup **semua peran** yang disebut Proposal.
 
-| # | Fitur | Peran | Status | % | Gap utama |
-| --- | --- | --- | --- | --- | --- |
-| 1 | Daftar (registrasi) | Guru, Siswa | Belum | 0 | Tidak ada form pendaftaran, upload KTP, status menunggu verifikasi |
-| 2 | Login | Guru, Siswa, Admin | Sebagian | 30 | Hanya guru, akun demo hardcode, tanpa autentikasi server |
-| 3 | Lupa kata sandi | Guru, Siswa | Belum | 0 | Tidak ada kirim tautan reset & buat sandi baru |
-| 4 | Dashboard | Guru, Siswa, Admin | Sebagian | 30 | Dashboard Guru bagus (mock); Siswa & Admin belum ada |
-| 5 | Modul Ajar | Guru | Sebagian | 75 | UI & AI mock lengkap, belum tersimpan di database, belum publikasi ke kelas nyata |
-| 6 | Soal | Guru | Sebagian | 70 | Bank soal & revisi AI ada; belum terhubung kelas/penugasan nyata |
-| 7 | Penugasan | Guru | Sebagian | 10 | Hanya tabel mock di dashboard; halaman masih Coming Soon |
-| 8 | Penilaian | Guru | Sebagian | 5 | Belum ada koreksi, nilai AI + manual, nilai akhir, rekap, ekspor |
-| 9 | Verifikasi Akun Siswa | Guru | Sebagian | 5 | Coming Soon; belum ada kode kelas & daftar pengajuan |
-| 10 | Arsip Data | Guru | Sebagian | 5 | Coming Soon; belum ada arsip per semester |
-| 11 | Profil | Guru, Siswa | Sebagian | 45 | Profil Guru berfungsi; profil Siswa (kelas, status pengajuan) belum ada |
-| 12 | Materi Siswa | Siswa | Belum | 0 | Belum ada halaman materi & penanda dilihat |
-| 13 | Tugas Siswa | Siswa | Belum | 0 | Belum ada kerjakan, unggah, batas waktu |
-| 14 | Nilai Siswa | Siswa | Belum | 0 | Belum ada lihat nilai, KKM, remedial |
-| 15 | Verifikasi Akun Guru | Admin | Belum | 0 | Belum ada panel admin |
-| 16 | Manajemen Guru | Admin | Belum | 0 | Belum ada daftar akun, edit, aktif/nonaktif, reset sandi |
-| 17 | Log Out | Guru, Siswa, Admin | Sebagian | 60 | Berfungsi untuk Guru saja |
+| #   | Fitur                 | Peran              | Status   | %   | Gap utama                                                                         |
+| --- | --------------------- | ------------------ | -------- | --- | --------------------------------------------------------------------------------- |
+| 1   | Daftar (registrasi)   | Guru, Siswa        | Belum    | 0   | Tidak ada form pendaftaran, upload KTP, status menunggu verifikasi                |
+| 2   | Login                 | Guru, Siswa, Admin | Sebagian | 30  | Hanya guru, akun demo hardcode, tanpa autentikasi server                          |
+| 3   | Lupa kata sandi       | Guru, Siswa        | Belum    | 0   | Tidak ada kirim tautan reset & buat sandi baru                                    |
+| 4   | Dashboard             | Guru, Siswa, Admin | Sebagian | 30  | Dashboard Guru bagus (mock); Siswa & Admin belum ada                              |
+| 5   | Modul Ajar            | Guru               | Sebagian | 75  | UI & AI mock lengkap, belum tersimpan di database, belum publikasi ke kelas nyata |
+| 6   | Soal                  | Guru               | Sebagian | 70  | Bank soal & revisi AI ada; belum terhubung kelas/penugasan nyata                  |
+| 7   | Penugasan             | Guru               | Sebagian | 10  | Hanya tabel mock di dashboard; halaman masih Coming Soon                          |
+| 8   | Penilaian             | Guru               | Sebagian | 5   | Belum ada koreksi, nilai AI + manual, nilai akhir, rekap, ekspor                  |
+| 9   | Verifikasi Akun Siswa | Guru               | Sebagian | 5   | Coming Soon; belum ada kode kelas & daftar pengajuan                              |
+| 10  | Arsip Data            | Guru               | Sebagian | 5   | Coming Soon; belum ada arsip per semester                                         |
+| 11  | Profil                | Guru, Siswa        | Sebagian | 45  | Profil Guru berfungsi; profil Siswa (kelas, status pengajuan) belum ada           |
+| 12  | Materi Siswa          | Siswa              | Belum    | 0   | Belum ada halaman materi & penanda dilihat                                        |
+| 13  | Tugas Siswa           | Siswa              | Belum    | 0   | Belum ada kerjakan, unggah, batas waktu                                           |
+| 14  | Nilai Siswa           | Siswa              | Belum    | 0   | Belum ada lihat nilai, KKM, remedial                                              |
+| 15  | Verifikasi Akun Guru  | Admin              | Belum    | 0   | Belum ada panel admin                                                             |
+| 16  | Manajemen Guru        | Admin              | Belum    | 0   | Belum ada daftar akun, edit, aktif/nonaktif, reset sandi                          |
+| 17  | Log Out               | Guru, Siswa, Admin | Sebagian | 60  | Berfungsi untuk Guru saja                                                         |
 
 **Perhitungan total:** (0+30+0+30+75+70+10+5+5+5+45+0+0+0+0+0+60) ÷ 17 = 335 ÷ 17 = **19,7 % ≈ 20 %**
 
 **Kesesuaian per peran** (hanya fitur milik peran tersebut, dinilai dari sudut peran itu):
 
-| Peran | Fitur dinilai | Kesesuaian |
-| --- | --- | --- |
-| Guru | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 17 | **± 39 %** |
-| Siswa | 1, 2, 3, 4, 11, 12, 13, 14, 17 | **0 %** |
-| Admin | 2, 4, 15, 16, 17 | **0 %** |
+| Peran | Fitur dinilai                         | Kesesuaian |
+| ----- | ------------------------------------- | ---------- |
+| Guru  | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 17 | **± 39 %** |
+| Siswa | 1, 2, 3, 4, 11, 12, 13, 14, 17        | **0 %**    |
+| Admin | 2, 4, 15, 16, 17                      | **0 %**    |
 
 ---
 
@@ -181,23 +181,23 @@ Rekap: dari ± 60 langkah kunci pada tiga BPMN, sekitar 9 langkah sudah/sebagian
 
 ## 6. Kesesuaian Wireframe & UI
 
-| Elemen wireframe | Status | Catatan |
-| --- | --- | --- |
-| Layout sidebar + header + konten | Sesuai | Sidebar collapsible, header sticky, tidak ada elemen bertumpuk |
-| Urutan menu Guru | Sesuai | Dashboard, Modul Ajar, Soal, Penugasan, Penilaian, Verifikasi Akun Siswa, Arsip Data, Profil, Log Out |
-| Responsif mobile | Sesuai | Sheet sidebar, kartu & tabel bertumpuk rapi |
-| Dashboard: 4 statistik | Sesuai | 2 Modul Aktif, 27 Tugas Masuk, 92 % Sudah Dinilai, 3 Kelas Diampu |
-| Dashboard: tabel tugas perlu dikoreksi | Sesuai | Responsif, aksi mengarah ke halaman terkait |
-| Dropdown notifikasi | Sesuai | 3 notifikasi mock |
-| Halaman Modul Ajar + editor + PPT | Sesuai | Tab isi / ilustrasi / slide |
-| Halaman Soal + review + revisi AI | Sesuai | Bank soal → publikasi |
-| Halaman Penugasan | Belum | Masih Coming Soon |
-| Halaman Penilaian / Rekap Nilai | Belum | Masih Coming Soon |
-| Halaman Verifikasi Akun Siswa | Belum | Masih Coming Soon |
-| Halaman Arsip Data | Belum | Masih Coming Soon |
-| Halaman Daftar / Lupa Sandi | Belum | Belum ada route |
-| Seluruh halaman Siswa | Belum | Belum ada route |
-| Seluruh halaman Admin | Belum | Belum ada route |
+| Elemen wireframe                       | Status | Catatan                                                                                               |
+| -------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------- |
+| Layout sidebar + header + konten       | Sesuai | Sidebar collapsible, header sticky, tidak ada elemen bertumpuk                                        |
+| Urutan menu Guru                       | Sesuai | Dashboard, Modul Ajar, Soal, Penugasan, Penilaian, Verifikasi Akun Siswa, Arsip Data, Profil, Log Out |
+| Responsif mobile                       | Sesuai | Sheet sidebar, kartu & tabel bertumpuk rapi                                                           |
+| Dashboard: 4 statistik                 | Sesuai | 2 Modul Aktif, 27 Tugas Masuk, 92 % Sudah Dinilai, 3 Kelas Diampu                                     |
+| Dashboard: tabel tugas perlu dikoreksi | Sesuai | Responsif, aksi mengarah ke halaman terkait                                                           |
+| Dropdown notifikasi                    | Sesuai | 3 notifikasi mock                                                                                     |
+| Halaman Modul Ajar + editor + PPT      | Sesuai | Tab isi / ilustrasi / slide                                                                           |
+| Halaman Soal + review + revisi AI      | Sesuai | Bank soal → publikasi                                                                                 |
+| Halaman Penugasan                      | Belum  | Masih Coming Soon                                                                                     |
+| Halaman Penilaian / Rekap Nilai        | Belum  | Masih Coming Soon                                                                                     |
+| Halaman Verifikasi Akun Siswa          | Belum  | Masih Coming Soon                                                                                     |
+| Halaman Arsip Data                     | Belum  | Masih Coming Soon                                                                                     |
+| Halaman Daftar / Lupa Sandi            | Belum  | Belum ada route                                                                                       |
+| Seluruh halaman Siswa                  | Belum  | Belum ada route                                                                                       |
+| Seluruh halaman Admin                  | Belum  | Belum ada route                                                                                       |
 
 Kesesuaian UI/navigasi: **± 55 %** (kerangka & halaman Guru inti sesuai; halaman Siswa, Admin, dan 4 menu Guru masih kosong).
 
@@ -209,26 +209,26 @@ Backend akan memakai Lovable Cloud (database Postgres + autentikasi + storage + 
 
 ### 7.1 Tabel yang Dibutuhkan
 
-| Tabel | Isi utama |
-| --- | --- |
-| `profiles` | id (→ akun), nama, email, no HP, sekolah, mapel, NIP/NUPTK, foto, status akun (menunggu/aktif/ditolak) |
-| `user_roles` | user_id, role (`guru` / `siswa` / `admin`) — **role wajib di tabel terpisah** |
-| `dokumen_verifikasi` | user_id, jenis (KTP), path file di storage, status |
-| `kelas` | id, guru_id, nama kelas, mapel, tahun ajar, kode kelas, KKM |
-| `kelas_anggota` | kelas_id, siswa_id, status (menunggu/aktif/keluar) |
-| `pengajuan_kelas` | siswa_id, kelas_id, sumber (kode/tautan), status, waktu, catatan |
-| `modul` | id, guru_id, kelas_id, judul, mapel, sumber tipe/input, ringkasan, status |
-| `modul_section` | modul_id, urutan, judul, poin, isi, ilustrasi |
-| `modul_slide` | modul_id, urutan, judul, bullets, ilustrasi |
-| `paket_soal` | id, guru_id, judul, topik, modul_id, status |
-| `soal` | paket_id, pertanyaan, jenis, opsi, kunci, tingkat kesulitan, skor |
-| `penugasan` | id, guru_id, kelas_id, paket_id/modul_id, judul, instruksi, dibuka, tenggat, status |
-| `pengumpulan` | penugasan_id, siswa_id, jawaban, file, waktu kumpul, status (belum/terkumpul/terlambat) |
-| `nilai` | pengumpulan_id, siswa_id, penugasan_id, nilai_ai, nilai_manual, nilai_akhir, catatan, final |
-| `remedial` | nilai_id, siswa_id, percobaan, nilai_remedial, status |
-| `arsip` | guru_id, jenis entitas, ref_id, semester, tahun ajar, waktu arsip |
-| `notifikasi` | user_id, jenis, judul, pesan, dibaca |
-| `log_aktivitas` | user_id, aksi, entitas, ref_id, waktu, metadata |
+| Tabel                | Isi utama                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------ |
+| `profiles`           | id (→ akun), nama, email, no HP, sekolah, mapel, NIP/NUPTK, foto, status akun (menunggu/aktif/ditolak) |
+| `user_roles`         | user_id, role (`guru` / `siswa` / `admin`) — **role wajib di tabel terpisah**                          |
+| `dokumen_verifikasi` | user_id, jenis (KTP), path file di storage, status                                                     |
+| `kelas`              | id, guru_id, nama kelas, mapel, tahun ajar, kode kelas, KKM                                            |
+| `kelas_anggota`      | kelas_id, siswa_id, status (menunggu/aktif/keluar)                                                     |
+| `pengajuan_kelas`    | siswa_id, kelas_id, sumber (kode/tautan), status, waktu, catatan                                       |
+| `modul`              | id, guru_id, kelas_id, judul, mapel, sumber tipe/input, ringkasan, status                              |
+| `modul_section`      | modul_id, urutan, judul, poin, isi, ilustrasi                                                          |
+| `modul_slide`        | modul_id, urutan, judul, bullets, ilustrasi                                                            |
+| `paket_soal`         | id, guru_id, judul, topik, modul_id, status                                                            |
+| `soal`               | paket_id, pertanyaan, jenis, opsi, kunci, tingkat kesulitan, skor                                      |
+| `penugasan`          | id, guru_id, kelas_id, paket_id/modul_id, judul, instruksi, dibuka, tenggat, status                    |
+| `pengumpulan`        | penugasan_id, siswa_id, jawaban, file, waktu kumpul, status (belum/terkumpul/terlambat)                |
+| `nilai`              | pengumpulan_id, siswa_id, penugasan_id, nilai_ai, nilai_manual, nilai_akhir, catatan, final            |
+| `remedial`           | nilai_id, siswa_id, percobaan, nilai_remedial, status                                                  |
+| `arsip`              | guru_id, jenis entitas, ref_id, semester, tahun ajar, waktu arsip                                      |
+| `notifikasi`         | user_id, jenis, judul, pesan, dibaca                                                                   |
+| `log_aktivitas`      | user_id, aksi, entitas, ref_id, waktu, metadata                                                        |
 
 ### 7.2 Prinsip Akses Data
 
@@ -242,24 +242,24 @@ Backend akan memakai Lovable Cloud (database Postgres + autentikasi + storage + 
 
 ## 8. Matriks Hak Akses per Peran
 
-| Menu / Aksi | Guru | Siswa | Admin |
-| --- | --- | --- | --- |
-| Dashboard | Milik sendiri | Milik sendiri | Ringkasan sistem |
-| Modul Ajar | Buat, edit, hapus, publikasi | — | — |
-| Materi | Sumber = modul terbit | Lihat saja | — |
-| Soal / Bank Soal | Buat, edit, hapus, revisi AI, publikasi | — | — |
-| Penugasan | Buat, atur tenggat, tutup | Lihat & kerjakan | — |
-| Pengumpulan | Lihat & koreksi | Unggah / unggah ulang | — |
-| Penilaian & Rekap | Nilai, finalisasi, ekspor | Lihat nilai sendiri | — |
-| Remedial | Buka remedial | Ikuti remedial | — |
-| Kelas & Kode Kelas | Kelola kelas sendiri | Ajukan gabung / keluar | Lihat (read-only) |
-| Verifikasi Akun Siswa | Setujui / tolak | — | — |
-| Verifikasi Akun Guru | — | — | Setujui / tolak |
-| Manajemen Akun Guru | — | — | Edit, aktif/nonaktif, reset sandi |
-| Arsip Data | Arsip milik sendiri | — | Lihat |
-| Profil | Edit sendiri | Edit sendiri | Edit sendiri |
-| Log Aktivitas | — | — | Lihat |
-| Log Out | Ya | Ya | Ya |
+| Menu / Aksi           | Guru                                    | Siswa                  | Admin                             |
+| --------------------- | --------------------------------------- | ---------------------- | --------------------------------- |
+| Dashboard             | Milik sendiri                           | Milik sendiri          | Ringkasan sistem                  |
+| Modul Ajar            | Buat, edit, hapus, publikasi            | —                      | —                                 |
+| Materi                | Sumber = modul terbit                   | Lihat saja             | —                                 |
+| Soal / Bank Soal      | Buat, edit, hapus, revisi AI, publikasi | —                      | —                                 |
+| Penugasan             | Buat, atur tenggat, tutup               | Lihat & kerjakan       | —                                 |
+| Pengumpulan           | Lihat & koreksi                         | Unggah / unggah ulang  | —                                 |
+| Penilaian & Rekap     | Nilai, finalisasi, ekspor               | Lihat nilai sendiri    | —                                 |
+| Remedial              | Buka remedial                           | Ikuti remedial         | —                                 |
+| Kelas & Kode Kelas    | Kelola kelas sendiri                    | Ajukan gabung / keluar | Lihat (read-only)                 |
+| Verifikasi Akun Siswa | Setujui / tolak                         | —                      | —                                 |
+| Verifikasi Akun Guru  | —                                       | —                      | Setujui / tolak                   |
+| Manajemen Akun Guru   | —                                       | —                      | Edit, aktif/nonaktif, reset sandi |
+| Arsip Data            | Arsip milik sendiri                     | —                      | Lihat                             |
+| Profil                | Edit sendiri                            | Edit sendiri           | Edit sendiri                      |
+| Log Aktivitas         | —                                       | —                      | Lihat                             |
+| Log Out               | Ya                                      | Ya                     | Ya                                |
 
 ---
 

@@ -55,6 +55,7 @@ const FIELDS: Array<{ key: keyof GuruProfile; label: string; placeholder: string
 function ProfilPage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const isUserSiswa = profile.role === "siswa";
 
   const [edit, setEdit] = useState(false);
   const [draft, setDraft] = useState<GuruProfile>(profile);
@@ -63,6 +64,25 @@ function ProfilPage() {
   useEffect(() => {
     if (!edit) setDraft(profile);
   }, [profile, edit]);
+
+  const fields: Array<{ key: keyof GuruProfile; label: string; placeholder: string }> = isUserSiswa
+    ? [
+        { key: "nama", label: "Nama Lengkap", placeholder: "Nama siswa" },
+        { key: "email", label: "Email", placeholder: "siswa@sekolah.sch.id" },
+        { key: "nisn", label: "NISN", placeholder: "Nomor Induk Siswa Nasional (10 digit)" },
+        { key: "telepon", label: "Nomor Telepon", placeholder: "08xx-xxxx-xxxx" },
+        { key: "sekolah", label: "Sekolah", placeholder: "Nama sekolah" },
+        { key: "kelas", label: "Jenjang / Kelas", placeholder: "Misal: XI RPL 1" },
+      ]
+    : [
+        { key: "nama", label: "Nama Lengkap", placeholder: "Nama guru" },
+        { key: "email", label: "Email", placeholder: "guru@sekolah.sch.id" },
+        { key: "nip", label: "NIP / NUPTK", placeholder: "Nomor induk" },
+        { key: "telepon", label: "Nomor Telepon", placeholder: "08xx-xxxx-xxxx" },
+        { key: "sekolah", label: "Sekolah", placeholder: "Nama sekolah" },
+        { key: "mapel", label: "Mata Pelajaran", placeholder: "Misal: Matematika" },
+        { key: "kelas", label: "Kelas yang Diampu", placeholder: "Misal: X IPA 3, XI IPA 1" },
+      ];
 
   const simpan = async () => {
     if (!draft.nama.trim() || !draft.email.trim()) {
@@ -81,8 +101,12 @@ function ProfilPage() {
   return (
     <div className="grid gap-6">
       <PageHeader
-        title="Profil Guru"
-        subtitle="Data ini dipakai pada modul ajar, soal, dan dokumen yang Anda unduh."
+        title={isUserSiswa ? "Profil Siswa" : "Profil Guru"}
+        subtitle={
+          isUserSiswa
+            ? "Data profil ini digunakan untuk keanggotaan kelas dan aktivitas belajar Anda."
+            : "Data ini dipakai pada modul ajar, soal, dan dokumen yang Anda unduh."
+        }
         actions={
           edit ? (
             <>
@@ -118,55 +142,60 @@ function ProfilPage() {
           <div className="min-w-0">
             <p className="font-display text-lg font-bold text-navy">{profile.nama}</p>
             <p className="text-sm text-muted-foreground">
-              {profile.mapel} · {profile.sekolah}
+              {isUserSiswa ? profile.kelas || "Siswa" : profile.mapel} · {profile.sekolah}
             </p>
             <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-primary">
               <ShieldCheck className="h-3.5 w-3.5" />
-              Akun terverifikasi (prototipe)
+              Akun {isUserSiswa ? "Siswa" : "Guru"} terverifikasi
             </p>
           </div>
         </CardContent>
       </Card>
 
-      {/* Card Shortcut Menuju Kelas Saya */}
-      <Card className="border-primary/25 bg-primary-soft/20 shadow-xs">
-        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-xs">
-              <School className="h-5 w-5" />
+      {/* Card Shortcut Menuju Kelas (Hanya untuk Guru) */}
+      {!isUserSiswa && (
+        <Card className="border-primary/25 bg-primary-soft/20 shadow-xs">
+          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-xs">
+                <School className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-display font-semibold text-navy">
+                  Kelola & Pantau Kelas di Menu &quot;Kelas Saya&quot;
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Untuk mengelola kelas, membagikan kode atau tautan undangan ke siswa, serta
+                  memantau aktivitas belajar, silakan buka menu <strong>Kelas Saya</strong> di
+                  sidebar.
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="font-display font-semibold text-navy">
-                Kelola & Pantau Kelas di Menu &quot;Kelas Saya&quot;
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Untuk mengelola kelas, membagikan kode atau tautan undangan ke siswa, serta memantau
-                aktivitas belajar, silakan buka menu <strong>Kelas Saya</strong> di sidebar.
-              </p>
-            </div>
-          </div>
-          <Button asChild size="sm" className="gap-1.5 shrink-0 font-medium">
-            <Link to="/kelas">
-              Buka Kelas Saya
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-        </CardContent>
-      </Card>
+            <Button asChild size="sm" className="gap-1.5 shrink-0 font-medium">
+              <Link to="/kelas">
+                Buka Kelas Saya
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Data Guru Profil */}
+      {/* Data Profil */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="font-display text-base text-navy">Data Guru</CardTitle>
+          <CardTitle className="font-display text-base text-navy">
+            {isUserSiswa ? "Data Siswa" : "Data Guru"}
+          </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 pt-0 sm:grid-cols-2">
-          {FIELDS.map((f) => (
+          {fields.map((f) => (
             <div key={f.key} className="grid gap-2">
               <Label htmlFor={f.key}>{f.label}</Label>
               {edit ? (
                 <Input
                   id={f.key}
-                  value={draft[f.key]}
+                  value={draft[f.key] ?? ""}
                   placeholder={f.placeholder}
                   onChange={(e) => setDraft((prev) => ({ ...prev, [f.key]: e.target.value }))}
                 />

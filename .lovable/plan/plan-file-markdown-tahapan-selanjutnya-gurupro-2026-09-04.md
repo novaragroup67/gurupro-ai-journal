@@ -1,9 +1,11 @@
 # Plan: File Markdown "Tahapan Selanjutnya" GuruPro
 
 ## Tujuan
+
 Membuat satu file markdown baru yang berisi tahapan kerja berikutnya (next steps) untuk membawa GuruPro dari prototype v2 (frontend-only, localStorage) menuju produk akhir sesuai proposal, blueprint, dan wireframe https://guruprowireframe.netlify.app.
 
 ## File yang dibuat
+
 1. `NEXT-STEPS.md` di root project (referensi developer).
 2. Salinan siap unduh: `GuruPro-Tahapan-Selanjutnya.md` di `/mnt/documents` (dilampirkan ke chat).
 
@@ -23,9 +25,11 @@ Membuat satu file markdown baru yang berisi tahapan kerja berikutnya (next steps
 9. **Checklist per tahap** — kotak cek `[ ]` yang bisa ditandai saat pengerjaan, plus estimasi urutan prioritas dan kriteria "selesai" per tahap.
 
 ## Verifikasi
+
 - Baca ulang file hasil untuk memastikan format markdown rapi dan lengkap.
 - Lampirkan file ke chat sebagai artifact.
 
 ## Catatan teknis
+
 - Tidak ada perubahan kode aplikasi; hanya penambahan 2 file markdown.
 - Konsisten dengan isi `ROADMAP.md` yang sudah ada (Tahap 0–8), dokumen ini difokuskan sebagai panduan eksekusi langkah-berikutnya yang lebih operasional.

@@ -91,17 +91,29 @@ export async function addModul(data: Omit<Modul, "id" | "createdAt" | "updatedAt
 }
 
 export async function saveModul(modul: Modul) {
+  const previous = store.get();
   const next = { ...modul, updatedAt: new Date().toISOString() };
-  store.set(store.get().map((m) => (m.id === modul.id ? next : m)));
-  const { error } = await supabase.from("moduls").update(toRow(modul)).eq("id", modul.id);
-  if (error) throw error;
-  return next;
+  store.set(previous.map((m) => (m.id === modul.id ? next : m)));
+  try {
+    const { error } = await supabase.from("moduls").update(toRow(modul)).eq("id", modul.id);
+    if (error) throw error;
+    return next;
+  } catch (err) {
+    store.set(previous);
+    throw err;
+  }
 }
 
 export async function deleteModul(id: string) {
-  store.set(store.get().filter((m) => m.id !== id));
-  const { error } = await supabase.from("moduls").delete().eq("id", id);
-  if (error) throw error;
+  const previous = store.get();
+  store.set(previous.filter((m) => m.id !== id));
+  try {
+    const { error } = await supabase.from("moduls").delete().eq("id", id);
+    if (error) throw error;
+  } catch (err) {
+    store.set(previous);
+    throw err;
+  }
 }
 
 export async function publishModul(id: string) {
@@ -110,7 +122,11 @@ export async function publishModul(id: string) {
   await saveModul({ ...found, status: "Terbit" });
 }
 
-export async function setIlustrasi(modulId: string, sectionId: string, ilustrasi: string | undefined) {
+export async function setIlustrasi(
+  modulId: string,
+  sectionId: string,
+  ilustrasi: string | undefined,
+) {
   const found = store.get().find((m) => m.id === modulId);
   if (!found) return;
   await saveModul({
@@ -134,4 +150,28 @@ export async function setSlides(modulId: string, slides: Slide[]) {
   await saveModul({ ...found, slides });
 }
 
+/**
+ * Mengambil modul terbit untuk siswa dari kelas yang diikutinya (read-only).
+ */
+export async function getPublishedModulsForSiswa(): Promise<Modul[]> {
+  try {
+    const { data, error } = await supabase
+      .from("moduls")
+      .select("*")
+      .eq("status", "Terbit")
+      .order("updated_at", { ascending: false });
+
+    if (error) {
+      console.warn("[ModulStore] Gagal memuat modul siswa:", error.message);
+      return [];
+    }
+
+    return (data as unknown as Row[]).map(toModul);
+  } catch (err) {
+    console.error("[ModulStore] Error getPublishedModulsForSiswa:", err);
+    return [];
+  }
+}
+
 export { uid };
+

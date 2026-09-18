@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "test": "node tests/security/security.test.mjs && node tests/security/remediation.test.mjs && node tests/ai/ai-core.test.mjs && node tests/auth/auth-role.test.mjs && node tests/kelas/kelas-membership.test.mjs && node tests/penugasan/penugasan.test.mjs && node tests/submission/submission.test.mjs && node tests/penilaian/penilaian.test.mjs && node tests/dashboard/dashboard-roles.test.mjs && node tests/rekap/rekap-nilai.test.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"
@@ -55,6 +55,7 @@
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.575.0",
+    "openai": "^7.15.0",
     "react": "^19.2.0",
     "react-day-picker": "^9.14.0",
     "react-dom": "^19.2.0",

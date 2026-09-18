@@ -119,10 +119,13 @@ function LupaKataSandiPage() {
                   <Mail className="h-6 w-6" />
                 </div>
                 <div>
-                  <h2 className="font-display text-base font-semibold text-navy">Periksa Email Anda</h2>
+                  <h2 className="font-display text-base font-semibold text-navy">
+                    Periksa Email Anda
+                  </h2>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Kami telah mengirimkan tautan reset kata sandi ke <strong>{email}</strong>.
-                    Silakan klik tautan pada email tersebut untuk melanjutkan pembuatan kata sandi baru.
+                    Silakan klik tautan pada email tersebut untuk melanjutkan pembuatan kata sandi
+                    baru.
                   </p>
                 </div>
                 <Button
@@ -155,7 +158,11 @@ function LupaKataSandiPage() {
                   {error ? <p className="text-xs text-destructive">{error}</p> : null}
                 </div>
                 <Button type="submit" disabled={loading} className="uppercase tracking-wide">
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Mail className="h-4 w-4" />
+                  )}
                   {loading ? "Mengirim…" : "Kirim Tautan Reset"}
                 </Button>
               </form>
@@ -192,7 +199,11 @@ function LupaKataSandiPage() {
                 {error ? <p className="text-xs text-destructive">{error}</p> : null}
               </div>
               <Button type="submit" disabled={loading} className="uppercase tracking-wide">
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <KeyRound className="h-4 w-4" />
+                )}
                 {loading ? "Menyimpan…" : "Simpan Kata Sandi Baru"}
               </Button>
             </form>

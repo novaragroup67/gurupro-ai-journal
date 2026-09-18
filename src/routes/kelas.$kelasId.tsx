@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Clock,
   Copy,
-  Download,
   FileQuestion,
   FileSpreadsheet,
   FileText,
@@ -18,13 +17,14 @@ import {
   Plus,
   RefreshCw,
   School,
+  Search,
   Share2,
   Sparkles,
   UserCheck,
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -40,6 +40,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -59,6 +60,11 @@ import {
   type Kelas,
 } from "@/lib/kelas-store";
 import { useModuls } from "@/lib/modul-store";
+import {
+  formatNilai,
+  getKelasRekapData,
+  type KelasRekapData,
+} from "@/lib/rekap-store";
 import { usePaketSoal } from "@/lib/soal-store";
 
 export const Route = createFileRoute("/kelas/$kelasId")({
@@ -93,7 +99,7 @@ function formatTanggal(isoDate: string) {
 function DetailKelasMonitoringPage() {
   const { kelasId } = Route.useParams();
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, user, ready } = useAuth();
   const { kelasList, anggotaList, refresh } = useKelas();
 
   // Local state for direct reload / fallback fetching
@@ -106,6 +112,30 @@ function DetailKelasMonitoringPage() {
   // Store data untuk tab modul dan tugas
   const allModuls = useModuls();
   const allPakets = usePaketSoal();
+
+  // State Rekap Nilai Riil
+  const [rekapData, setRekapData] = useState<KelasRekapData | null>(null);
+  const [loadingRekap, setLoadingRekap] = useState(false);
+  const [searchRekapQuery, setSearchRekapQuery] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    if (!kelasId) return;
+
+    setLoadingRekap(true);
+    getKelasRekapData(kelasId)
+      .then((data) => {
+        if (active) setRekapData(data);
+      })
+      .catch((err) => console.error("Gagal memuat rekap nilai kelas:", err))
+      .finally(() => {
+        if (active) setLoadingRekap(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [kelasId]);
 
   // Ambil kelas dari cache atau Supabase
   useEffect(() => {
@@ -130,6 +160,51 @@ function DetailKelasMonitoringPage() {
       active = false;
     };
   }, [kelasId, kelasList]);
+
+  // Role guard: Akses khusus guru
+  if (ready && profile.role !== "guru") {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-md space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-foreground">Akses Khusus Guru</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Halaman Monitoring Kelas hanya dapat diakses oleh akun Guru terdaftar.
+          </p>
+          <div className="pt-2 flex justify-center">
+            <Button asChild variant="outline">
+              <Link to="/">Kembali ke Dashboard</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Teacher-to-teacher isolation guard
+  const currentUserId = user?.id || profile.id;
+  if (
+    !loadingKelas &&
+    kelasDetail &&
+    kelasDetail.guruId &&
+    currentUserId &&
+    kelasDetail.guruId !== currentUserId
+  ) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-md space-y-4 rounded-xl border border-destructive/30 bg-destructive/5 p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-destructive">Akses Dibatasi</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Anda tidak memiliki izin untuk mengelola atau memantau kelas milik guru lain.
+          </p>
+          <div className="pt-2 flex justify-center">
+            <Button asChild variant="outline">
+              <Link to="/kelas">Kembali ke Kelas Saya</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Siswa anggota kelas
   const anggotaKelas = anggotaList.filter((a) => a.kelasId === kelasId);
@@ -211,26 +286,6 @@ function DetailKelasMonitoringPage() {
     return true;
   });
 
-  // Dummy helper nilai siswa aktif untuk tab rekap nilai
-  const getNilaiSiswa = (index: number) => {
-    const seedNilai = [
-      { tugas: 88, kuis: 92, uts: 85, akhir: 88, predikat: "A" },
-      { tugas: 82, kuis: 80, uts: 86, akhir: 83, predikat: "B+" },
-      { tugas: 90, kuis: 95, uts: 92, akhir: 92, predikat: "A" },
-      { tugas: 78, kuis: 75, uts: 80, akhir: 78, predikat: "B" },
-      { tugas: 85, kuis: 88, uts: 84, akhir: 86, predikat: "A" },
-      { tugas: 92, kuis: 90, uts: 95, akhir: 93, predikat: "A" },
-      { tugas: 76, kuis: 82, uts: 78, akhir: 79, predikat: "B" },
-    ];
-    return seedNilai[index % seedNilai.length];
-  };
-
-  const handleEksporNilaiPDF = () => {
-    if (!kelasDetail) return;
-    toast.success(
-      `Rekap nilai kelas ${kelasDetail.tingkat} ${kelasDetail.namaKelas} (PDF) berhasil dipersiapkan untuk diunduh.`,
-    );
-  };
 
   if (loadingKelas) {
     return (
@@ -776,103 +831,287 @@ function DetailKelasMonitoringPage() {
 
         {/* ================= TAB 4: REKAP NILAI (MONITORING) ================= */}
         <TabsContent value="nilai" className="space-y-6">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <CardTitle className="font-display text-base text-navy">
-                    Rekapitulasi Nilai Siswa
-                  </CardTitle>
-                  <CardDescription>
-                    Ringkasan capaian nilai tugas, kuis, dan ujian seluruh murid aktif di kelas{" "}
-                    {kelasDetail.namaKelas}.
-                  </CardDescription>
-                </div>
-                <Button
-                  onClick={handleEksporNilaiPDF}
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 shadow-xs font-medium"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Ekspor Rekap Nilai (PDF)
-                </Button>
+          {loadingRekap ? (
+            <div className="flex min-h-[300px] flex-col items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="mt-3 text-sm text-muted-foreground">Memuat rekapitulasi nilai kelas…</p>
+            </div>
+          ) : !rekapData ? (
+            <Card className="py-12 text-center">
+              <CardContent>
+                <AlertCircle className="mx-auto h-10 w-10 text-destructive/40" />
+                <p className="mt-3 font-semibold text-navy">Data Rekap Nilai Belum Tersedia</p>
+                <p className="text-xs text-muted-foreground">
+                  Data nilai kelas tidak dapat diakses atau belum tersedia saat ini.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Summary Stats Cards */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Card className="border-border/60">
+                  <CardContent className="flex items-center gap-3 p-4">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
+                      <Users className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <p className="font-display text-xl font-bold text-navy">
+                        {rekapData.totalSiswa}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Siswa Aktif</p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/60">
+                  <CardContent className="flex items-center gap-3 p-4">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
+                      <FileQuestion className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <p className="font-display text-xl font-bold text-navy">
+                        {rekapData.daftarPenugasan.length}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Tugas Terbit</p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/60">
+                  <CardContent className="flex items-center gap-3 p-4">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-600">
+                      <CheckCircle2 className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <p className="font-display text-xl font-bold text-navy">
+                        {rekapData.totalSubmissionsDinilai}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Tugas Dinilai</p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/60">
+                  <CardContent className="flex items-center gap-3 p-4">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600">
+                      <GraduationCap className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <p className="font-display text-xl font-bold text-navy">
+                        {formatNilai(rekapData.rataRataKelas)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Rata-Rata Kelas</p>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
-            </CardHeader>
-            <CardContent className="px-0 sm:px-6">
-              {aktifList.length === 0 ? (
-                <div className="py-12 text-center">
-                  <GraduationCap className="mx-auto h-10 w-10 text-muted-foreground/30" />
-                  <p className="mt-3 font-display text-base font-semibold text-navy">
-                    Belum Ada Data Siswa Aktif
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Verifikasi siswa yang mendaftar terlebih dahulu pada tab Anggota untuk mulai
-                    merekap nilai mereka.
-                  </p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-12 text-center">No</TableHead>
-                        <TableHead>Nama Siswa</TableHead>
-                        <TableHead>NISN</TableHead>
-                        <TableHead className="text-center">Nilai Tugas</TableHead>
-                        <TableHead className="text-center">Nilai Kuis</TableHead>
-                        <TableHead className="text-center">UTS / PTS</TableHead>
-                        <TableHead className="text-center">Nilai Akhir</TableHead>
-                        <TableHead className="text-center">Predikat</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {aktifList.map((siswa, idx) => {
-                        const nilai = getNilaiSiswa(idx);
-                        return (
-                          <TableRow key={siswa.id}>
-                            <TableCell className="text-center font-mono text-xs text-muted-foreground">
-                              {idx + 1}
-                            </TableCell>
-                            <TableCell className="font-semibold text-navy">
-                              {siswa.siswaNama}
-                            </TableCell>
-                            <TableCell className="font-mono text-xs text-muted-foreground">
-                              {siswa.siswaNisn || "—"}
-                            </TableCell>
-                            <TableCell className="text-center font-mono text-xs">
-                              {nilai.tugas}
-                            </TableCell>
-                            <TableCell className="text-center font-mono text-xs">
-                              {nilai.kuis}
-                            </TableCell>
-                            <TableCell className="text-center font-mono text-xs">
-                              {nilai.uts}
-                            </TableCell>
-                            <TableCell className="text-center font-mono text-sm font-bold text-navy">
-                              {nilai.akhir}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge
-                                variant="secondary"
-                                className={
-                                  nilai.predikat === "A"
-                                    ? "bg-emerald-100 text-emerald-800"
-                                    : "bg-blue-100 text-blue-800"
-                                }
+
+              {/* Rekap Table Card */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <CardTitle className="font-display text-base text-navy">
+                        Rekapitulasi Nilai Siswa
+                      </CardTitle>
+                      <CardDescription>
+                        Capaian nilai resmi seluruh murid aktif pada penugasan kelas{" "}
+                        {kelasDetail.namaKelas}.
+                      </CardDescription>
+                    </div>
+
+                    <div className="relative w-full sm:w-60">
+                      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input
+                        placeholder="Cari siswa atau NISN…"
+                        value={searchRekapQuery}
+                        onChange={(e) => setSearchRekapQuery(e.target.value)}
+                        className="pl-8 h-8 text-xs shadow-xs"
+                      />
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="px-0 sm:px-6">
+                  {rekapData.totalSiswa === 0 ? (
+                    <div className="py-12 text-center">
+                      <GraduationCap className="mx-auto h-10 w-10 text-muted-foreground/30" />
+                      <p className="mt-3 font-display text-base font-semibold text-navy">
+                        Belum Ada Siswa Aktif
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Verifikasi pendaftaran siswa pada tab Anggota terlebih dahulu untuk mulai
+                        merekap nilai.
+                      </p>
+                    </div>
+                  ) : rekapData.daftarPenugasan.length === 0 ? (
+                    <div className="py-12 text-center">
+                      <FileQuestion className="mx-auto h-10 w-10 text-muted-foreground/30" />
+                      <p className="mt-3 font-display text-base font-semibold text-navy">
+                        Belum Ada Penugasan Terbit
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Publikasikan penugasan untuk kelas ini di menu Penugasan agar nilai siswa
+                        dapat direkap.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-12 text-center">No</TableHead>
+                            <TableHead className="min-w-[160px]">Nama Siswa</TableHead>
+                            <TableHead className="w-24">NISN</TableHead>
+
+                            {/* Kolom Tiap Penugasan */}
+                            {rekapData.daftarPenugasan.map((tugas) => (
+                              <TableHead
+                                key={tugas.id}
+                                className="text-center min-w-[110px] max-w-[140px] truncate"
+                                title={tugas.judul}
                               >
-                                {nilai.predikat}
-                              </Badge>
-                            </TableCell>
+                                <span className="block truncate">{tugas.judul}</span>
+                              </TableHead>
+                            ))}
+
+                            <TableHead className="w-24 text-center font-bold text-navy">
+                              Rata-Rata
+                            </TableHead>
+                            <TableHead className="w-28 text-center">Kelengkapan</TableHead>
                           </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                        </TableHeader>
+                        <TableBody>
+                          {rekapData.siswaRows
+                            .filter((s) => {
+                              const q = searchRekapQuery.toLowerCase().trim();
+                              if (!q) return true;
+                              return (
+                                s.siswaNama.toLowerCase().includes(q) ||
+                                (s.siswaNisn && s.siswaNisn.toLowerCase().includes(q))
+                              );
+                            })
+                            .map((siswa, idx) => {
+                              const totalTugas = rekapData.daftarPenugasan.length;
+                              const isLengkap =
+                                totalTugas > 0 && siswa.totalTugasDinilai === totalTugas;
+                              const isSebagian =
+                                siswa.totalTugasDinilai > 0 && siswa.totalTugasDinilai < totalTugas;
+
+                              return (
+                                <TableRow key={siswa.siswaId}>
+                                  <TableCell className="text-center font-mono text-xs text-muted-foreground">
+                                    {idx + 1}
+                                  </TableCell>
+                                  <TableCell className="font-semibold text-navy">
+                                    {siswa.siswaNama}
+                                  </TableCell>
+                                  <TableCell className="font-mono text-xs text-muted-foreground">
+                                    {siswa.siswaNisn || "—"}
+                                  </TableCell>
+
+                                  {/* Skor Per Tugas */}
+                                  {rekapData.daftarPenugasan.map((tugas) => {
+                                    const nItem = siswa.nilaiPerTugas[tugas.id];
+
+                                    if (!nItem || nItem.statusPengumpulan === "belum_mengumpulkan") {
+                                      return (
+                                        <TableCell
+                                          key={tugas.id}
+                                          className="text-center text-xs text-muted-foreground"
+                                        >
+                                          —
+                                        </TableCell>
+                                      );
+                                    }
+
+                                    if (nItem.statusPenilaian === "dinilai" && nItem.nilaiAkhir !== null) {
+                                      return (
+                                        <TableCell
+                                          key={tugas.id}
+                                          className="text-center font-mono text-xs font-bold text-navy"
+                                        >
+                                          <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-800 border border-emerald-200">
+                                            {formatNilai(nItem.nilaiAkhir)}
+                                          </span>
+                                        </TableCell>
+                                      );
+                                    }
+
+                                    if (nItem.statusPenilaian === "perlu_penilaian_manual") {
+                                      return (
+                                        <TableCell key={tugas.id} className="text-center">
+                                          <Badge
+                                            variant="outline"
+                                            className="border-amber-300 bg-amber-50 text-[10px] text-amber-800"
+                                          >
+                                            Perlu Koreksi
+                                          </Badge>
+                                        </TableCell>
+                                      );
+                                    }
+
+                                    if (nItem.statusPengumpulan === "submitted") {
+                                      return (
+                                        <TableCell key={tugas.id} className="text-center">
+                                          <Badge
+                                            variant="outline"
+                                            className="border-blue-300 bg-blue-50 text-[10px] text-blue-800"
+                                          >
+                                            Terkumpul
+                                          </Badge>
+                                        </TableCell>
+                                      );
+                                    }
+
+                                    return (
+                                      <TableCell key={tugas.id} className="text-center">
+                                        <Badge variant="secondary" className="text-[10px]">
+                                          Draf
+                                        </Badge>
+                                      </TableCell>
+                                    );
+                                  })}
+
+                                  {/* Rata-Rata Siswa */}
+                                  <TableCell className="text-center font-mono text-xs font-bold text-navy">
+                                    {siswa.rataRata !== null ? (
+                                      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">
+                                        {formatNilai(siswa.rataRata)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground">—</span>
+                                    )}
+                                  </TableCell>
+
+                                  {/* Kelengkapan */}
+                                  <TableCell className="text-center">
+                                    {isLengkap ? (
+                                      <Badge className="bg-emerald-600 hover:bg-emerald-700 text-[10px]">
+                                        Lengkap
+                                      </Badge>
+                                    ) : isSebagian ? (
+                                      <Badge variant="outline" className="border-blue-300 text-blue-700 text-[10px]">
+                                        {siswa.totalTugasDinilai}/{totalTugas}
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="secondary" className="text-[10px] text-muted-foreground">
+                                        Belum Dinilai
+                                      </Badge>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
       </Tabs>
 

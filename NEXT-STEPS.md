@@ -10,6 +10,7 @@ Dokumen ini adalah panduan eksekusi langkah-berikutnya untuk membawa **GuruPro**
 ## 0. Posisi Saat Ini (Baseline)
 
 ### Sudah selesai (Prototype v2 — frontend-only)
+
 - Login / Logout / Proteksi halaman (mock, localStorage), akun demo `guru@gurupro.id`.
 - Profil guru: lihat & edit data diri, tersimpan di localStorage.
 - Dashboard guru: statistik (Modul Aktif, Tugas Masuk, % Dinilai, Kelas Diampu), tabel "Tugas Perlu Dikoreksi", dropdown notifikasi.
@@ -19,6 +20,7 @@ Dokumen ini adalah panduan eksekusi langkah-berikutnya untuk membawa **GuruPro**
 - Design system sesuai brand (navy #0D1B3D, biru #2563EB, sky #60A5FA, oranye #FF8A00).
 
 ### Batasan saat ini (harus diselesaikan di tahap berikutnya)
+
 - Tidak ada database — semua data hilang jika localStorage dibersihkan, tidak bisa dibagikan antar perangkat/pengguna.
 - Autentikasi masih mock — belum ada akun sungguhan, reset password, atau keamanan sesi.
 - Belum ada peran **Siswa** dan **Admin** — tampilan saat ini hanya sisi Guru.
@@ -69,18 +71,21 @@ Dokumen ini adalah panduan eksekusi langkah-berikutnya untuk membawa **GuruPro**
 ## Tahap 3 — Tampilan Per Peran
 
 ### 3a. Tampilan Siswa (baru)
+
 - [ ] Dashboard siswa: tugas aktif, deadline terdekat, nilai terbaru.
 - [ ] Lihat modul ajar yang di-publish gurunya (read-only).
 - [ ] Halaman mengerjakan soal/tugas (pilihan ganda + essay) dengan batas waktu.
 - [ ] Halaman nilai & riwayat pengerjaan (read-only, sesuai blueprint: siswa hanya melihat).
 
 ### 3b. Tampilan Guru (sambungkan yang sudah ada)
+
 - [ ] Dashboard, Modul Ajar, Soal/Bank Soal membaca & menulis ke database.
 - [ ] Penugasan: publish bank soal ke kelas dengan deadline.
 - [ ] Penilaian: koreksi jawaban siswa, beri nilai & catatan.
 - [ ] Verifikasi Akun Siswa: setujui/tolak akun siswa di kelasnya.
 
 ### 3c. Tampilan Admin (baru)
+
 - [ ] Dashboard admin: jumlah pengguna, guru, siswa, kelas, aktivitas.
 - [ ] Kelola pengguna (buat/nonaktifkan akun, atur peran).
 - [ ] Kelola kelas & mata pelajaran.
@@ -154,6 +159,7 @@ Tahap 1 Database ──► Tahap 2 Auth & Peran ──► Tahap 3 Tampilan per P
 ```
 
 **Dependensi penting:**
+
 - Tahap 2–7 bergantung pada Tahap 1 (tidak ada yang bisa permanen tanpa database).
 - Tampilan siswa/admin (Tahap 3) bergantung pada Tahap 2 (peran harus ada dulu).
 - Penilaian (Tahap 4) bergantung pada Tahap 3a (siswa harus bisa mengerjakan dulu).
@@ -161,6 +167,7 @@ Tahap 1 Database ──► Tahap 2 Auth & Peran ──► Tahap 3 Tampilan per P
 ---
 
 ## Cara Memakai Dokumen Ini
+
 1. Kerjakan tahap berurutan; jangan melompat sebelum dependensinya selesai.
 2. Tandai `[x]` setiap item yang selesai.
 3. Setelah tiap tahap, perbarui persen kesesuaian di `ROADMAP.md`.

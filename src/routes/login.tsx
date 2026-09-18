@@ -114,7 +114,9 @@ function LoginPage() {
                   {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              {errors.password ? <p className="text-xs text-destructive">{errors.password}</p> : null}
+              {errors.password ? (
+                <p className="text-xs text-destructive">{errors.password}</p>
+              ) : null}
             </div>
 
             <label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -123,7 +125,11 @@ function LoginPage() {
             </label>
 
             <Button type="submit" disabled={loading} className="uppercase tracking-wide">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <LogIn className="h-4 w-4" />
+              )}
               {loading ? "Memeriksa akun…" : "Masuk"}
             </Button>
           </form>

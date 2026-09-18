@@ -36,14 +36,7 @@ export interface Modul {
 
 export const SUMBER_TIPE: SumberTipe[] = ["CP / ATP", "eBook / Dokumen", "Teks", "Link Luar"];
 
-export const KELAS = [
-  "X IPA 3",
-  "XI IPA 1",
-  "XI IPA 2",
-  "X RPL 1",
-  "XI RPL 1",
-  "XII RPL 1",
-];
+export const KELAS = ["X IPA 3", "XI IPA 1", "XI IPA 2", "X RPL 1", "XI RPL 1", "XII RPL 1"];
 
 export const MAPEL = [
   "Matematika",

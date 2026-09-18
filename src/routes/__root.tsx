@@ -43,7 +43,7 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
+  console.error("[TanStack ErrorComponent]", error);
   const router = useRouter();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
@@ -51,13 +51,23 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 
   return (
     <div className="flex min-h-[70vh] items-center justify-center px-4">
-      <div className="max-w-md text-center">
+      <div className="max-w-xl text-center">
         <h1 className="font-display text-xl font-semibold tracking-tight">
           Halaman ini gagal dimuat
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Terjadi kesalahan. Coba muat ulang atau kembali ke dashboard.
         </p>
+        {error && (
+          <div className="mt-4 max-h-64 overflow-auto rounded-lg border border-red-200 bg-red-50 p-4 text-left font-mono text-xs text-red-900 shadow-inner">
+            <p className="font-bold text-red-700">{error.name}: {error.message}</p>
+            {error.stack && (
+              <pre className="mt-2 whitespace-pre-wrap text-[11px] text-red-800/90 leading-relaxed">
+                {error.stack}
+              </pre>
+            )}
+          </div>
+        )}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button
             onClick={() => {
@@ -136,7 +146,11 @@ function AuthGate({ children }: { children: ReactNode }) {
     }
   }, [ready, signedIn, publicAuth, pathname, navigate]);
 
-  if (!ready || (!signedIn && !publicAuth) || (signedIn && (pathname === "/login" || pathname === "/daftar"))) {
+  if (
+    !ready ||
+    (!signedIn && !publicAuth) ||
+    (signedIn && (pathname === "/login" || pathname === "/daftar"))
+  ) {
     return (
       <div className="grid min-h-screen place-items-center bg-background text-sm text-muted-foreground">
         Memuat sesi GuruPro…
@@ -165,7 +179,12 @@ function AppShell() {
               </span>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <Button variant="ghost" size="icon" aria-label="Cari" className="hidden sm:inline-flex">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Cari"
+                className="hidden sm:inline-flex"
+              >
                 <Search className="h-4 w-4" />
               </Button>
               <NotificationMenu />
@@ -178,8 +197,12 @@ function AppShell() {
                   {initials(profile.nama)}
                 </span>
                 <span className="hidden min-w-0 leading-tight sm:block">
-                  <span className="block truncate text-xs font-semibold">{shortName(profile.nama)}</span>
-                  <span className="block truncate text-[11px] text-muted-foreground">{profile.mapel}</span>
+                  <span className="block truncate text-xs font-semibold">
+                    {shortName(profile.nama)}
+                  </span>
+                  <span className="block truncate text-[11px] text-muted-foreground">
+                    {profile.mapel}
+                  </span>
                 </span>
               </Link>
             </div>
@@ -203,9 +226,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthGate>
-        {publicAuth ? <Outlet /> : <AppShell />}
-      </AuthGate>
+      <AuthGate>{publicAuth ? <Outlet /> : <AppShell />}</AuthGate>
       <Toaster position="bottom-right" richColors />
     </QueryClientProvider>
   );

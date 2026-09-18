@@ -1,5 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
+import { useAuth } from "@/lib/auth-store";
 import {
   ArrowLeft,
   Copy,
@@ -43,7 +44,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -68,7 +75,14 @@ import {
   updatePaket,
   usePaketSoal,
 } from "@/lib/soal-store";
-import { JENIS_SOAL, TINGKAT, type JenisSoal, type PaketSoal, type Soal, type Tingkat } from "@/lib/soal-types";
+import {
+  JENIS_SOAL,
+  TINGKAT,
+  type JenisSoal,
+  type PaketSoal,
+  type Soal,
+  type Tingkat,
+} from "@/lib/soal-types";
 
 export const Route = createFileRoute("/soal")({
   head: () => ({
@@ -82,7 +96,8 @@ export const Route = createFileRoute("/soal")({
       { property: "og:title", content: "Bank Soal — GuruPro" },
       {
         property: "og:description",
-        content: "Buat soal manual atau dibantu AI, simpan ke bank soal, lalu terbitkan sebagai tugas.",
+        content:
+          "Buat soal manual atau dibantu AI, simpan ke bank soal, lalu terbitkan sebagai tugas.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -94,6 +109,7 @@ export const Route = createFileRoute("/soal")({
 type Mode = "bank" | "buat" | "review";
 
 function SoalPage() {
+  const { profile, ready } = useAuth();
   const moduls = useModuls();
   const generateAi = useServerFn(generateSoalAi);
   const reviseAi = useServerFn(reviseSoalAi);
@@ -141,6 +157,24 @@ function SoalPage() {
     );
   }, [pakets, query, statusFilter]);
 
+  if (ready && profile.role !== "guru") {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-md space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-foreground">Akses Khusus Guru</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Halaman Bank Soal hanya dapat diakses oleh akun Guru terdaftar.
+          </p>
+          <div className="pt-2 flex justify-center">
+            <Button asChild variant="outline">
+              <Link to="/">Kembali ke Dashboard</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const resetDraft = () => {
     setJudul("");
     setTopik("");
@@ -157,7 +191,9 @@ function SoalPage() {
     return [
       m.judul,
       m.ringkasan,
-      ...m.sections.map((sec) => `${sec.judul}\n${sec.poin.map((p) => `- ${p}`).join("\n")}\n${sec.isi}`),
+      ...m.sections.map(
+        (sec) => `${sec.judul}\n${sec.poin.map((p) => `- ${p}`).join("\n")}\n${sec.isi}`,
+      ),
     ]
       .filter(Boolean)
       .join("\n\n");
@@ -185,7 +221,13 @@ function SoalPage() {
       for (const h of hasil) {
         const key = h.pertanyaan.trim().toLowerCase();
         if (!key || unik.some((u) => u.pertanyaan.trim().toLowerCase() === key)) continue;
-        unik.push({ id: uid(), pertanyaan: h.pertanyaan, jenis: h.jenis, opsi: h.opsi, kunci: h.kunci });
+        unik.push({
+          id: uid(),
+          pertanyaan: h.pertanyaan,
+          jenis: h.jenis,
+          opsi: h.opsi,
+          kunci: h.kunci,
+        });
       }
       if (unik.length === 0) {
         toast.error("AI belum menghasilkan soal yang valid. Coba lagi.");
@@ -250,7 +292,9 @@ function SoalPage() {
       toast.error(error instanceof Error ? error.message : "Gagal menyimpan ke Bank Soal.");
       return;
     }
-    toast.success(status === "Terbit" ? "Soal berhasil diterbitkan." : "Soal disimpan ke Bank Soal.");
+    toast.success(
+      status === "Terbit" ? "Soal berhasil diterbitkan." : "Soal disimpan ke Bank Soal.",
+    );
     if (status === "Terbit") {
       resetDraft();
       setMode("bank");
@@ -551,7 +595,10 @@ function SoalPage() {
                             setDraftSoal((prev) =>
                               prev.map((x) =>
                                 x.id === s.id
-                                  ? { ...x, opsi: x.opsi.map((v, vi) => (vi === oi ? e.target.value : v)) }
+                                  ? {
+                                      ...x,
+                                      opsi: x.opsi.map((v, vi) => (vi === oi ? e.target.value : v)),
+                                    }
                                   : x,
                               ),
                             )
@@ -565,7 +612,9 @@ function SoalPage() {
                     <Input
                       value={s.kunci}
                       onChange={(e) =>
-                        setDraftSoal((prev) => prev.map((x) => (x.id === s.id ? { ...x, kunci: e.target.value } : x)))
+                        setDraftSoal((prev) =>
+                          prev.map((x) => (x.id === s.id ? { ...x, kunci: e.target.value } : x)),
+                        )
                       }
                     />
                   </div>
@@ -591,20 +640,29 @@ function SoalPage() {
           </Card>
         ))}
 
-        <Dialog open={aiTarget !== null} onOpenChange={(o) => !o && !aiLoading && setAiTarget(null)}>
-          <DialogContent className="w-[min(28rem,calc(100vw-2rem))]">
-            <DialogHeader>
-              <DialogTitle className="font-display text-navy">Edit Soal dengan AI</DialogTitle>
-              <DialogDescription>Pilih atau tulis instruksi revisi untuk soal ini.</DialogDescription>
+        <Dialog
+          open={aiTarget !== null}
+          onOpenChange={(o) => !o && !aiLoading && setAiTarget(null)}
+        >
+          <DialogContent className="max-h-[90dvh] w-[calc(100vw-2rem)] sm:max-w-md overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+            <DialogHeader className="min-w-0">
+              <DialogTitle className="font-display text-navy break-words">
+                Edit Soal dengan AI
+              </DialogTitle>
+              <DialogDescription className="break-words">
+                Pilih atau tulis instruksi revisi untuk soal ini.
+              </DialogDescription>
             </DialogHeader>
             {aiLoading ? (
-              <div className="grid place-items-center gap-3 py-10 text-center">
+              <div className="grid place-items-center gap-3 py-10 text-center min-w-0 px-2">
                 <Loader2 className="h-7 w-7 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">GuruPro AI sedang merevisi soal…</p>
+                <p className="text-sm text-muted-foreground break-words">
+                  GuruPro AI sedang merevisi soal…
+                </p>
               </div>
             ) : (
-              <div className="grid gap-3">
-                <div className="flex flex-wrap gap-2">
+              <div className="grid gap-3 min-w-0">
+                <div className="flex flex-wrap gap-2 min-w-0">
                   {INSTRUKSI_AI.map((i) => (
                     <Button
                       key={i}
@@ -621,15 +679,20 @@ function SoalPage() {
                   value={instruksi}
                   onChange={(e) => setInstruksi(e.target.value)}
                   placeholder="Misal: buat lebih sulit"
+                  className="min-w-0 max-w-full break-words"
                 />
               </div>
             )}
             {!aiLoading ? (
-              <DialogFooter>
-                <Button variant="ghost" onClick={() => setAiTarget(null)}>
+              <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 w-full pt-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => setAiTarget(null)}
+                  className="w-full sm:w-auto"
+                >
                   Batal
                 </Button>
-                <Button onClick={applyAiRevisi}>
+                <Button onClick={applyAiRevisi} className="w-full sm:w-auto">
                   <Sparkles className="h-4 w-4" />
                   Terapkan Revisi
                 </Button>
@@ -670,7 +733,10 @@ function SoalPage() {
             aria-label="Cari soal"
           />
         </div>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}
+        >
           <SelectTrigger className="sm:w-44">
             <SelectValue />
           </SelectTrigger>
@@ -764,7 +830,9 @@ function SoalPage() {
                     <TableRow key={p.id}>
                       <TableCell className="max-w-[18rem]">
                         <span className="block truncate font-medium">{p.judul}</span>
-                        <span className="block truncate text-xs text-muted-foreground">{p.topik}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {p.topik}
+                        </span>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {p.kelas.length ? p.kelas.join(", ") : "—"}
@@ -807,28 +875,37 @@ function SoalPage() {
       )}
 
       <Dialog open={terbitTarget !== null} onOpenChange={(o) => !o && setTerbitTarget(null)}>
-        <DialogContent className="w-[min(28rem,calc(100vw-2rem))]">
-          <DialogHeader>
-            <DialogTitle className="font-display text-navy">Terbitkan sebagai Tugas</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="max-h-[90dvh] w-[calc(100vw-2rem)] sm:max-w-md overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+          <DialogHeader className="min-w-0">
+            <DialogTitle className="font-display text-navy break-words">
+              Terbitkan sebagai Tugas
+            </DialogTitle>
+            <DialogDescription className="break-words">
               Pilih kelas tujuan untuk paket soal &ldquo;{terbitTarget?.judul}&rdquo;.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-2">
+          <div className="grid gap-2 min-w-0">
             {KELAS.map((k) => (
-              <label key={k} className="flex items-center gap-3 rounded-lg border p-3 text-sm">
+              <label
+                key={k}
+                className="flex items-center gap-3 rounded-lg border p-3 text-sm min-w-0"
+              >
                 <Checkbox
                   checked={kelasPilihan.includes(k)}
                   onCheckedChange={(v) =>
                     setKelasPilihan((prev) => (v ? [...prev, k] : prev.filter((x) => x !== k)))
                   }
                 />
-                {k}
+                <span className="truncate">{k}</span>
               </label>
             ))}
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setTerbitTarget(null)}>
+          <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 w-full pt-2">
+            <Button
+              variant="ghost"
+              onClick={() => setTerbitTarget(null)}
+              className="w-full sm:w-auto"
+            >
               Batal
             </Button>
             <Button
@@ -841,6 +918,7 @@ function SoalPage() {
                 setTerbitTarget(null);
                 toast.success("Soal diterbitkan sebagai tugas.");
               }}
+              className="w-full sm:w-auto"
             >
               <Send className="h-4 w-4" />
               Terbitkan

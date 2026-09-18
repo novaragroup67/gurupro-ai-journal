@@ -1,18 +1,21 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { logSystemEvent } from "@/lib/admin-store";
 
 export interface GuruProfile {
   id?: string;
   nama: string;
   email: string;
   nip: string;
+  nisn?: string;
   sekolah: string;
   mapel: string;
   kelas: string;
   telepon: string;
   bio: string;
-  role?: "guru" | "siswa" | string;
+  role?: "guru" | "siswa" | "admin" | string;
+  status_verifikasi?: "menunggu" | "terverifikasi" | "ditolak" | string;
 }
 
 export type UserProfile = GuruProfile;
@@ -24,9 +27,7 @@ export interface AuthState {
   profile: GuruProfile;
 }
 
-export type LoginResult =
-  | { ok: true }
-  | { ok: false; message: string };
+export type LoginResult = { ok: true } | { ok: false; message: string };
 
 export type RegisterGuruInput = {
   nama: string;
@@ -61,8 +62,9 @@ export const AUTH_PUBLIC_PATHS = [
 export function isAuthPublicPath(pathname: string) {
   const clean = pathname.replace(/\/+$/, "") || "/";
   return (
-    (AUTH_PUBLIC_PATHS as readonly string[]).includes(clean as (typeof AUTH_PUBLIC_PATHS)[number]) ||
-    clean.startsWith("/gabung/")
+    (AUTH_PUBLIC_PATHS as readonly string[]).includes(
+      clean as (typeof AUTH_PUBLIC_PATHS)[number],
+    ) || clean.startsWith("/gabung/")
   );
 }
 
@@ -71,12 +73,14 @@ export const DEFAULT_PROFILE: GuruProfile = {
   nama: "Pengguna GuruPro",
   email: "",
   nip: "",
+  nisn: "",
   sekolah: "",
   mapel: "",
   kelas: "",
   telepon: "",
   bio: "",
-  role: "guru",
+  role: "",
+  status_verifikasi: "terverifikasi",
 };
 
 const LOGGED_OUT: AuthState = {
@@ -103,6 +107,18 @@ function setState(next: Partial<AuthState>) {
   emit();
 }
 
+export function isGuru(profile: GuruProfile): boolean {
+  return profile?.role === "guru";
+}
+
+export function isSiswa(profile: GuruProfile): boolean {
+  return profile?.role === "siswa";
+}
+
+export function isAdmin(profile: GuruProfile): boolean {
+  return profile?.role === "admin";
+}
+
 async function fetchProfileForUser(user: User): Promise<GuruProfile> {
   try {
     const { data, error } = await supabase
@@ -115,33 +131,49 @@ async function fetchProfileForUser(user: User): Promise<GuruProfile> {
       console.warn("[Auth] Failed to load profile from DB:", error.message);
     }
 
+    // Fail-safe role validation: strictly from DB, never trust client user_metadata for role elevation
+    const rawRole = data?.role || "";
+    const validatedRole =
+      rawRole === "guru" || rawRole === "siswa" || rawRole === "admin" ? rawRole : "";
+
     if (data) {
+      const resolvedNisn =
+        data.nisn ||
+        (validatedRole === "siswa" ? data.nip : "") ||
+        "";
+      const resolvedNip =
+        validatedRole === "siswa" ? "" : data.nip || "";
+
       return {
         id: data.id,
-        nama: data.nama || (user.user_metadata?.nama as string) || "Guru",
+        nama: data.nama || "Pengguna",
         email: data.email || user.email || "",
-        nip: data.nip || "",
+        nip: resolvedNip,
+        nisn: resolvedNisn,
         sekolah: data.sekolah || "",
         mapel: data.mapel || "",
         kelas: data.kelas || "",
         telepon: data.telepon || "",
         bio: data.bio || "",
-        role: data.role || (user.user_metadata?.role as string) || "guru",
+        role: validatedRole,
+        status_verifikasi: data.status_verifikasi || (validatedRole === "guru" ? "menunggu" : "terverifikasi"),
       };
     }
 
-    // Fallback jika baris di tabel profiles belum ada
+    // Fallback jika baris di tabel profiles belum ada (tidak ada akses role guru/admin tanpa baris DB)
     return {
       id: user.id,
-      nama: (user.user_metadata?.nama as string) || user.email?.split("@")[0] || "Pengguna",
+      nama: user.email?.split("@")[0] || "Pengguna",
       email: user.email || "",
-      nip: (user.user_metadata?.nip as string) || "",
-      sekolah: (user.user_metadata?.sekolah as string) || "",
-      mapel: (user.user_metadata?.mapel as string) || "",
-      kelas: (user.user_metadata?.kelas as string) || "",
-      telepon: (user.user_metadata?.telepon as string) || "",
+      nip: "",
+      nisn: "",
+      sekolah: "",
+      mapel: "",
+      kelas: "",
+      telepon: "",
       bio: "",
-      role: (user.user_metadata?.role as string) || "guru",
+      role: "",
+      status_verifikasi: "menunggu",
     };
   } catch (err) {
     console.error("[Auth] Unexpected error fetching profile:", err);
@@ -150,12 +182,13 @@ async function fetchProfileForUser(user: User): Promise<GuruProfile> {
       nama: user.email?.split("@")[0] || "Pengguna",
       email: user.email || "",
       nip: "",
+      nisn: "",
       sekolah: "",
       mapel: "",
       kelas: "",
       telepon: "",
       bio: "",
-      role: "guru",
+      role: "",
     };
   }
 }
@@ -235,10 +268,16 @@ export async function login(
     });
 
     if (error) {
+      void logSystemEvent("auth_failure", "login_failed", error.message, {
+        email: email.trim().toLowerCase(),
+      });
       return { ok: false, message: error.message };
     }
 
     if (!data.user) {
+      void logSystemEvent("auth_failure", "user_not_found", "Pengguna tidak ditemukan.", {
+        email: email.trim().toLowerCase(),
+      });
       return { ok: false, message: "Pengguna tidak ditemukan." };
     }
 
@@ -253,6 +292,9 @@ export async function login(
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat masuk.";
+    void logSystemEvent("error", "login_exception", msg, {
+      email: email.trim().toLowerCase(),
+    });
     return { ok: false, message: msg };
   }
 }
@@ -310,12 +352,14 @@ export async function registerGuru(
         nama: input.nama.trim(),
         email,
         nip: input.nip.trim(),
+        nisn: "",
         sekolah: input.sekolah.trim(),
         mapel: input.mapel.trim(),
         kelas: "",
         telepon: input.telepon.trim(),
         bio: "",
         role: "guru",
+        status_verifikasi: "menunggu",
       },
       { onConflict: "id" },
     );
@@ -368,7 +412,8 @@ export async function registerSiswa(
         id: user.id,
         nama: input.nama.trim(),
         email,
-        nip: input.nisn.trim(), // NISN disimpan pada kolom nip
+        nip: "",
+        nisn: input.nisn.trim(),
         sekolah: input.sekolah.trim(),
         mapel: "Siswa",
         kelas: input.jenjang.trim(),
@@ -394,7 +439,9 @@ export async function updateProfile(
   patch: Partial<GuruProfile>,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   const current = get();
-  const nextProfile = { ...current.profile, ...patch };
+  // Strip privilege & identity fields to prevent client-side authorization escalation
+  const { role: _r, status_verifikasi: _s, id: _id, ...safePatch } = patch;
+  const nextProfile = { ...current.profile, ...safePatch };
   setState({ profile: nextProfile });
 
   if (!current.user) {
@@ -407,6 +454,7 @@ export async function updateProfile(
       .update({
         nama: nextProfile.nama,
         nip: nextProfile.nip,
+        nisn: nextProfile.nisn ?? "",
         sekolah: nextProfile.sekolah,
         mapel: nextProfile.mapel,
         kelas: nextProfile.kelas,
@@ -430,14 +478,11 @@ export async function requestPasswordReset(
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   try {
     const redirectUrl =
-      typeof window !== "undefined"
-        ? `${window.location.origin}/lupa-kata-sandi`
-        : undefined;
+      typeof window !== "undefined" ? `${window.location.origin}/lupa-kata-sandi` : undefined;
 
-    const { error } = await supabase.auth.resetPasswordForEmail(
-      email.trim().toLowerCase(),
-      { redirectTo: redirectUrl },
-    );
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: redirectUrl,
+    });
 
     if (error) {
       return { ok: false, message: error.message };
@@ -464,7 +509,8 @@ export async function completePasswordReset(
   }
 }
 
-export function initials(nama: string) {
+export function initials(nama: string | undefined | null) {
+  if (!nama || typeof nama !== "string") return "GP";
   return (
     nama
       .replace(/^(Bu|Pak|Bapak|Ibu)\s+/i, "")
@@ -476,7 +522,8 @@ export function initials(nama: string) {
   );
 }
 
-export function shortName(nama: string) {
+export function shortName(nama: string | undefined | null) {
+  if (!nama || typeof nama !== "string") return "Pengguna";
   const parts = nama.trim().split(/\s+/).filter(Boolean);
-  return parts.slice(0, 2).join(" ") || "Guru";
+  return parts.slice(0, 2).join(" ") || "Pengguna";
 }
