@@ -31,6 +31,39 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
   };
 }
 
+function createSupabaseAuthClient(supabaseUrl: string, supabaseKey: string) {
+  return createClient<Database>(supabaseUrl, supabaseKey, {
+    global: {
+      fetch: createSupabaseFetch(supabaseKey),
+    },
+    auth: {
+      storage: undefined,
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
+function createUserScopedSupabaseClient(
+  supabaseUrl: string,
+  supabaseKey: string,
+  accessToken: string,
+) {
+  return createClient<Database>(supabaseUrl, supabaseKey, {
+    accessToken: async () => accessToken,
+    global: {
+      fetch: createSupabaseFetch(supabaseKey),
+    },
+    auth: {
+      storage: undefined,
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
 export const requireSupabaseAuth = createMiddleware({ type: "function" }).server(
   async ({ next }) => {
     const SUPABASE_URL = process.env["SUPABASE_URL"];
@@ -71,34 +104,24 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
       throw new Error("Unauthorized: Invalid token");
     }
 
-    const supabase = createClient<Database>(SUPABASE_URL!, SUPABASE_PUBLISHABLE_KEY!, {
-      global: {
-        fetch: createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY!),
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-      auth: {
-        storage: undefined,
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
+    const authClient = createSupabaseAuthClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-    const { data, error } = await supabase.auth.getClaims(token);
-    if (error || !data?.claims) {
+    const { data, error } = await authClient.auth.getUser(token);
+    if (error || !data?.user) {
       throw new Error("Unauthorized: Invalid token");
     }
 
-    if (!data.claims.sub) {
+    if (!data.user.id) {
       throw new Error("Unauthorized: No user ID found in token");
     }
+
+    const supabase = createUserScopedSupabaseClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, token);
 
     return next({
       context: {
         supabase,
-        userId: data.claims.sub,
-        claims: data.claims,
+        userId: data.user.id,
+        user: data.user,
       },
     });
   },
@@ -117,7 +140,12 @@ export const requireGuruAuth = createMiddleware({ type: "function" })
       .eq("id", userId)
       .maybeSingle();
 
-    if (error || !profile) {
+    if (error) {
+      console.error("[Supabase] Failed to load profile for authenticated request:", error.message);
+      throw new Error("Unauthorized: Gagal memuat profil pengguna.");
+    }
+
+    if (!profile) {
       throw new Error("Unauthorized: Profil pengguna tidak ditemukan.");
     }
 

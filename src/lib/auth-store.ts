@@ -383,7 +383,6 @@ export async function registerGuru(
   try {
     const email = input.email.trim().toLowerCase();
 
-    // 1. Buat user di Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password: input.password,
@@ -408,29 +407,6 @@ export async function registerGuru(
       return { ok: false, message: "Gagal membuat akun." };
     }
 
-    // 2. Simpan profil di tabel profiles (menggunakan user.id, tanpa password)
-    const { error: profileError } = await supabase.from("profiles").upsert(
-      {
-        id: user.id,
-        nama: input.nama.trim(),
-        email,
-        nip: input.nip.trim(),
-        nisn: "",
-        sekolah: input.sekolah.trim(),
-        mapel: input.mapel.trim(),
-        kelas: "",
-        telepon: input.telepon.trim(),
-        bio: "",
-        role: "guru",
-        status_verifikasi: "menunggu",
-      },
-      { onConflict: "id" },
-    );
-
-    if (profileError) {
-      console.warn("[Auth] Failed to insert profile row:", profileError.message);
-    }
-
     return { ok: true, user };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat mendaftar.";
@@ -444,7 +420,6 @@ export async function registerSiswa(
   try {
     const email = input.email.trim().toLowerCase();
 
-    // 1. Buat user di Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password: input.password,
@@ -467,28 +442,6 @@ export async function registerSiswa(
     const user = authData.user;
     if (!user) {
       return { ok: false, message: "Gagal membuat akun siswa." };
-    }
-
-    // 2. Simpan profil di tabel profiles (menggunakan user.id, tanpa password)
-    const { error: profileError } = await supabase.from("profiles").upsert(
-      {
-        id: user.id,
-        nama: input.nama.trim(),
-        email,
-        nip: "",
-        nisn: input.nisn.trim(),
-        sekolah: input.sekolah.trim(),
-        mapel: "Siswa",
-        kelas: input.jenjang.trim(),
-        telepon: (input.telepon ?? "").trim(),
-        bio: "",
-        role: "siswa",
-      },
-      { onConflict: "id" },
-    );
-
-    if (profileError) {
-      console.warn("[Auth] Failed to insert student profile row:", profileError.message);
     }
 
     return { ok: true, user };

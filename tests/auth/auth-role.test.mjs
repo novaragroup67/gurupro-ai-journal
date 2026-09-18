@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 
 console.log("======================================================");
 console.log("  GURUPRO TEST SUITE: AUTHENTICATION & ROLE FAIL-SAFE ");
@@ -167,5 +169,35 @@ let passed = 0;
   passed++;
 }
 
-console.log(`\nAUTH & ROLE TESTS COMPLETE: ${passed}/10 PASSED\n`);
+// Test 11: Server auth client must bind Supabase data requests to user token
+{
+  const source = fs.readFileSync(
+    path.resolve(process.cwd(), "src/integrations/supabase/auth-middleware.ts"),
+    "utf-8",
+  );
+
+  assert.match(source, /accessToken:\s*async\s*\(\)\s*=>\s*accessToken/);
+  assert.match(source, /auth\.getUser\(token\)/);
+  assert.match(source, /Gagal memuat profil pengguna/);
+  console.log("  [PASS] 11. Server Supabase client is explicitly scoped to incoming user token");
+  passed++;
+}
+
+// Test 12: Registration relies on handle_new_user trigger, not post-signup profile upsert
+{
+  const source = fs.readFileSync(
+    path.resolve(process.cwd(), "src/lib/auth-store.ts"),
+    "utf-8",
+  );
+
+  assert.equal(
+    source.includes('.from("profiles").upsert'),
+    false,
+    "Registration must not client-upsert profiles after signUp",
+  );
+  console.log("  [PASS] 12. Registration no longer performs client-side profile upsert");
+  passed++;
+}
+
+console.log(`\nAUTH & ROLE TESTS COMPLETE: ${passed}/12 PASSED\n`);
 
