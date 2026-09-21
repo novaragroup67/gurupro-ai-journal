@@ -150,7 +150,7 @@ function ModulAjarPage() {
       />
 
       <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-center">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as TabValue)} className="w-full lg:w-auto">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as TabValue)}>
           <TabsList className="w-full justify-start overflow-x-auto lg:w-auto">
             <TabsTrigger value="semua">Semua</TabsTrigger>
             <TabsTrigger value="draft">Draft</TabsTrigger>
@@ -387,4 +387,146 @@ function SiswaModulAjarView() {
 
         {/* Bagian-Bagian Pembelajaran */}
         <div className="space-y-6">
-          {activeModul.sections.map((sec, idx) => (\n            <Card key={sec.id || idx} className=\"overflow-hidden\">\n              <CardContent className=\"p-5 sm:p-6 space-y-4\">\n                <h3 className=\"font-display text-lg font-semibold text-navy\">\n                  {idx + 1}. {sec.judul}\n                </h3>\n                {sec.poin && sec.poin.length > 0 && (\n                  <ul className=\"list-disc pl-5 text-sm space-y-1 text-muted-foreground\">\n                    {sec.poin.map((p, pIdx) => (\n                      <li key={pIdx}>{p}</li>\n                    ))}\n                  </ul>\n                )}\n                {sec.isi && (\n                  <div className=\"prose prose-sm max-w-none text-foreground leading-relaxed whitespace-pre-wrap\">\n                    {sec.isi}\n                  </div>\n                )}\n                {sec.ilustrasi && (\n                  <div className=\"rounded-lg overflow-hidden border\">\n                    <img\n                      src={sec.ilustrasi}\n                      alt={sec.judul}\n                      className=\"max-h-80 w-full object-cover\"\n                    />\n                  </div>\n                )}\n              </CardContent>\n            </Card>\n          ))}\n        </div>\n\n        {/* Slide Ringkas */}\n        {activeModul.slides && activeModul.slides.length > 0 && (\n          <div className=\"space-y-4 pt-4 border-t\">\n            <h2 className=\"font-display text-lg font-semibold text-navy\">\n              Slide Materi Ringkas\n            </h2>\n            <div className=\"grid gap-4 sm:grid-cols-2\">\n              {activeModul.slides.map((s, idx) => (\n                <div\n                  key={s.id || idx}\n                  className=\"rounded-xl border p-4 bg-card shadow-xs space-y-2\"\n                >\n                  <span className=\"text-xs font-bold text-primary\">Slide {idx + 1}</span>\n                  <h4 className=\"font-semibold text-sm text-navy\">{s.judul}</h4>\n                  <ul className=\"list-disc pl-4 text-xs space-y-1 text-muted-foreground\">\n                    {s.bullets.map((b, bIdx) => (\n                      <li key={bIdx}>{b}</li>\n                    ))}\n                  </ul>\n                </div>\n              ))}\n            </div>\n          </div>\n        )}\n\n        <div className=\"flex justify-center pt-4\">\n          <Button variant=\"outline\" onClick={() => setActiveModul(null)} className=\"gap-2\">\n            <ArrowLeft className=\"h-4 w-4\" />\n            Kembali ke Daftar Modul\n          </Button>\n        </div>\n      </div>\n    );\n  }\n\n  return (\n    <div className=\"grid gap-6\">\n      <PageHeader\n        title=\"Modul Pembelajaran Siswa 📚\"\n        subtitle=\"Pelajari modul ajar dan materi pembelajaran yang diterbitkan oleh bapak/ibu guru untuk kelasmu.\"\n      />\n\n      <div className=\"flex items-center gap-3\">\n        <div className=\"relative flex-1\">\n          <Search className=\"absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground\" />\n          <Input\n            placeholder=\"Cari judul modul, mata pelajaran, atau kelas…\"\n            value={query}\n            onChange={(e) => setQuery(e.target.value)}\n            className=\"pl-9\"\n          />\n        </div>\n      </div>\n\n      {loading ? (\n        <div className=\"py-16 text-center text-sm text-muted-foreground\">\n          Memuat modul pembelajaran…\n        </div>\n      ) : filtered.length === 0 ? (\n        <Card className=\"p-12 text-center\">\n          <BookOpen className=\"mx-auto h-12 w-12 text-muted-foreground/30\" />\n          <h3 className=\"mt-3 font-display text-base font-semibold text-navy\">\n            {query\n              ? \"Tidak ada modul yang cocok dengan pencarian\"\n              : \"Belum Ada Modul Ajar Terbit\"}\n          </h3>\n          <p className=\"mt-1 text-xs text-muted-foreground max-w-md mx-auto\">\n            {query\n              ? \"Coba gunakan kata kunci lain untuk mencari materi modul.\"\n              : \"Bapak/ibu guru belum menerbitkan modul ajar untuk kelas yang kamu ikuti. Periksa kembali nanti.\"}\n          </p>\n        </Card>\n      ) : (\n        <div className=\"grid gap-4 sm:grid-cols-2 lg:grid-cols-3\">\n          {filtered.map((m) => (\n            <Card\n              key={m.id}\n              className=\"flex flex-col justify-between transition-shadow hover:shadow-lift\"\n            >\n              <CardContent className=\"p-5 space-y-3\">\n                <div className=\"flex items-center justify-between text-xs\">\n                  <Badge variant=\"outline\" className=\"font-semibold text-primary\">\n                    {m.mapel}\n                  </Badge>\n                  <span className=\"text-muted-foreground\">{m.kelas}</span>\n                </div>\n                <div>\n                  <h3 className=\"font-display font-semibold text-navy line-clamp-2\">{m.judul}</h3>\n                  <p className=\"mt-1 text-xs text-muted-foreground line-clamp-3\">\n                    {m.ringkasan || \"Klik tombol baca modul untuk melihat rangkuman materi lengkap.\"}\n                  </p>\n                </div>\n                <div className=\"pt-2 flex items-center justify-between border-t text-[11px] text-muted-foreground\">\n                  <span>{formatTanggal(m.updatedAt)}</span>\n                  <Button\n                    size=\"sm\"\n                    onClick={() => setActiveModul(m)}\n                    className=\"gap-1.5 h-8 text-xs font-medium\"\n                  >\n                    <Eye className=\"h-3.5 w-3.5\" />\n                    Baca Modul\n                  </Button>\n                </div>\n              </CardContent>\n            </Card>\n          ))}\n        </div>\n      )}\n    </div>\n  );\n}\n
+          {activeModul.sections.map((sec, idx) => (
+            <Card key={sec.id || idx} className="overflow-hidden">
+              <CardContent className="p-5 sm:p-6 space-y-4">
+                <h3 className="font-display text-lg font-semibold text-navy">
+                  {idx + 1}. {sec.judul}
+                </h3>
+                {sec.poin && sec.poin.length > 0 && (
+                  <ul className="list-disc pl-5 text-sm space-y-1 text-muted-foreground">
+                    {sec.poin.map((p, pIdx) => (
+                      <li key={pIdx}>{p}</li>
+                    ))}
+                  </ul>
+                )}
+                {sec.isi && (
+                  <div className="prose prose-sm max-w-none text-foreground leading-relaxed whitespace-pre-wrap">
+                    {sec.isi}
+                  </div>
+                )}
+                {sec.ilustrasi && (
+                  <div className="rounded-lg overflow-hidden border">
+                    <img
+                      src={sec.ilustrasi}
+                      alt={sec.judul}
+                      className="max-h-80 w-full object-cover"
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Slide Ringkas */}
+        {activeModul.slides && activeModul.slides.length > 0 && (
+          <div className="space-y-4 pt-4 border-t">
+            <h2 className="font-display text-lg font-semibold text-navy">
+              Slide Materi Ringkas
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {activeModul.slides.map((s, idx) => (
+                <div
+                  key={s.id || idx}
+                  className="rounded-xl border p-4 bg-card shadow-xs space-y-2"
+                >
+                  <span className="text-xs font-bold text-primary">Slide {idx + 1}</span>
+                  <h4 className="font-semibold text-sm text-navy">{s.judul}</h4>
+                  <ul className="list-disc pl-4 text-xs space-y-1 text-muted-foreground">
+                    {s.bullets.map((b, bIdx) => (
+                      <li key={bIdx}>{b}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-center pt-4">
+          <Button variant="outline" onClick={() => setActiveModul(null)} className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Kembali ke Daftar Modul
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-6">
+      <PageHeader
+        title="Modul Pembelajaran Siswa 📚"
+        subtitle="Pelajari modul ajar dan materi pembelajaran yang diterbitkan oleh bapak/ibu guru untuk kelasmu."
+      />
+
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Cari judul modul, mata pelajaran, atau kelas…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="py-16 text-center text-sm text-muted-foreground">
+          Memuat modul pembelajaran…
+        </div>
+      ) : filtered.length === 0 ? (
+        <Card className="p-12 text-center">
+          <BookOpen className="mx-auto h-12 w-12 text-muted-foreground/30" />
+          <h3 className="mt-3 font-display text-base font-semibold text-navy">
+            {query
+              ? "Tidak ada modul yang cocok dengan pencarian"
+              : "Belum Ada Modul Ajar Terbit"}
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
+            {query
+              ? "Coba gunakan kata kunci lain untuk mencari materi modul."
+              : "Bapak/ibu guru belum menerbitkan modul ajar untuk kelas yang kamu ikuti. Periksa kembali nanti."}
+          </p>
+        </Card>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((m) => (
+            <Card
+              key={m.id}
+              className="flex flex-col justify-between transition-shadow hover:shadow-lift"
+            >
+              <CardContent className="p-5 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <Badge variant="outline" className="font-semibold text-primary">
+                    {m.mapel}
+                  </Badge>
+                  <span className="text-muted-foreground">{m.kelas}</span>
+                </div>
+                <div>
+                  <h3 className="font-display font-semibold text-navy line-clamp-2">{m.judul}</h3>
+                  <p className="mt-1 text-xs text-muted-foreground line-clamp-3">
+                    {m.ringkasan || "Klik tombol baca modul untuk melihat rangkuman materi lengkap."}
+                  </p>
+                </div>
+                <div className="pt-2 flex items-center justify-between border-t text-[11px] text-muted-foreground">
+                  <span>{formatTanggal(m.updatedAt)}</span>
+                  <Button
+                    size="sm"
+                    onClick={() => setActiveModul(m)}
+                    className="gap-1.5 h-8 text-xs font-medium"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    Baca Modul
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
