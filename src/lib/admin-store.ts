@@ -168,8 +168,8 @@ export async function getTeachersList(): Promise<TeacherAdminItem[]> {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.warn("[AdminStore] Gagal memuat daftar guru:", error.message);
-      return [];
+      console.error("[AdminStore] Gagal memuat daftar guru dari Supabase:", error.message);
+      throw new Error(`Gagal memuat daftar guru dari database: ${error.message}`);
     }
 
     return (data || []).map((row) => ({
@@ -185,7 +185,7 @@ export async function getTeachersList(): Promise<TeacherAdminItem[]> {
     }));
   } catch (err) {
     console.error("[AdminStore] Error getTeachersList:", err);
-    return [];
+    throw err;
   }
 }
 
@@ -225,8 +225,8 @@ export async function getSystemLogs(limit = 30): Promise<SystemLogItem[]> {
       .limit(limit);
 
     if (error) {
-      console.warn("[AdminStore] Gagal memuat system_logs:", error.message);
-      return [];
+      console.error("[AdminStore] Gagal memuat system_logs dari Supabase:", error.message);
+      throw new Error(`Gagal memuat log sistem dari database: ${error.message}`);
     }
 
     return (data || []).map((row) => ({
@@ -239,6 +239,6 @@ export async function getSystemLogs(limit = 30): Promise<SystemLogItem[]> {
     }));
   } catch (err) {
     console.error("[AdminStore] Error getSystemLogs:", err);
-    return [];
+    throw err;
   }
 }
