@@ -11,7 +11,7 @@ import {
   Target,
   Type,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -34,8 +34,12 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { generateModulAi } from "@/lib/ai.functions";
+import { supabase } from "@/integrations/supabase/client";
+import { isRecoverableAuthError, withAuthRetry } from "@/integrations/supabase/auth-token";
+import { useAuth } from "@/lib/auth-store";
 import { uid } from "@/lib/cloud-store";
-import { KELAS, MAPEL, SUMBER_TIPE, type Modul, type SumberTipe } from "@/lib/modul-types";
+import { useKelas } from "@/lib/kelas-store";
+import { MAPEL, SUMBER_TIPE, type Modul, type SumberTipe } from "@/lib/modul-types";
 import { analisisSumberUrl, type SumberPreview } from "@/lib/sumber.functions";
 
 const ICONS: Record<SumberTipe, typeof Target> = {
@@ -61,8 +65,24 @@ export function ModulGeneratorDialog({
   onOpenChange: (open: boolean) => void;
   onGenerated: (draft: Omit<Modul, "id" | "createdAt" | "updatedAt">) => void | Promise<void>;
 }) {
+  const { profile, user } = useAuth();
+  const { kelasList } = useKelas();
   const analisis = useServerFn(analisisSumberUrl);
   const generate = useServerFn(generateModulAi);
+
+  const myKelasList = useMemo(() => {
+    return kelasList.filter((k) => k.guruId === user?.id || k.guruId === profile?.id);
+  }, [kelasList, user?.id, profile?.id]);
+
+  const mapelOptions = useMemo(() => {
+    const options = new Set<string>();
+    if (profile?.mapel?.trim()) options.add(profile.mapel.trim());
+    myKelasList.forEach((k) => {
+      if (k.mapel?.trim()) options.add(k.mapel.trim());
+    });
+    MAPEL.forEach((m) => options.add(m));
+    return Array.from(options);
+  }, [profile?.mapel, myKelasList]);
 
   const [sumberTipe, setSumberTipe] = useState<SumberTipe>("Link Luar");
   const [sumberInput, setSumberInput] = useState("");
@@ -74,6 +94,17 @@ export function ModulGeneratorDialog({
   const [sumberError, setSumberError] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      if (profile?.mapel && !mapel) {
+        setMapel(profile.mapel);
+      }
+      if (myKelasList.length > 0 && !kelas) {
+        setKelas(`${myKelasList[0].tingkat} ${myKelasList[0].namaKelas}`);
+      }
+    }
+  }, [open, profile?.mapel, myKelasList, mapel, kelas]);
 
   const reset = () => {
     setPreview(null);
@@ -97,12 +128,18 @@ export function ModulGeneratorDialog({
     setSumberError("");
     setPreview(null);
     try {
-      const hasil = await analisis({ data: { url: sumberInput.trim() } });
+      const hasil = await withAuthRetry(
+        () => supabase.auth.refreshSession(),
+        () => analisis({ data: { url: sumberInput.trim() } }),
+      );
       setPreview(hasil);
       if (!topik.trim()) setTopik(hasil.judul);
       toast.success("Isi sumber berhasil dibaca.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Sumber tidak dapat diakses.";
+      const raw = error instanceof Error ? error.message : "Sumber tidak dapat diakses.";
+      const message = isRecoverableAuthError(error)
+        ? "Sesi login tidak valid atau kedaluwarsa. Keluar lalu masuk kembali, kemudian analisis sumber lagi."
+        : raw;
       setSumberError(message);
       toast.error(message);
     } finally {
@@ -127,16 +164,20 @@ export function ModulGeneratorDialog({
 
     setLoading(true);
     try {
-      const hasil = await generate({
-        data: {
-          sumberTipe,
-          konten,
-          topik: topik.trim(),
-          mapel,
-          kelas,
-          ...(preview ? { sumberJudul: preview.judul, sumberUrl: preview.url } : {}),
-        },
-      });
+      const hasil = await withAuthRetry(
+        () => supabase.auth.refreshSession(),
+        () =>
+          generate({
+            data: {
+              sumberTipe,
+              konten,
+              topik: topik.trim(),
+              mapel,
+              kelas,
+              ...(preview ? { sumberJudul: preview.judul, sumberUrl: preview.url } : {}),
+            },
+          }),
+      );
 
       const sections = hasil.sections.map((s) => ({
         id: uid(),
@@ -178,7 +219,11 @@ export function ModulGeneratorDialog({
       reset();
       onOpenChange(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "AI gagal menyusun modul.");
+      const raw = error instanceof Error ? error.message : "AI gagal menyusun modul.";
+      const message = isRecoverableAuthError(error)
+        ? "Sesi login tidak valid atau kedaluwarsa. Keluar lalu masuk kembali, kemudian coba generate ulang."
+        : raw;
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -282,6 +327,20 @@ export function ModulGeneratorDialog({
                       <p className="mt-0.5 text-xs break-words [overflow-wrap:anywhere]">
                         {sumberError}
                       </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => {
+                            setSumberTipe("Teks");
+                            setSumberError("");
+                          }}
+                        >
+                          Beralih ke Input Teks
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ) : null}
@@ -366,10 +425,10 @@ export function ModulGeneratorDialog({
                 <Label>Mata Pelajaran</Label>
                 <Select value={mapel} onValueChange={setMapel}>
                   <SelectTrigger className="min-w-0 w-full">
-                    <SelectValue placeholder="Pilih" />
+                    <SelectValue placeholder="Pilih Mapel" />
                   </SelectTrigger>
                   <SelectContent>
-                    {MAPEL.map((m) => (
+                    {mapelOptions.map((m) => (
                       <SelectItem key={m} value={m}>
                         {m}
                       </SelectItem>
@@ -381,14 +440,29 @@ export function ModulGeneratorDialog({
                 <Label>Kelas</Label>
                 <Select value={kelas} onValueChange={setKelas}>
                   <SelectTrigger className="min-w-0 w-full">
-                    <SelectValue placeholder="Pilih" />
+                    <SelectValue
+                      placeholder={
+                        myKelasList.length === 0
+                          ? "Belum ada kelas (buat di Kelas Saya)"
+                          : "Pilih Kelas"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {KELAS.map((k) => (
-                      <SelectItem key={k} value={k}>
-                        {k}
-                      </SelectItem>
-                    ))}
+                    {myKelasList.length > 0 ? (
+                      myKelasList.map((k) => {
+                        const val = `${k.tingkat} ${k.namaKelas}`;
+                        return (
+                          <SelectItem key={k.id} value={val}>
+                            {val} {k.mapel ? `(${k.mapel})` : ""}
+                          </SelectItem>
+                        );
+                      })
+                    ) : (
+                      <div className="p-2 text-xs text-muted-foreground text-center">
+                        Belum ada kelas aktif. Buat kelas terlebih dahulu di menu <strong>Kelas Saya</strong>.
+                      </div>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
