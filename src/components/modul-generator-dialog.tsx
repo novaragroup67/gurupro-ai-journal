@@ -163,8 +163,9 @@ export function ModulGeneratorDialog({
     }
 
     setLoading(true);
+    let hasil: any = null;
     try {
-      const hasil = await withAuthRetry(
+      hasil = await withAuthRetry(
         () => supabase.auth.refreshSession(),
         () =>
           generate({
@@ -178,8 +179,19 @@ export function ModulGeneratorDialog({
             },
           }),
       );
+    } catch (error) {
+      const raw = error instanceof Error ? error.message : "AI gagal menyusun modul.";
+      const message = isRecoverableAuthError(error)
+        ? "Sesi login tidak valid atau kedaluwarsa. Keluar lalu masuk kembali, kemudian coba generate ulang."
+        : raw;
+      toast.error(message);
+      setLoading(false);
+      return;
+    }
 
-      const sections = hasil.sections.map((s) => ({
+    // Proses hasil AI dan simpan modul secara terpisah
+    try {
+      const sections = (hasil.sections || []).map((s: any) => ({
         id: uid(),
         judul: s.judul,
         poin: s.poin,
@@ -191,7 +203,7 @@ export function ModulGeneratorDialog({
 
       const ringkasan = [
         hasil.ringkasan,
-        hasil.tujuan.length ? `Tujuan pembelajaran: ${hasil.tujuan.join("; ")}.` : "",
+        hasil.tujuan?.length ? `Tujuan pembelajaran: ${hasil.tujuan.join("; ")}.` : "",
         hasil.catatanKeterbatasan ? `Catatan sumber: ${hasil.catatanKeterbatasan}` : "",
       ]
         .filter(Boolean)
@@ -218,12 +230,10 @@ export function ModulGeneratorDialog({
       toast.success("Modul berhasil disusun dari isi sumber.");
       reset();
       onOpenChange(false);
-    } catch (error) {
-      const raw = error instanceof Error ? error.message : "AI gagal menyusun modul.";
-      const message = isRecoverableAuthError(error)
-        ? "Sesi login tidak valid atau kedaluwarsa. Keluar lalu masuk kembali, kemudian coba generate ulang."
-        : raw;
-      toast.error(message);
+    } catch (saveError) {
+      const msg = saveError instanceof Error ? saveError.message : "Gagal menyimpan modul hasil AI.";
+      console.error("[ModulGenerator] Error saving generated modul:", saveError);
+      toast.error(`Modul selesai disusun AI, namun gagal disimpan: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -241,256 +251,256 @@ export function ModulGeneratorDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {loading ? (
-          <div className="grid place-items-center gap-3 py-14 text-center min-w-0 px-2">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="font-display font-semibold text-navy">
-              GuruPro AI sedang menyusun modul…
-            </p>
-            <p className="max-w-sm text-sm text-muted-foreground break-words">
-              Menyusun tujuan pembelajaran, bab, poin kunci, penjelasan, dan kesimpulan dari isi
-              sumber.
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-4 min-w-0">
-            <div className="grid gap-2 min-w-0">
-              <Label>Jenis Sumber</Label>
-              <div className="grid gap-2 sm:grid-cols-2 min-w-0">
-                {SUMBER_TIPE.map((tipe) => {
-                  const Icon = ICONS[tipe];
-                  const active = sumberTipe === tipe;
-                  return (
-                    <button
-                      key={tipe}
-                      type="button"
-                      onClick={() => {
-                        setSumberTipe(tipe);
-                        reset();
-                      }}
-                      className={`flex items-center gap-2 rounded-xl border p-3 text-left text-sm transition-colors min-w-0 ${
-                        active ? "border-primary bg-primary-soft text-primary" : "hover:bg-muted/60"
-                      }`}
-                    >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      <span className="truncate font-medium min-w-0">{tipe}</span>
-                      {tipe === "Link Luar" ? (
-                        <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase text-accent-foreground">
-                          utama
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {sumberTipe === "Link Luar" ? (
-              <div className="grid gap-3 min-w-0">
-                <div className="grid gap-2 min-w-0">
-                  <Label htmlFor="sumber">Link Sumber Materi</Label>
-                  <div className="flex flex-col gap-2 sm:flex-row min-w-0">
-                    <Input
-                      id="sumber"
-                      value={sumberInput}
-                      onChange={(e) => {
-                        setSumberInput(e.target.value);
-                        reset();
-                      }}
-                      placeholder={PLACEHOLDER["Link Luar"]}
-                      className="min-w-0 flex-1"
-                    />
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={handleAnalisis}
-                      disabled={analyzing}
-                      className="shrink-0 w-full sm:w-auto"
-                    >
-                      {analyzing ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : preview ? (
-                        <RefreshCw className="h-4 w-4" />
-                      ) : (
-                        <Search className="h-4 w-4" />
-                      )}
-                      {analyzing ? "Membaca…" : preview ? "Baca Ulang" : "Analisis Sumber"}
-                    </Button>
-                  </div>
-                </div>
-
-                {sumberError ? (
-                  <div className="flex gap-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive min-w-0 overflow-hidden">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium">Sumber tidak dapat dibaca</p>
-                      <p className="mt-0.5 text-xs break-words [overflow-wrap:anywhere]">
-                        {sumberError}
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => {
-                            setSumberTipe("Teks");
-                            setSumberError("");
-                          }}
-                        >
-                          Beralih ke Input Teks
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-
-                {preview ? (
-                  <div className="grid gap-2 rounded-xl border bg-muted/40 p-3 min-w-0 max-w-full overflow-hidden">
-                    <div className="flex items-start gap-2 min-w-0">
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-display text-sm font-semibold text-navy break-words">
-                          {preview.judul}
-                        </p>
-                        <p className="text-xs text-muted-foreground break-all truncate">
-                          {preview.url}
-                        </p>
-                        <p className="mt-0.5 text-xs text-muted-foreground break-words">
-                          {preview.situs} · {preview.jumlahKata.toLocaleString("id-ID")} kata
-                          terbaca
-                          {preview.cukup ? "" : " · isi terbatas"}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="max-h-40 overflow-y-auto overflow-x-hidden whitespace-pre-line break-words [overflow-wrap:anywhere] rounded-lg bg-background p-2 text-xs leading-relaxed text-muted-foreground max-w-full">
-                      {preview.konten.slice(0, 1200)}
-                      {preview.konten.length > 1200 ? "…" : ""}
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <div className="grid gap-2 min-w-0">
-                <Label htmlFor="sumber">{sumberTipe}</Label>
-                {sumberTipe === "eBook / Dokumen" ? (
-                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed p-3 text-sm text-muted-foreground hover:bg-muted/50 min-w-0">
-                    <FileUp className="h-4 w-4 shrink-0" />
-                    <span className="truncate">
-                      {fileName || "Tandai nama file eBook (isi materi tetap ditempel di bawah)"}
-                    </span>
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept=".pdf,.doc,.docx,.txt"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) {
-                          setFileName(f.name);
-                          toast.info(
-                            "Tempel bagian isi dokumen di bawah agar AI berdasar isi aslinya.",
-                          );
-                        }
-                      }}
-                    />
-                  </label>
-                ) : null}
-                <Textarea
-                  id="sumber"
-                  rows={6}
-                  value={sumberInput}
-                  onChange={(e) => setSumberInput(e.target.value)}
-                  placeholder={PLACEHOLDER[sumberTipe]}
-                  className="min-w-0 max-w-full break-words"
-                />
-                <p className="text-xs text-muted-foreground break-words">
-                  Isi yang ditempel menjadi satu-satunya rujukan AI, jadi tempel materi selengkap
-                  mungkin.
-                </p>
-              </div>
-            )}
-
-            <div className="grid gap-4 sm:grid-cols-3 min-w-0">
-              <div className="grid gap-2 sm:col-span-3 min-w-0">
-                <Label htmlFor="topik">Topik / Materi</Label>
-                <Input
-                  id="topik"
-                  value={topik}
-                  onChange={(e) => setTopik(e.target.value)}
-                  placeholder="Misal: Sistem Persamaan Linear"
-                  className="min-w-0"
-                />
-              </div>
-              <div className="grid gap-2 min-w-0">
-                <Label>Mata Pelajaran</Label>
-                <Select value={mapel} onValueChange={setMapel}>
-                  <SelectTrigger className="min-w-0 w-full">
-                    <SelectValue placeholder="Pilih Mapel" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {mapelOptions.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {m}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2 min-w-0">
-                <Label>Kelas</Label>
-                <Select value={kelas} onValueChange={setKelas}>
-                  <SelectTrigger className="min-w-0 w-full">
-                    <SelectValue
-                      placeholder={
-                        myKelasList.length === 0
-                          ? "Belum ada kelas (buat di Kelas Saya)"
-                          : "Pilih Kelas"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {myKelasList.length > 0 ? (
-                      myKelasList.map((k) => {
-                        const val = `${k.tingkat} ${k.namaKelas}`;
-                        return (
-                          <SelectItem key={k.id} value={val}>
-                            {val} {k.mapel ? `(${k.mapel})` : ""}
-                          </SelectItem>
-                        );
-                      })
-                    ) : (
-                      <div className="p-2 text-xs text-muted-foreground text-center">
-                        Belum ada kelas aktif. Buat kelas terlebih dahulu di menu <strong>Kelas Saya</strong>.
-                      </div>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {!loading ? (
-          <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-2 w-full pt-2">
-            <Button
-              variant="ghost"
-              onClick={() => close(false)}
-              disabled={busy}
-              className="w-full sm:w-auto"
-            >
-              Batal
-            </Button>
-            <Button
-              onClick={handleGenerate}
-              disabled={busy || (sumberTipe === "Link Luar" && !preview)}
-              className="w-full sm:w-auto"
-            >
-              <Sparkles className="h-4 w-4" />
-              Generate Modul dengan AI
-            </Button>
-          </DialogFooter>
-        ) : null}
-      </DialogContent>
-    </Dialog>
-  );
+        {loading ? (\r
+          <div className="grid place-items-center gap-3 py-14 text-center min-w-0 px-2">\r
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />\r
+            <p className="font-display font-semibold text-navy">\r
+              GuruPro AI sedang menyusun modul…\r
+            </p>\r
+            <p className="max-w-sm text-sm text-muted-foreground break-words">\r
+              Menyusun tujuan pembelajaran, bab, poin kunci, penjelasan, dan kesimpulan dari isi\r
+              sumber.\r
+            </p>\r
+          </div>\r
+        ) : (\r
+          <div className="grid gap-4 min-w-0">\r
+            <div className="grid gap-2 min-w-0">\r
+              <Label>Jenis Sumber</Label>\r
+              <div className="grid gap-2 sm:grid-cols-2 min-w-0">\r
+                {SUMBER_TIPE.map((tipe) => {\r
+                  const Icon = ICONS[tipe];\r
+                  const active = sumberTipe === tipe;\r
+                  return (\r
+                    <button\r
+                      key={tipe}\r
+                      type="button"\r
+                      onClick={() => {\r
+                        setSumberTipe(tipe);\r
+                        reset();\r
+                      }}\r
+                      className={`flex items-center gap-2 rounded-xl border p-3 text-left text-sm transition-colors min-w-0 ${\r
+                        active ? "border-primary bg-primary-soft text-primary" : "hover:bg-muted/60"\r
+                      }`}\r
+                    >\r
+                      <Icon className="h-4 w-4 shrink-0" />\r
+                      <span className="truncate font-medium min-w-0">{tipe}</span>\r
+                      {tipe === "Link Luar" ? (\r
+                        <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase text-accent-foreground">\r
+                          utama\r
+                        </span>\r
+                      ) : null}\r
+                    </button>\r
+                  );\r
+                })}\r
+              </div>\r
+            </div>\r
+\r
+            {sumberTipe === "Link Luar" ? (\r
+              <div className="grid gap-3 min-w-0">\r
+                <div className="grid gap-2 min-w-0">\r
+                  <Label htmlFor="sumber">Link Sumber Materi</Label>\r
+                  <div className="flex flex-col gap-2 sm:flex-row min-w-0">\r
+                    <Input\r
+                      id="sumber"\r
+                      value={sumberInput}\r
+                      onChange={(e) => {\r
+                        setSumberInput(e.target.value);\r
+                        reset();\r
+                      }}\r
+                      placeholder={PLACEHOLDER["Link Luar"]}\r
+                      className="min-w-0 flex-1"\r
+                    />\r
+                    <Button\r
+                      type="button"\r
+                      variant="secondary"\r
+                      onClick={handleAnalisis}\r
+                      disabled={analyzing}\r
+                      className="shrink-0 w-full sm:w-auto"\r
+                    >\r
+                      {analyzing ? (\r
+                        <Loader2 className="h-4 w-4 animate-spin" />\r
+                      ) : preview ? (\r
+                        <RefreshCw className="h-4 w-4" />\r
+                      ) : (\r
+                        <Search className="h-4 w-4" />\r
+                      )}\r
+                      {analyzing ? "Membaca…" : preview ? "Baca Ulang" : "Analisis Sumber"}\r
+                    </Button>\r
+                  </div>\r
+                </div>\r
+\r
+                {sumberError ? (\r
+                  <div className="flex gap-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive min-w-0 overflow-hidden">\r
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />\r
+                    <div className="min-w-0 flex-1">\r
+                      <p className="font-medium">Sumber tidak dapat dibaca</p>\r
+                      <p className="mt-0.5 text-xs break-words [overflow-wrap:anywhere]">\r
+                        {sumberError}\r
+                      </p>\r
+                      <div className="mt-2 flex flex-wrap items-center gap-2">\r
+                        <Button\r
+                          type="button"\r
+                          variant="outline"\r
+                          size="sm"\r
+                          className="h-7 text-xs"\r
+                          onClick={() => {\r
+                            setSumberTipe("Teks");\r
+                            setSumberError("");\r
+                          }}\r
+                        >\r
+                          Beralih ke Input Teks\r
+                        </Button>\r
+                      </div>\r
+                    </div>\r
+                  </div>\r
+                ) : null}\r
+\r
+                {preview ? (\r
+                  <div className="grid gap-2 rounded-xl border bg-muted/40 p-3 min-w-0 max-w-full overflow-hidden">\r
+                    <div className="flex items-start gap-2 min-w-0">\r
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />\r
+                      <div className="min-w-0 flex-1">\r
+                        <p className="truncate font-display text-sm font-semibold text-navy break-words">\r
+                          {preview.judul}\r
+                        </p>\r
+                        <p className="text-xs text-muted-foreground break-all truncate">\r
+                          {preview.url}\r
+                        </p>\r
+                        <p className="mt-0.5 text-xs text-muted-foreground break-words">\r
+                          {preview.situs} · {preview.jumlahKata.toLocaleString("id-ID")} kata\r
+                          terbaca\r
+                          {preview.cukup ? "" : " · isi terbatas"}\r
+                        </p>\r
+                      </div>\r
+                    </div>\r
+                    <p className="max-h-40 overflow-y-auto overflow-x-hidden whitespace-pre-line break-words [overflow-wrap:anywhere] rounded-lg bg-background p-2 text-xs leading-relaxed text-muted-foreground max-w-full">\r
+                      {preview.konten.slice(0, 1200)}\r
+                      {preview.konten.length > 1200 ? "…" : ""}\r
+                    </p>\r
+                  </div>\r
+                ) : null}\r
+              </div>\r
+            ) : (\r
+              <div className="grid gap-2 min-w-0">\r
+                <Label htmlFor="sumber">{sumberTipe}</Label>\r
+                {sumberTipe === "eBook / Dokumen" ? (\r
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed p-3 text-sm text-muted-foreground hover:bg-muted/50 min-w-0">\r
+                    <FileUp className="h-4 w-4 shrink-0" />\r
+                    <span className="truncate">\r
+                      {fileName || "Tandai nama file eBook (isi materi tetap ditempel di bawah)"}\r
+                    </span>\r
+                    <input\r
+                      type="file"\r
+                      className="hidden"\r
+                      accept=".pdf,.doc,.docx,.txt"\r
+                      onChange={(e) => {\r
+                        const f = e.target.files?.[0];\r
+                        if (f) {\r
+                          setFileName(f.name);\r
+                          toast.info(\r
+                            "Tempel bagian isi dokumen di bawah agar AI berdasar isi aslinya.",\r
+                          );\r
+                        }\r
+                      }}\r
+                    />\r
+                  </label>\r
+                ) : null}\r
+                <Textarea\r
+                  id="sumber"\r
+                  rows={6}\r
+                  value={sumberInput}\r
+                  onChange={(e) => setSumberInput(e.target.value)}\r
+                  placeholder={PLACEHOLDER[sumberTipe]}\r
+                  className="min-w-0 max-w-full break-words"\r
+                />\r
+                <p className="text-xs text-muted-foreground break-words">\r
+                  Isi yang ditempel menjadi satu-satunya rujukan AI, jadi tempel materi selengkap\r
+                  mungkin.\r
+                </p>\r
+              </div>\r
+            )}\r
+\r
+            <div className="grid gap-4 sm:grid-cols-3 min-w-0">\r
+              <div className="grid gap-2 sm:col-span-3 min-w-0">\r
+                <Label htmlFor="topik">Topik / Materi</Label>\r
+                <Input\r
+                  id="topik"\r
+                  value={topik}\r
+                  onChange={(e) => setTopik(e.target.value)}\r
+                  placeholder="Misal: Sistem Persamaan Linear"\r
+                  className="min-w-0"\r
+                />\r
+              </div>\r
+              <div className="grid gap-2 min-w-0">\r
+                <Label>Mata Pelajaran</Label>\r
+                <Select value={mapel} onValueChange={setMapel}>\r
+                  <SelectTrigger className="min-w-0 w-full">\r
+                    <SelectValue placeholder="Pilih Mapel" />\r
+                  </SelectTrigger>\r
+                  <SelectContent>\r
+                    {mapelOptions.map((m) => (\r
+                      <SelectItem key={m} value={m}>\r
+                        {m}\r
+                      </SelectItem>\r
+                    ))}\r
+                  </SelectContent>\r
+                </Select>\r
+              </div>\r
+              <div className="grid gap-2 min-w-0">\r
+                <Label>Kelas</Label>\r
+                <Select value={kelas} onValueChange={setKelas}>\r
+                  <SelectTrigger className="min-w-0 w-full">\r
+                    <SelectValue\r
+                      placeholder={\r
+                        myKelasList.length === 0\r
+                          ? "Belum ada kelas (buat di Kelas Saya)"\r
+                          : "Pilih Kelas"\r
+                      }\r
+                    />\r
+                  </SelectTrigger>\r
+                  <SelectContent>\r
+                    {myKelasList.length > 0 ? (\r
+                      myKelasList.map((k) => {\r
+                        const val = `${k.tingkat} ${k.namaKelas}`;\r
+                        return (\r
+                          <SelectItem key={k.id} value={val}>\r
+                            {val} {k.mapel ? `(${k.mapel})` : ""}\r
+                          </SelectItem>\r
+                        );\r
+                      })\r
+                    ) : (\r
+                      <div className="p-2 text-xs text-muted-foreground text-center">\r
+                        Belum ada kelas aktif. Buat kelas terlebih dahulu di menu <strong>Kelas Saya</strong>.\r
+                      </div>\r
+                    )}\r
+                  </SelectContent>\r
+                </Select>\r
+              </div>\r
+            </div>\r
+          </div>\r
+        )}\r
+\r
+        {!loading ? (\r
+          <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-2 w-full pt-2">\r
+            <Button\r
+              variant="ghost"\r
+              onClick={() => close(false)}\r
+              disabled={busy}\r
+              className="w-full sm:w-auto"\r
+            >\r
+              Batal\r
+            </Button>\r
+            <Button\r
+              onClick={handleGenerate}\r
+              disabled={busy || (sumberTipe === "Link Luar" && !preview)}\r
+              className="w-full sm:w-auto"\r
+            >\r
+              <Sparkles className="h-4 w-4" />\r
+              Generate Modul dengan AI\r
+            </Button>\r
+          </DialogFooter>\r
+        ) : null}\r
+      </DialogContent>\r
+    </Dialog>\r
+  );\r
 }

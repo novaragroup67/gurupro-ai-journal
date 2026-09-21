@@ -5,67 +5,92 @@ import {
   ACCESS_TOKEN_HEADER,
   isJwtExpired,
   isSessionExpiring,
+  looksLikeJwt,
 } from "./auth-token";
 
-function getLocalStoredTokens(): { accessToken: string | null; refreshToken: string | null } {
+function getLocalStoredTokens(): {
+  accessToken: string | null;
+  refreshToken: string | null;
+  expiresAt: number | null;
+} {
   if (typeof window === "undefined" || !window.localStorage) {
-    return { accessToken: null, refreshToken: null };
+    return { accessToken: null, refreshToken: null, expiresAt: null };
   }
   try {
+    // Check canonical project key first
+    const canonicalKey = "sb-dxzzpsrgbiummjplggyo-auth-token";
+    const canonicalVal = window.localStorage.getItem(canonicalKey);
+    if (canonicalVal) {
+      const parsed = JSON.parse(canonicalVal);
+      const token = parsed?.access_token ?? null;
+      if (token && typeof token === "string" && looksLikeJwt(token)) {
+        return {
+          accessToken: token,
+          refreshToken: parsed?.refresh_token ?? null,
+          expiresAt: typeof parsed?.expires_at === "number" ? parsed.expires_at : null,
+        };
+      }
+    }
+
+    // Fallback: search any Supabase auth token keys
     for (let i = 0; i < window.localStorage.length; i++) {
       const key = window.localStorage.key(i);
       if (key && key.startsWith("sb-") && key.endsWith("-auth-token")) {
         const val = window.localStorage.getItem(key);
         if (val) {
           const parsed = JSON.parse(val);
-          return {
-            accessToken: parsed?.access_token ?? null,
-            refreshToken: parsed?.refresh_token ?? null,
-          };
+          const token = parsed?.access_token ?? null;
+          if (token && typeof token === "string" && looksLikeJwt(token)) {
+            return {
+              accessToken: token,
+              refreshToken: parsed?.refresh_token ?? null,
+              expiresAt: typeof parsed?.expires_at === "number" ? parsed.expires_at : null,
+            };
+          }
         }
       }
     }
   } catch {
     // Ignore storage read/parse errors
   }
-  return { accessToken: null, refreshToken: null };
+  return { accessToken: null, refreshToken: null, expiresAt: null };
 }
 
 async function resolveAccessToken(): Promise<string | null> {
   let token: string | null = null;
   let expiresAt: number | null | undefined = undefined;
+  let refreshToken: string | null = null;
 
   try {
     const { data } = await supabase.auth.getSession();
     token = data.session?.access_token ?? null;
     expiresAt = data.session?.expires_at;
+    refreshToken = data.session?.refresh_token ?? null;
   } catch {
     // getSession may fail if offline or memory store not hydrated
   }
 
-  // Fallback to localStorage if getSession didn't find the token
-  let refreshToken: string | null = null;
-  if (!token) {
+  // Fallback to localStorage if getSession didn't find the token or if token is not a valid JWT
+  if (!token || !looksLikeJwt(token)) {
     const stored = getLocalStoredTokens();
-    token = stored.accessToken;
-    refreshToken = stored.refreshToken;
+    if (stored.accessToken) {
+      token = stored.accessToken;
+      refreshToken = stored.refreshToken;
+      expiresAt = stored.expiresAt;
+    }
   }
 
-  const needsRefresh =
-    !token ||
-    isSessionExpiring(expiresAt) ||
-    isJwtExpired(token);
+  // A token only needs refresh if it is actually expired or expiring within 60s
+  const needsRefresh = !token || isSessionExpiring(expiresAt, token, 60_000);
 
-  if (needsRefresh) {
+  if (needsRefresh && refreshToken) {
     try {
-      const refreshed = refreshToken
-        ? await supabase.auth.refreshSession({ refresh_token: refreshToken })
-        : await supabase.auth.refreshSession();
+      const refreshed = await supabase.auth.refreshSession({ refresh_token: refreshToken });
       if (refreshed.data.session?.access_token) {
         token = refreshed.data.session.access_token;
       }
     } catch {
-      // Keep the existing token; the server will reject it if it is unusable.
+      // Keep existing unexpired token; avoid destroying a usable token
     }
   }
 

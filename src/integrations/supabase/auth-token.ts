@@ -44,15 +44,32 @@ export function isJwtExpired(token: string, skewMs = 30_000): boolean {
   return payload.exp * 1000 <= Date.now() + skewMs;
 }
 
-export function isSessionExpiring(expiresAt: number | null | undefined, withinMs = 60_000): boolean {
-  if (!expiresAt) return true;
-  const ms = expiresAt > 1_000_000_000_000 ? expiresAt : expiresAt * 1000;
-  return ms - Date.now() < withinMs;
+export function isSessionExpiring(
+  expiresAt: number | null | undefined,
+  token?: string | null,
+  withinMs = 60_000,
+): boolean {
+  if (typeof expiresAt === "number" && expiresAt > 0) {
+    const ms = expiresAt > 1_000_000_000_000 ? expiresAt : expiresAt * 1000;
+    return ms - Date.now() < withinMs;
+  }
+  if (token) {
+    return isJwtExpired(token, withinMs);
+  }
+  return true;
 }
 
 export function isRecoverableAuthError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? "");
-  return /unauthorized|invalid token|jwt expired|bad_jwt|sesi kedaluwarsa|no authorization header|no token provided|401|403/i.test(
+  // Do not treat permission/role denials, database errors, or AI failures as expired sessions
+  if (
+    /forbidden|peran guru|profil pengguna|basis data|kunci api|autentikasi ai|ditolak|keterbatasan/i.test(
+      message,
+    )
+  ) {
+    return false;
+  }
+  return /jwt expired|token expired|sesi kedaluwarsa|session expired|invalid jwt|bad_jwt|no authorization header|no token provided|unauthorized: invalid token|unauthorized: no/i.test(
     message,
   );
 }
