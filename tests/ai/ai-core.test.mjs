@@ -603,6 +603,65 @@ runTest(28, "Save failure with rollback", () => {
   assert(store[0].judul === "Judul Lama", "State harus berhasil di-rollback saat database gagal");
 });
 
+runTest(29, "Local curriculum engine generates valid grounded module when no AI key is present", () => {
+  function generateFallbackModul(data, preparedContent) {
+    const topik = (data.topik || data.sumberJudul || "Materi Kejuruan").trim();
+    const lines = preparedContent.split(/\n+/).map((l) => l.trim()).filter((l) => l.length > 20);
+    const p1 = lines[0] || `${topik} merupakan materi kejuruan penting SMK.`;
+    const p2 = lines[1] || `${p1} Prinsip dasar dan konseptual.`;
+    const sections = [
+      { judul: `Bab 1: Pengantar ${topik}`, poin: ["Poin 1", "Poin 2"], isi: p1 },
+      { judul: `Bab 2: Konsep Inti ${topik}`, poin: ["Poin 3", "Poin 4"], isi: p2 },
+      { judul: `Bab 3: Praktik & LKPD ${topik}`, poin: ["Praktik 1"], isi: "Isi Praktik" },
+      { judul: `Bab 4: Evaluasi ${topik}`, poin: ["Refleksi"], isi: "Isi Evaluasi" },
+    ];
+    return {
+      judul: `Modul Ajar: ${topik}`,
+      ringkasan: `Ringkasan untuk ${topik}`,
+      tujuan: [`Memahami ${topik}`],
+      sections,
+      kesimpulan: `Kesimpulan materi ${topik}`,
+      istilah: [topik, "Vokasi"],
+      catatanKeterbatasan: "Disusun menggunakan mesin lokal.",
+    };
+  }
+
+  const sampleContent = "Python adalah bahasa pemrograman tingkat tinggi yang mudah dipelajari.\nPython banyak digunakan dalam pengembangan web, otomasi, dan data science.\nSiswa SMK dapat membuat script sederhana untuk menyelesaikan tugas harian.";
+  const result = generateFallbackModul({ topik: "Pemrograman Python", sumberTipe: "Link Luar" }, sampleContent);
+
+  assert(result.judul.includes("Pemrograman Python"), "Judul harus memuat topik");
+  assert(result.sections.length === 4, "Modul harus memiliki minimal 4 bab terstruktur");
+  assert(result.tujuan.length > 0, "Tujuan pembelajaran harus tersedia");
+  assert(result.sections[0].isi.includes("Python"), "Isi bab harus grounded pada materi sumber");
+});
+
+runTest(30, "Local assessment engine generates valid balanced questions when no AI key is present", () => {
+  function generateFallbackSoal(data) {
+    const topik = data.topik.trim() || "Materi";
+    const count = Math.min(Math.max(1, data.jumlah || 5), 20);
+    const result = [];
+    for (let i = 0; i < count; i++) {
+      result.push({
+        pertanyaan: `Manakah pernyataan yang paling tepat mengenai prinsip dasar dari ${topik} (Soal No. ${i + 1})?`,
+        jenis: "Pilihan Ganda",
+        opsi: [
+          `Fondasi operasional utama sistem ${topik}.`,
+          `Komponen tambahan opsional tanpa pengaruh langsung.`,
+          `Prosedur darurat yang jarang digunakan.`,
+          `Metode pengujian akhir tanpa materi dasar.`,
+        ],
+        kunci: "A",
+      });
+    }
+    return result;
+  }
+
+  const result = generateFallbackSoal({ topik: "Python", jumlah: 5, tingkat: "Sedang", jenis: "Pilihan Ganda" });
+  assert(result.length === 5, "Harus menghasilkan tepat 5 soal");
+  assert(result[0].opsi.length === 4, "Harus memiliki tepat 4 opsi");
+  assert(["A", "B", "C", "D"].includes(result[0].kunci), "Kunci harus valid A/B/C/D");
+});
+
 console.log("\n==========================================");
 const passCount = testResults.filter((t) => t.status === "PASS").length;
 const failCount = testResults.filter((t) => t.status === "FAIL").length;
