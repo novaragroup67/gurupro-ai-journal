@@ -31,7 +31,11 @@ export interface AuthState {
   profileError: string | null;
 }
 
-export type LoginResult = { ok: true } | { ok: false; message: string };
+export type LoginResult = { ok: true } | { ok: false; message: string; code?: string };
+
+export type RegisterResult =
+  | { ok: true; user?: User; needsConfirmation?: boolean; message?: string }
+  | { ok: false; message: string; code?: string };
 
 export type RegisterGuruInput = {
   nama: string;
@@ -154,7 +158,7 @@ export async function fetchProfileForUser(user: User): Promise<FetchProfileResul
       .maybeSingle();
 
     if (error) {
-      console.warn("[Auth] Failed to load profile from DB:", error.message);
+      console.error("[Auth] Real DB/RLS query error during fetchProfileForUser:", error.message, error);
       return {
         status: "error",
         message: error.message || "Gagal memuat profil akun dari basis data.",
@@ -163,6 +167,7 @@ export async function fetchProfileForUser(user: User): Promise<FetchProfileResul
     }
 
     if (!data) {
+      console.warn("[Auth] No profile row found in DB for auth.uid():", user.id);
       return {
         status: "missing",
         profile: fallbackProfile,
@@ -325,23 +330,39 @@ export async function login(
   _remember = true,
 ): Promise<LoginResult> {
   try {
+    const normalizedEmail = email.trim().toLowerCase();
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
       password,
     });
 
     if (error) {
       void logSystemEvent("auth_failure", "login_failed", error.message, {
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
       });
-      return { ok: false, message: error.message };
+
+      const errMsg = error.message.toLowerCase();
+      let userFacingMessage = error.message;
+
+      if (errMsg.includes("invalid login credentials")) {
+        userFacingMessage =
+          "Email atau kata sandi tidak valid. Pastikan email dan kata sandi benar, serta email Anda sudah terverifikasi.";
+      } else if (errMsg.includes("email not confirmed")) {
+        userFacingMessage =
+          "Email Anda belum dikonfirmasi. Silakan periksa tautan verifikasi pada kotak masuk atau folder spam email Anda.";
+      } else if (errMsg.includes("rate limit") || errMsg.includes("too many requests")) {
+        userFacingMessage =
+          "Terlalu banyak percobaan masuk yang gagal. Silakan tunggu beberapa saat sebelum mencoba kembali.";
+      }
+
+      return { ok: false, message: userFacingMessage };
     }
 
-    if (!data.user) {
-      void logSystemEvent("auth_failure", "user_not_found", "Pengguna tidak ditemukan.", {
-        email: email.trim().toLowerCase(),
+    if (!data.session || !data.user) {
+      void logSystemEvent("auth_failure", "session_not_created", "Sesi autentikasi tidak valid.", {
+        email: normalizedEmail,
       });
-      return { ok: false, message: "Pengguna tidak ditemukan." };
+      return { ok: false, message: "Sesi login tidak valid. Silakan coba masuk kembali." };
     }
 
     // Explicitly synchronize and await validated database profile
@@ -350,7 +371,31 @@ export async function login(
     if (profileResult?.status === "error") {
       return {
         ok: false,
-        message: `Terhubung ke akun, namun gagal memuat profil: ${profileResult.message}. Silakan coba lagi.`,
+        message: `Terhubung ke akun, namun gagal memuat profil dari basis data: ${profileResult.message}. Silakan coba lagi.`,
+        code: "database_error",
+      };
+    }
+
+    if (profileResult?.status === "missing") {
+      return {
+        ok: false,
+        message:
+          "Profil akun tidak ditemukan di basis data. Silakan hubungi administrator untuk mendaftarkan profil Anda.",
+        code: "profile_missing",
+      };
+    }
+
+    if (
+      profileResult?.status === "loaded" &&
+      (!profileResult.profile.role ||
+        (profileResult.profile.role !== "guru" &&
+          profileResult.profile.role !== "siswa" &&
+          profileResult.profile.role !== "admin"))
+    ) {
+      return {
+        ok: false,
+        message: "Peran akun Anda belum terdaftar di sistem. Silakan hubungi administrator.",
+        code: "invalid_role",
       };
     }
 
@@ -379,14 +424,22 @@ export async function logout(): Promise<void> {
 
 export async function registerGuru(
   input: RegisterGuruInput,
-): Promise<{ ok: true; user?: User } | { ok: false; message: string }> {
+): Promise<RegisterResult> {
   try {
     const email = input.email.trim().toLowerCase();
 
+    const redirectUrl =
+      typeof window !== "undefined" && window.location.origin
+        ? `${window.location.origin}/masuk`
+        : "https://gurupro-ai-journal.vercel.app/masuk";
+
+    // 1. Buat user di Supabase Auth
+    // Trigger database handle_new_user() di Postgres akan otomatis menyisipkan profil ke public.profiles
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password: input.password,
       options: {
+        emailRedirectTo: redirectUrl,
         data: {
           nama: input.nama.trim(),
           role: "guru",
@@ -399,15 +452,57 @@ export async function registerGuru(
     });
 
     if (authError) {
+      const errMsg = authError.message.toLowerCase();
+      const status = (authError as any).status;
+      if (
+        errMsg.includes("already registered") ||
+        errMsg.includes("already taken") ||
+        errMsg.includes("user already exists") ||
+        (authError as any).code === "user_already_exists"
+      ) {
+        return {
+          ok: false,
+          message: "Email ini sudah terdaftar. Silakan masuk menggunakan akun Anda atau gunakan fitur lupa kata sandi.",
+          code: "email_exists",
+        };
+      }
+      if (
+        errMsg.includes("rate limit") ||
+        errMsg.includes("too many requests") ||
+        errMsg.includes("security purposes") ||
+        status === 429 ||
+        (authError as any).code === "over_email_send_rate_limit" ||
+        (authError as any).code === "over_request_rate_limit"
+      ) {
+        return {
+          ok: false,
+          message: "Batas pengiriman email sistem terlampaui. Silakan tunggu 1-2 menit sebelum mencoba mendaftar kembali.",
+          code: "rate_limited",
+        };
+      }
       return { ok: false, message: authError.message };
     }
 
     const user = authData.user;
     if (!user) {
-      return { ok: false, message: "Gagal membuat akun." };
+      return { ok: false, message: "Gagal membuat akun guru." };
     }
 
-    return { ok: true, user };
+    // Supabase returns an empty identities array if the email is already registered
+    if (Array.isArray(user.identities) && user.identities.length === 0) {
+      return {
+        ok: false,
+        message: "Email ini sudah terdaftar. Silakan masuk menggunakan akun Anda atau gunakan fitur lupa kata sandi.",
+        code: "email_exists",
+      };
+    }
+
+    const needsConfirmation = !authData.session;
+    const message = needsConfirmation
+      ? "Pendaftaran berhasil! Tautan konfirmasi telah dikirimkan ke email Anda. Silakan verifikasi email Anda sebelum masuk."
+      : "Pendaftaran akun guru berhasil! Silakan masuk dengan akun Anda.";
+
+    return { ok: true, user, needsConfirmation, message };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat mendaftar.";
     return { ok: false, message: msg };
@@ -416,14 +511,21 @@ export async function registerGuru(
 
 export async function registerSiswa(
   input: RegisterSiswaInput,
-): Promise<{ ok: true; user?: User } | { ok: false; message: string }> {
+): Promise<RegisterResult> {
   try {
     const email = input.email.trim().toLowerCase();
 
+    // 1. Buat user di Supabase Auth
+    // Trigger database handle_new_user() di Postgres akan otomatis menyisipkan profil ke public.profiles
+    const redirectUrl =
+      typeof window !== "undefined" && window.location.origin
+        ? `${window.location.origin}/masuk`
+        : "https://gurupro-ai-journal.vercel.app/masuk";
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password: input.password,
       options: {
+        emailRedirectTo: redirectUrl,
         data: {
           nama: input.nama.trim(),
           role: "siswa",
@@ -436,6 +538,34 @@ export async function registerSiswa(
     });
 
     if (authError) {
+      const errMsg = authError.message.toLowerCase();
+      const status = (authError as any).status;
+      if (
+        errMsg.includes("already registered") ||
+        errMsg.includes("already taken") ||
+        errMsg.includes("user already exists") ||
+        (authError as any).code === "user_already_exists"
+      ) {
+        return {
+          ok: false,
+          message: "Email ini sudah terdaftar. Silakan masuk menggunakan akun Anda atau gunakan fitur lupa kata sandi.",
+          code: "email_exists",
+        };
+      }
+      if (
+        errMsg.includes("rate limit") ||
+        errMsg.includes("too many requests") ||
+        errMsg.includes("security purposes") ||
+        status === 429 ||
+        (authError as any).code === "over_email_send_rate_limit" ||
+        (authError as any).code === "over_request_rate_limit"
+      ) {
+        return {
+          ok: false,
+          message: "Batas pengiriman email sistem terlampaui. Silakan tunggu 1-2 menit sebelum mencoba mendaftar kembali.",
+          code: "rate_limited",
+        };
+      }
       return { ok: false, message: authError.message };
     }
 
@@ -444,7 +574,21 @@ export async function registerSiswa(
       return { ok: false, message: "Gagal membuat akun siswa." };
     }
 
-    return { ok: true, user };
+    // Supabase returns an empty identities array if the email is already registered
+    if (Array.isArray(user.identities) && user.identities.length === 0) {
+      return {
+        ok: false,
+        message: "Email ini sudah terdaftar. Silakan masuk menggunakan akun Anda atau gunakan fitur lupa kata sandi.",
+        code: "email_exists",
+      };
+    }
+
+    const needsConfirmation = !authData.session;
+    const message = needsConfirmation
+      ? "Pendaftaran berhasil! Tautan konfirmasi telah dikirimkan ke email Anda. Silakan verifikasi email Anda sebelum masuk."
+      : "Pendaftaran akun siswa berhasil! Silakan masuk dengan akun Anda.";
+
+    return { ok: true, user, needsConfirmation, message };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat mendaftar.";
     return { ok: false, message: msg };
@@ -455,14 +599,16 @@ export async function updateProfile(
   patch: Partial<GuruProfile>,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   const current = get();
+  if (!current.user) {
+    return {
+      ok: false,
+      message: "Sesi autentikasi tidak ditemukan. Silakan login terlebih dahulu.",
+    };
+  }
+
   // Strip privilege & identity fields to prevent client-side authorization escalation
   const { role: _r, status_verifikasi: _s, id: _id, ...safePatch } = patch;
   const nextProfile = { ...current.profile, ...safePatch };
-  setState({ profile: nextProfile });
-
-  if (!current.user) {
-    return { ok: true };
-  }
 
   try {
     const { error } = await supabase
@@ -482,6 +628,9 @@ export async function updateProfile(
     if (error) {
       return { ok: false, message: error.message };
     }
+
+    // Update in-memory state only AFTER Supabase confirms write
+    setState({ profile: nextProfile });
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Gagal memperbarui profil di database.";
