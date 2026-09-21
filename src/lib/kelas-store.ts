@@ -75,6 +75,9 @@ export function generateKodeKelas(tingkat: string, mapel: string): string {
   return `${t}-${m}-${r}`;
 }
 
+let lastKelasError: string | null = null;
+let lastAnggotaError: string | null = null;
+
 // Fetch all classes from Supabase
 export async function refreshKelasList(): Promise<Kelas[]> {
   try {
@@ -84,10 +87,13 @@ export async function refreshKelasList(): Promise<Kelas[]> {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.warn("[Kelas] Error fetching classes:", error.message);
-      return cachedKelasList;
+      lastKelasError = error.message;
+      console.error("[Kelas] Error fetching classes from Supabase:", error.message);
+      emitChange();
+      throw new Error(`Gagal memuat kelas dari database: ${error.message}`);
     }
 
+    lastKelasError = null;
     cachedKelasList = (data || []).map((row) => ({
       id: row.id,
       namaKelas: row.nama_kelas,
@@ -101,8 +107,11 @@ export async function refreshKelasList(): Promise<Kelas[]> {
     emitChange();
     return cachedKelasList;
   } catch (err) {
-    console.error("[Kelas] Unexpected error:", err);
-    return cachedKelasList;
+    if (!lastKelasError) {
+      lastKelasError = err instanceof Error ? err.message : "Terjadi kesalahan saat memuat kelas.";
+      emitChange();
+    }
+    throw err;
   }
 }
 
@@ -115,10 +124,13 @@ export async function refreshAnggotaList(): Promise<AnggotaKelas[]> {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.warn("[Kelas] Error fetching members:", error.message);
-      return cachedAnggotaList;
+      lastAnggotaError = error.message;
+      console.error("[Kelas] Error fetching members from Supabase:", error.message);
+      emitChange();
+      throw new Error(`Gagal memuat anggota kelas dari database: ${error.message}`);
     }
 
+    lastAnggotaError = null;
     cachedAnggotaList = (data || []).map((row) => ({
       id: row.id,
       kelasId: row.kelas_id,
@@ -133,8 +145,11 @@ export async function refreshAnggotaList(): Promise<AnggotaKelas[]> {
     emitChange();
     return cachedAnggotaList;
   } catch (err) {
-    console.error("[Kelas] Unexpected error:", err);
-    return cachedAnggotaList;
+    if (!lastAnggotaError) {
+      lastAnggotaError = err instanceof Error ? err.message : "Terjadi kesalahan saat memuat anggota kelas.";
+      emitChange();
+    }
+    throw err;
   }
 }
 
@@ -593,18 +608,32 @@ export function useKelas() {
   );
 
   const [loading, setLoading] = useState(cachedKelasList.length === 0);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([refreshKelasList(), refreshAnggotaList()]).finally(() => {
-      setLoading(false);
-    });
+    Promise.all([refreshKelasList(), refreshAnggotaList()])
+      .then(() => setError(null))
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
   return {
     kelasList,
     anggotaList,
     loading,
-    refresh: () => Promise.all([refreshKelasList(), refreshAnggotaList()]),
+    error: error || lastKelasError || lastAnggotaError,
+    refresh: () =>
+      Promise.all([refreshKelasList(), refreshAnggotaList()])
+        .then(() => setError(null))
+        .catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          setError(msg);
+          throw err;
+        }),
   };
 }
 

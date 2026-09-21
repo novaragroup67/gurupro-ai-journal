@@ -68,6 +68,8 @@ const store = createCloudStore<Modul>(async () => {
 });
 
 export const useModuls = store.useItems;
+export const useModulsError = store.useError;
+export const getModulsError = store.getError;
 export const reloadModuls = store.reload;
 
 async function currentUserId() {
@@ -84,7 +86,10 @@ export async function addModul(data: Omit<Modul, "id" | "createdAt" | "updatedAt
     .insert({ user_id, ...toRow(data) })
     .select("*")
     .single();
-  if (error) throw error;
+  if (error) {
+    console.error("[addModul] Supabase insert error:", error);
+    throw new Error(error.message || "Gagal menyimpan modul ke database.");
+  }
   const modul = toModul(row as unknown as Row);
   store.set([modul, ...store.get()]);
   return modul;
@@ -96,7 +101,10 @@ export async function saveModul(modul: Modul) {
   store.set(previous.map((m) => (m.id === modul.id ? next : m)));
   try {
     const { error } = await supabase.from("moduls").update(toRow(modul)).eq("id", modul.id);
-    if (error) throw error;
+    if (error) {
+      console.error("[saveModul] Supabase update error:", error);
+      throw new Error(error.message || "Gagal memperbarui modul.");
+    }
     return next;
   } catch (err) {
     store.set(previous);
@@ -106,10 +114,13 @@ export async function saveModul(modul: Modul) {
 
 export async function deleteModul(id: string) {
   const previous = store.get();
-  store.set(previous.filter((m) => m.id !== id));
+  store.set(previous.filter((p) => p.id !== id));
   try {
     const { error } = await supabase.from("moduls").delete().eq("id", id);
-    if (error) throw error;
+    if (error) {
+      console.error("[deleteModul] Supabase delete error:", error);
+      throw new Error(error.message || "Gagal menghapus modul.");
+    }
   } catch (err) {
     store.set(previous);
     throw err;
@@ -174,4 +185,3 @@ export async function getPublishedModulsForSiswa(): Promise<Modul[]> {
 }
 
 export { uid };
-

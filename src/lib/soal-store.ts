@@ -47,6 +47,8 @@ const store = createCloudStore<PaketSoal>(async () => {
 });
 
 export const usePaketSoal = store.useItems;
+export const usePaketSoalError = store.useError;
+export const getPaketSoalError = store.getError;
 export const reloadPaketSoal = store.reload;
 
 async function currentUserId() {
@@ -63,7 +65,10 @@ export async function addPaket(data: Omit<PaketSoal, "id" | "createdAt">) {
     .insert({ user_id, ...toRow(data) } as never)
     .select("*")
     .single();
-  if (error) throw error;
+  if (error) {
+    console.error("[addPaket] Supabase insert error:", error);
+    throw new Error(error.message || "Gagal menyimpan paket soal ke database.");
+  }
   const paket = toPaket(row as unknown as Row);
   store.set([paket, ...store.get()]);
   return paket;

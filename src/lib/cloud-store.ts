@@ -15,11 +15,15 @@ export function createCloudStore<T>(fetcher: () => Promise<T[]>) {
   const EMPTY: T[] = [];
   let data: T[] = EMPTY;
   let loaded = false;
+  let error: Error | null = null;
   let inflight: Promise<void> | null = null;
   const listeners = new Set<() => void>();
 
   const emit = () => listeners.forEach((l) => l());
   const get = () => data;
+  const getError = () => error;
+  const isLoaded = () => loaded;
+
   const set = (next: T[]) => {
     data = next;
     emit();
@@ -27,20 +31,25 @@ export function createCloudStore<T>(fetcher: () => Promise<T[]>) {
 
   const reload = async () => {
     try {
+      error = null;
       data = await fetcher();
       loaded = true;
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      error = err instanceof Error ? err : new Error(String(err));
+      console.error("[CloudStore] Error loading data from Supabase:", error.message);
     }
     emit();
+    if (error) throw error;
   };
 
   const ensure = () => {
     if (loaded) return Promise.resolve();
     if (!inflight) {
-      inflight = reload().finally(() => {
-        inflight = null;
-      });
+      inflight = reload()
+        .catch(() => {})
+        .finally(() => {
+          inflight = null;
+        });
     }
     return inflight;
   };
@@ -53,6 +62,7 @@ export function createCloudStore<T>(fetcher: () => Promise<T[]>) {
   resets.add(() => {
     data = EMPTY;
     loaded = false;
+    error = null;
     emit();
   });
 
@@ -64,7 +74,11 @@ export function createCloudStore<T>(fetcher: () => Promise<T[]>) {
     return items;
   }
 
-  return { get, set, reload, ensure, useItems, subscribe };
+  function useError(): Error | null {
+    return useSyncExternalStore(subscribe, getError, () => null);
+  }
+
+  return { get, set, reload, ensure, useItems, useError, getError, isLoaded, subscribe };
 }
 
 export function uid() {

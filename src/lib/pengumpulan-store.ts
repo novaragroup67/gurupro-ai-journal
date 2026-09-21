@@ -76,9 +76,12 @@ export async function getMySubmission(penugasanId: string): Promise<PenugasanPen
       .eq("siswa_id", userId)
       .maybeSingle();
 
-    if (error && error.code !== "PGRST116") {
-      console.warn("[Pengumpulan] Gagal memuat data pengumpulan:", error.message);
-      return null;
+    if (error) {
+      if (error.code === "PGRST116") {
+        return null;
+      }
+      console.error("[Pengumpulan] Gagal memuat data pengumpulan:", error.message);
+      throw new Error(`Gagal memuat data pengumpulan dari database: ${error.message}`);
     }
 
     if (!data) return null;
@@ -99,8 +102,11 @@ export async function getMySubmission(penugasanId: string): Promise<PenugasanPen
       updatedAt: data.updated_at,
     };
   } catch (err) {
+    if (err instanceof Error && err.message.startsWith("Gagal memuat data pengumpulan")) {
+      throw err;
+    }
     console.error("[Pengumpulan] Error getMySubmission:", err);
-    return null;
+    throw err;
   }
 }
 
@@ -587,4 +593,3 @@ export async function getMyGradedSubmissions(): Promise<Array<{
     return [];
   }
 }
-
