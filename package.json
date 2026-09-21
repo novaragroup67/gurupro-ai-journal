@@ -9,7 +9,8 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "node tests/security/security.test.mjs && node tests/security/remediation.test.mjs && node tests/ai/ai-core.test.mjs && node tests/auth/auth-role.test.mjs && node tests/kelas/kelas-membership.test.mjs && node tests/penugasan/penugasan.test.mjs && node tests/submission/submission.test.mjs && node tests/penilaian/penilaian.test.mjs && node tests/dashboard/dashboard-roles.test.mjs && node tests/rekap/rekap-nilai.test.mjs"
+    "test": "node tests/security/security.test.mjs && node tests/security/remediation.test.mjs && node tests/ai/ai-core.test.mjs && node tests/auth/auth-role.test.mjs && node tests/kelas/kelas-membership.test.mjs && node tests/penugasan/penugasan.test.mjs && node tests/submission/submission.test.mjs && node tests/penilaian/penilaian.test.mjs && node tests/dashboard/dashboard-roles.test.mjs && node tests/rekap/rekap-nilai.test.mjs && node tests/persistence/persistence-integrity.test.mjs",
+    "verify:db": "node scripts/verify-supabase.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"
