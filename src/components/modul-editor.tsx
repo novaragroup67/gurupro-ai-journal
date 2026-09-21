@@ -260,7 +260,8 @@ export function ModulEditor({
         </div>
       </div>
 
-      {modul.sumberUrl || modul.sumberJudul ? (\n        <Card className="bg-muted/30 border-muted">
+      {modul.sumberUrl || modul.sumberJudul ? (
+        <Card className="bg-muted/30 border-muted">
           <CardContent className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs text-muted-foreground">
             <div className="min-w-0 flex-1 truncate">
               <span className="font-semibold text-foreground">Sumber Rujukan: </span>
