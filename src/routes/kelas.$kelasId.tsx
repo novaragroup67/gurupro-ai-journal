@@ -261,27 +261,34 @@ function DetailKelasMonitoringPage() {
   // Filter modul ajar untuk kelas ini
   const modulKelas = allModuls.filter((m) => {
     if (!kelasDetail) return true;
-    const normModulKelas = m.kelas.toLowerCase();
-    const normTargetKelas = kelasDetail.namaKelas.toLowerCase();
-    const normTingkat = kelasDetail.tingkat.toLowerCase();
-    const normMapel = kelasDetail.mapel.toLowerCase();
+    const modulKelasStr = (m.kelas || "").toLowerCase();
+    const namaKelasStr = (kelasDetail.namaKelas || "").toLowerCase();
+    const tingkatStr = (kelasDetail.tingkat || "").toLowerCase();
+    const combinedStr = `${tingkatStr} ${namaKelasStr}`.trim();
 
     return (
-      normModulKelas.includes(normTargetKelas) ||
-      normModulKelas.includes(normTingkat) ||
-      m.mapel.toLowerCase().includes(normMapel)
+      modulKelasStr.includes(combinedStr) ||
+      modulKelasStr.includes(namaKelasStr) ||
+      (m.mapel && kelasDetail.mapel && m.mapel.toLowerCase() === kelasDetail.mapel.toLowerCase())
     );
   });
 
   // Filter tugas/soal untuk kelas ini
   const tugasKelas = allPakets.filter((p) => {
     if (!kelasDetail) return true;
+    const namaKelasStr = (kelasDetail.namaKelas || "").toLowerCase();
+    const tingkatStr = (kelasDetail.tingkat || "").toLowerCase();
+    const combinedStr = `${tingkatStr} ${namaKelasStr}`.trim();
+
     if (p.kelas && p.kelas.length > 0) {
-      return p.kelas.some(
-        (k) =>
-          k.toLowerCase().includes(kelasDetail.namaKelas.toLowerCase()) ||
-          k.toLowerCase().includes(kelasDetail.tingkat.toLowerCase()),
-      );
+      return p.kelas.some((k) => {
+        const kStr = (k || "").toLowerCase();
+        return (
+          kStr.includes(combinedStr) ||
+          kStr.includes(namaKelasStr) ||
+          kStr === tingkatStr
+        );
+      });
     }
     return true;
   });
