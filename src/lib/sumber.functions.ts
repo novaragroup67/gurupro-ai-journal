@@ -216,12 +216,14 @@ export const analisisSumberUrl = createServerFn({ method: "POST" })
       await validateHostSafety(parsed.hostname, hop > 0);
 
       try {
+        const outboundHeaders = new Headers({
+          "user-agent": "Mozilla/5.0 (compatible; GuruProBot/1.0; +https://gurupro.id)",
+          accept: "text/html,application/xhtml+xml,text/plain",
+          "accept-language": "id,en;q=0.8",
+        });
+        outboundHeaders.delete("authorization");
         response = await fetch(currentUrl, {
-          headers: {
-            "user-agent": "Mozilla/5.0 (compatible; GuruProBot/1.0; +https://gurupro.id)",
-            accept: "text/html,application/xhtml+xml,text/plain",
-            "accept-language": "id,en;q=0.8",
-          },
+          headers: outboundHeaders,
           redirect: "manual",
           signal: AbortSignal.timeout(10000),
         });
