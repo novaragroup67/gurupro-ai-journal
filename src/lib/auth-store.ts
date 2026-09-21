@@ -1,8 +1,8 @@
+import { resetAllCloudStores } from "@/lib/cloud-store";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { logSystemEvent } from "@/lib/admin-store";
-import { resetAllCloudStores } from "@/lib/cloud-store";
 
 export interface GuruProfile {
   id?: string;
@@ -215,234 +215,431 @@ export async function fetchProfileForUser(user: User): Promise<FetchProfileResul
   }
 }
 
-export async function refreshProfile(): Promise<FetchProfileResult | null> {
-  const current = state.user;
-  if (!current) return null;
-  const res = await fetchProfileForUser(current);
-  setState({
-    profile: res.profile,
-    profileStatus: res.status,
-    profileError: res.status === "error" ? res.message : null,
-  });
-  return res;
-}
+let authRequestId = 0;
 
-export async function login(email: string, password: string): Promise<LoginResult> {
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      console.error("[Auth] Sign in error:", error.message);
-      return { ok: false, message: error.message, code: error.status ? String(error.status) : undefined };
-    }
-    if (!data.user) {
-      return { ok: false, message: "Gagal masuk: Data pengguna tidak ditemukan." };
-    }
+async function syncProfile(user: User | null): Promise<FetchProfileResult | null> {
+  const reqId = ++authRequestId;
+  if (!user) {
+    resetAllCloudStores();
+    setState({
+      ready: true,
+      signedIn: false,
+      user: null,
+      profile: DEFAULT_PROFILE,
+      profileStatus: "idle",
+      profileError: null,
+    });
+    return null;
+  }
 
-    // Proactively fetch profile right away
-    const profRes = await fetchProfileForUser(data.user);
-
+  // Set loading status jika profil belum loaded
+  if (state.profileStatus !== "loaded" || state.user?.id !== user.id) {
     setState({
       ready: true,
       signedIn: true,
-      user: data.user,
-      profile: profRes.profile,
-      profileStatus: profRes.status,
-      profileError: profRes.status === "error" ? profRes.message : null,
+      user,
+      profileStatus: "loading",
+      profileError: null,
     });
+  }
+
+  const result = await fetchProfileForUser(user);
+
+  // Jika ada request auth yang lebih baru saat query berjalan, abaikan hasil usang
+  if (reqId !== authRequestId) {
+    return result;
+  }
+
+  setState({
+    ready: true,
+    signedIn: true,
+    user,
+    profile: result.profile,
+    profileStatus: result.status,
+    profileError: result.status === "error" ? result.message : null,
+  });
+
+  return result;
+}
+
+export async function refreshProfile(): Promise<FetchProfileResult | null> {
+  return syncProfile(state.user);
+}
+
+let initialized = false;
+
+function initAuth() {
+  if (initialized) return;
+  initialized = true;
+
+  // Cek sesi awal
+  supabase.auth.getSession().then(({ data: { session }, error }) => {
+    if (error) {
+      console.error("[Auth] Error getting session:", error.message);
+      setState({
+        ready: true,
+        signedIn: false,
+        user: null,
+        profile: DEFAULT_PROFILE,
+        profileStatus: "idle",
+        profileError: null,
+      });
+      return;
+    }
+    void syncProfile(session?.user ?? null);
+  });
+
+  // Listen perubahan auth state (misal login, logout, token refresh)
+  supabase.auth.onAuthStateChange(async (_event, session) => {
+    if (session?.user) {
+      void syncProfile(session.user);
+    } else {
+      void syncProfile(null);
+    }
+  });
+}
+
+export function useAuth(): {
+  ready: boolean;
+  signedIn: boolean;
+  user: User | null;
+  profile: GuruProfile;
+  profileStatus: ProfileStatus;
+  profileError: string | null;
+  isGuru: boolean;
+  isSiswa: boolean;
+  isAdmin: boolean;
+} {
+  const current = useSyncExternalStore(subscribe, get, get);
+  const [, force] = useState(0);
+
+  useEffect(() => {
+    initAuth();
+  }, []);
+
+  useEffect(() => {
+    if (current.signedIn && current.user && current.profileStatus === "missing") {
+      const timer = setTimeout(() => {
+        void syncProfile(current.user);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [current.signedIn, current.user, current.profileStatus]);
+
+  return {
+    ready: current.ready,
+    signedIn: current.signedIn,
+    user: current.user,
+    profile: current.profile,
+    profileStatus: current.profileStatus,
+    profileError: current.profileError,
+    isGuru: isGuru(current.profile),
+    isSiswa: isSiswa(current.profile),
+    isAdmin: isAdmin(current.profile),
+  };
+}
+
+export async function login(
+  email: string,
+  password: string,
+): Promise<LoginResult> {
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+
+    if (error) {
+      const errMsg = error.message.toLowerCase();
+      let code: string | undefined = undefined;
+      if (errMsg.includes("invalid login credentials")) {
+        code = "invalid_credentials";
+      } else if (errMsg.includes("email not confirmed")) {
+        code = "unconfirmed_email";
+      }
+      return { ok: false, message: error.message, code };
+    }
+
+    if (!data.user) {
+      return {
+        ok: false,
+        message: "Tidak ada data pengguna yang dikembalikan dari server autentikasi.",
+        code: "session_missing",
+      };
+    }
+
+    // Tunggu syncProfile selesai untuk mendapatkan role yang valid
+    const profileResult = await syncProfile(data.user);
+
+    if (profileResult?.status === "error") {
+      return {
+        ok: false,
+        message: `Gagal memuat profil akun: ${profileResult.message}`,
+        code: "database_error",
+      };
+    }
+
+    if (profileResult?.status === "missing") {
+      return {
+        ok: false,
+        message: "Data profil akun tidak ditemukan di basis data. Hubungi administrator.",
+        code: "profile_missing",
+      };
+    }
+
+    if (!profileResult?.profile.role) {
+      return {
+        ok: false,
+        message: "Akun ini belum memiliki peran pengguna (Guru/Siswa/Admin) yang valid.",
+        code: "invalid_role",
+      };
+    }
 
     logSystemEvent({
       action: "LOGIN",
       category: "auth",
-      detail: `Pengguna masuk: ${data.user.email} (${profRes.profile.role || "unknown"})`,
-      userEmail: data.user.email || undefined,
-      userRole: profRes.profile.role || undefined,
+      detail: `Pengguna masuk: ${data.user.email} (${profileResult.profile.role})`,
+      userEmail: data.user.email,
+      userRole: profileResult.profile.role,
     });
 
     return { ok: true };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Terjadi kesalahan tidak terduga saat masuk.";
-    return { ok: false, message: msg };
-  }
-}
-
-export async function registerGuru(input: RegisterGuruInput): Promise<RegisterResult> {
-  try {
-    const { data, error } = await supabase.auth.signUp({
-      email: input.email,
-      password: input.password,
-      options: {
-        data: {
-          nama: input.nama,
-          telepon: input.telepon,
-          sekolah: input.sekolah,
-          mapel: input.mapel,
-          nip: input.nip,
-          role: "guru",
-        },
-      },
-    });
-
-    if (error) {
-      return { ok: false, message: error.message, code: error.status ? String(error.status) : undefined };
-    }
-
-    const needsConfirmation = !data.session && !!data.user;
-
-    logSystemEvent({
-      action: "REGISTER_GURU",
-      category: "auth",
-      detail: `Guru mendaftar: ${input.email} (${input.nama})`,
-      userEmail: input.email,
-      userRole: "guru",
-    });
-
-    return {
-      ok: true,
-      user: data.user || undefined,
-      needsConfirmation,
-      message: needsConfirmation
-        ? "Pendaftaran berhasil! Silakan periksa email Anda untuk konfirmasi akun."
-        : "Pendaftaran berhasil!",
-    };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Terjadi kesalahan tidak terduga saat mendaftar.";
-    return { ok: false, message: msg };
-  }
-}
-
-export async function registerSiswa(input: RegisterSiswaInput): Promise<RegisterResult> {
-  try {
-    const { data, error } = await supabase.auth.signUp({
-      email: input.email,
-      password: input.password,
-      options: {
-        data: {
-          nama: input.nama,
-          telepon: input.telepon || "",
-          sekolah: input.sekolah,
-          jenjang: input.jenjang,
-          nisn: input.nisn,
-          role: "siswa",
-        },
-      },
-    });
-
-    if (error) {
-      return { ok: false, message: error.message, code: error.status ? String(error.status) : undefined };
-    }
-
-    const needsConfirmation = !data.session && !!data.user;
-
-    logSystemEvent({
-      action: "REGISTER_SISWA",
-      category: "auth",
-      detail: `Siswa mendaftar: ${input.email} (${input.nama})`,
-      userEmail: input.email,
-      userRole: "siswa",
-    });
-
-    return {
-      ok: true,
-      user: data.user || undefined,
-      needsConfirmation,
-      message: needsConfirmation
-        ? "Pendaftaran berhasil! Silakan periksa email Anda untuk konfirmasi akun."
-        : "Pendaftaran berhasil!",
-    };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Terjadi kesalahan tidak terduga saat mendaftar.";
+    const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat masuk.";
     return { ok: false, message: msg };
   }
 }
 
 export async function logout(): Promise<void> {
   try {
-    const userEmail = state.user?.email;
-    const userRole = state.profile?.role;
-    if (userEmail) {
-      logSystemEvent({
-        action: "LOGOUT",
-        category: "auth",
-        detail: `Pengguna keluar: ${userEmail}`,
-        userEmail,
-        userRole,
-      });
-    }
     await supabase.auth.signOut();
   } catch (err) {
-    console.error("[Auth] Error signing out:", err);
+    console.error("[Auth] Sign out error:", err);
   } finally {
     resetAllCloudStores();
-    setState({ ...LOGGED_OUT, ready: true });
+    setState({
+      ...LOGGED_OUT,
+      ready: true,
+    });
   }
 }
 
-let authInitialized = false;
+export async function registerGuru(
+  input: RegisterGuruInput,
+): Promise<RegisterResult> {
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email: input.email.trim().toLowerCase(),
+      password: input.password,
+      options: {
+        data: {
+          nama: input.nama.trim(),
+          role: "guru",
+          nip: input.nip.trim(),
+          sekolah: input.sekolah.trim(),
+          mapel: input.mapel.trim(),
+          telepon: input.telepon.trim(),
+        },
+      },
+    });
 
-export function initAuth(): () => void {
-  if (authInitialized) return () => {};
-  authInitialized = true;
-
-  supabase.auth.getSession().then(({ data: { session }, error }) => {
     if (error) {
-      console.error("[Auth] Initial getSession error:", error.message);
-      setState({ ready: true, signedIn: false, user: null, profile: DEFAULT_PROFILE });
-      return;
-    }
+      const errMsg = error.message.toLowerCase();
+      let code: string | undefined = undefined;
+      let userFriendlyMessage = error.message;
 
-    if (session?.user) {
-      fetchProfileForUser(session.user).then((res) => {
-        setState({
-          ready: true,
-          signedIn: true,
-          user: session.user,
-          profile: res.profile,
-          profileStatus: res.status,
-          profileError: res.status === "error" ? res.message : null,
-        });
-      });
-    } else {
-      setState({ ready: true, signedIn: false, user: null, profile: DEFAULT_PROFILE });
-    }
-  });
-
-  const {
-    data: { subscription },
-  } = supabase.auth.onAuthStateChange(async (event, session) => {
-    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
-      if (session?.user) {
-        const res = await fetchProfileForUser(session.user);
-        setState({
-          ready: true,
-          signedIn: true,
-          user: session.user,
-          profile: res.profile,
-          profileStatus: res.status,
-          profileError: res.status === "error" ? res.message : null,
-        });
+      if (errMsg.includes("already registered") || errMsg.includes("user already exists")) {
+        code = "user_already_exists";
+        userFriendlyMessage = "Email ini sudah terdaftar. Silakan login atau gunakan email lain.";
+      } else if (errMsg.includes("rate limit") || errMsg.includes("too many requests")) {
+        code = "rate_limit";
+        userFriendlyMessage = "Terlalu banyak permintaan pendaftaran. Tunggu beberapa saat lalu coba lagi.";
       }
-    } else if (event === "SIGNED_OUT") {
-      resetAllCloudStores();
-      setState({ ...LOGGED_OUT, ready: true });
-    }
-  });
 
-  return () => {
-    subscription.unsubscribe();
-  };
+      return { ok: false, message: userFriendlyMessage, code };
+    }
+
+    const user = data.user ?? undefined;
+    const needsConfirmation = !data.session && Boolean(user);
+
+    const message = needsConfirmation
+      ? "Pendaftaran berhasil! Tautan konfirmasi telah dikirim ke email Anda. Silakan cek kotak masuk atau spam."
+      : "Pendaftaran berhasil! Akun Anda telah aktif.";
+
+    if (user) {
+      void syncProfile(user);
+    }
+
+    logSystemEvent({
+      action: "REGISTER_GURU",
+      category: "auth",
+      detail: `Guru baru mendaftar: ${input.email} (${input.nama})`,
+      userEmail: input.email,
+      userRole: "guru",
+    });
+
+    return { ok: true, user, needsConfirmation, message };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat mendaftar.";
+    return { ok: false, message: msg };
+  }
 }
 
-export function useAuth() {
-  const s = useSyncExternalStore(subscribe, get, get);
-  return {
-    ready: s.ready,
-    signedIn: s.signedIn,
-    user: s.user,
-    profile: s.profile,
-    profileStatus: s.profileStatus,
-    profileError: s.profileError,
-    isGuru: isGuru(s.profile),
-    isSiswa: isSiswa(s.profile),
-    isAdmin: isAdmin(s.profile),
-  };
+export async function registerSiswa(
+  input: RegisterSiswaInput,
+): Promise<RegisterResult> {
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email: input.email.trim().toLowerCase(),
+      password: input.password,
+      options: {
+        data: {
+          nama: input.nama.trim(),
+          role: "siswa",
+          nisn: input.nisn.trim(),
+          sekolah: input.sekolah.trim(),
+          jenjang: input.jenjang.trim(),
+          telepon: (input.telepon ?? "").trim(),
+        },
+      },
+    });
+
+    if (error) {
+      const errMsg = error.message.toLowerCase();
+      let code: string | undefined = undefined;
+      let userFriendlyMessage = error.message;
+
+      if (errMsg.includes("already registered") || errMsg.includes("user already exists")) {
+        code = "user_already_exists";
+        userFriendlyMessage = "Email ini sudah terdaftar. Silakan login atau gunakan email lain.";
+      } else if (errMsg.includes("rate limit") || errMsg.includes("too many requests")) {
+        code = "rate_limit";
+        userFriendlyMessage = "Terlalu banyak permintaan pendaftaran. Tunggu beberapa saat lalu coba lagi.";
+      }
+
+      return { ok: false, message: userFriendlyMessage, code };
+    }
+
+    const user = data.user ?? undefined;
+    const needsConfirmation = !data.session && Boolean(user);
+
+    const message = needsConfirmation
+      ? "Pendaftaran berhasil! Tautan konfirmasi telah dikirim ke email Anda. Silakan cek kotak masuk atau spam."
+      : "Pendaftaran berhasil! Akun Anda telah aktif.";
+
+    if (user) {
+      void syncProfile(user);
+    }
+
+    logSystemEvent({
+      action: "REGISTER_SISWA",
+      category: "auth",
+      detail: `Siswa baru mendaftar: ${input.email} (${input.nama})`,
+      userEmail: input.email,
+      userRole: "siswa",
+    });
+
+    return { ok: true, user, needsConfirmation, message };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat mendaftar.";
+    return { ok: false, message: msg };
+  }
+}
+
+export async function updateProfile(
+  patch: Partial<GuruProfile>,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const current = get();
+  if (!current.user) {
+    return {
+      ok: false,
+      message: "Sesi autentikasi tidak ditemukan. Silakan login terlebih dahulu.",
+    };
+  }
+
+  // Strip privilege & identity fields to prevent client-side authorization escalation
+  const { role: _r, status_verifikasi: _s, id: _id, ...safePatch } = patch;
+  const nextProfile = { ...current.profile, ...safePatch };
+
+  try {
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        nama: nextProfile.nama,
+        nip: nextProfile.nip,
+        nisn: nextProfile.nisn ?? "",
+        sekolah: nextProfile.sekolah,
+        mapel: nextProfile.mapel,
+        kelas: nextProfile.kelas,
+        telepon: nextProfile.telepon,
+        bio: nextProfile.bio,
+      })
+      .eq("id", current.user.id);
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+
+    // Update in-memory state only AFTER Supabase confirms write
+    setState({ profile: nextProfile });
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal memperbarui profil di database.";
+    return { ok: false, message: msg };
+  }
+}
+
+export async function requestPasswordReset(
+  email: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const redirectUrl =
+      typeof window !== "undefined" ? `${window.location.origin}/lupa-kata-sandi` : undefined;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: redirectUrl,
+    });
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal mengirim permintaan reset kata sandi.";
+    return { ok: false, message: msg };
+  }
+}
+
+export async function completePasswordReset(
+  password: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal memperbarui kata sandi.";
+    return { ok: false, message: msg };
+  }
+}
+
+export function initials(nama: string | undefined | null) {
+  if (!nama || typeof nama !== "string") return "GP";
+  return (
+    nama
+      .replace(/^(Bu|Pak|Bapak|Ibu)\s+/i, "")
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w[0] ?? "")
+      .join("")
+      .toUpperCase() || "GP"
+  );
+}
+
+export function shortName(nama: string | undefined | null) {
+  if (!nama || typeof nama !== "string") return "Pengguna";
+  const parts = nama.trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).join(" ") || "Pengguna";
 }
