@@ -36,6 +36,8 @@ import { buatIlustrasi, buatSlides } from "@/lib/modul-ai";
 import type { Modul } from "@/lib/modul-types";
 import { useServerFn } from "@tanstack/react-start";
 import { editModulAi, generateModulAi } from "@/lib/ai.functions";
+import { supabase } from "@/integrations/supabase/client";
+import { isRecoverableAuthError, withAuthRetry } from "@/integrations/supabase/auth-token";
 import { uid } from "@/lib/cloud-store";
 
 const INSTRUKSI_MODUL = [
@@ -128,17 +130,21 @@ export function ModulEditor({
     }
     setRegenerating(true);
     try {
-      const hasil = await generateAi({
-        data: {
-          sumberTipe: modul.sumberTipe || "Teks",
-          konten: rawContent,
-          topik: modul.judul.replace(/^Modul Ajar:\s*/i, ""),
-          mapel: modul.mapel,
-          kelas: modul.kelas,
-          ...(modul.sumberJudul ? { sumberJudul: modul.sumberJudul } : {}),
-          ...(modul.sumberUrl ? { sumberUrl: modul.sumberUrl } : {}),
-        },
-      });
+      const hasil = await withAuthRetry(
+        () => supabase.auth.refreshSession(),
+        () =>
+          generateAi({
+            data: {
+              sumberTipe: modul.sumberTipe || "Teks",
+              konten: rawContent,
+              topik: modul.judul.replace(/^Modul Ajar:\s*/i, ""),
+              mapel: modul.mapel,
+              kelas: modul.kelas,
+              ...(modul.sumberJudul ? { sumberJudul: modul.sumberJudul } : {}),
+              ...(modul.sumberUrl ? { sumberUrl: modul.sumberUrl } : {}),
+            },
+          }),
+      );
       const newSections = hasil.sections.map((s) => ({
         id: uid(),
         judul: s.judul,
@@ -164,7 +170,11 @@ export function ModulEditor({
       setRegenerateOpen(false);
       toast.success("Modul berhasil disusun ulang dengan AI.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Gagal meregenerasi modul.");
+      const raw = error instanceof Error ? error.message : "Gagal meregenerasi modul.";
+      const message = isRecoverableAuthError(error)
+        ? "Sesi login tidak valid atau kedaluwarsa. Keluar lalu masuk kembali, kemudian coba lagi."
+        : raw;
+      toast.error(message);
     } finally {
       setRegenerating(false);
     }
@@ -250,8 +260,7 @@ export function ModulEditor({
         </div>
       </div>
 
-      {modul.sumberUrl || modul.sumberJudul ? (
-        <Card className="bg-muted/30 border-muted">
+      {modul.sumberUrl || modul.sumberJudul ? (\n        <Card className="bg-muted/30 border-muted">
           <CardContent className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs text-muted-foreground">
             <div className="min-w-0 flex-1 truncate">
               <span className="font-semibold text-foreground">Sumber Rujukan: </span>
