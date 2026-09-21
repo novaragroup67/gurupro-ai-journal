@@ -402,4 +402,652 @@ function SoalPage() {
                       GuruPro AI sedang menyusun soal…
                     </p>
                   </div>
-                ) : (\n                  <>\n                    <div className=\"grid gap-4 sm:grid-cols-2\">\n                      <div className=\"grid gap-2\">\n                        <Label>Pilih Modul Sumber (opsional)</Label>\n                        <Select value={modulId} onValueChange={setModulId}>\n                          <SelectTrigger>\n                            <SelectValue placeholder=\"Tanpa modul sumber\" />\n                          </SelectTrigger>\n                          <SelectContent>\n                            {moduls.map((m) => (\n                              <SelectItem key={m.id} value={m.id}>\n                                {m.judul}\n                              </SelectItem>\n                            ))}\n                          </SelectContent>\n                        </Select>\n                      </div>\n                      <div className=\"grid gap-2\">\n                        <Label htmlFor=\"topik\">Topik / Materi</Label>\n                        <Input\n                          id=\"topik\"\n                          value={topik}\n                          onChange={(e) => setTopik(e.target.value)}\n                          placeholder=\"Misal: Turunan Fungsi Aljabar\"\n                        />\n                      </div>\n                      <div className=\"grid gap-2\">\n                        <Label htmlFor=\"jumlah\">Jumlah Soal</Label>\n                        <Input\n                          id=\"jumlah\"\n                          type=\"number\"\n                          min={1}\n                          max={20}\n                          value={jumlah}\n                          onChange={(e) => setJumlah(e.target.value)}\n                        />\n                      </div>\n                      <div className=\"grid gap-2\">\n                        <Label>Tingkat Kesulitan</Label>\n                        <Select value={tingkat} onValueChange={(v) => setTingkat(v as Tingkat)}>\n                          <SelectTrigger>\n                            <SelectValue />\n                          </SelectTrigger>\n                          <SelectContent>\n                            {TINGKAT.map((t) => (\n                              <SelectItem key={t} value={t}>\n                                {t}\n                              </SelectItem>\n                            ))}\n                          </SelectContent>\n                        </Select>\n                      </div>\n                      <div className=\"grid gap-2\">\n                        <Label>Jenis Soal</Label>\n                        <Select value={jenis} onValueChange={(v) => setJenis(v as JenisSoal)}>\n                          <SelectTrigger>\n                            <SelectValue />\n                          </SelectTrigger>\n                          <SelectContent>\n                            {JENIS_SOAL.map((j) => (\n                              <SelectItem key={j} value={j}>\n                                {j}\n                              </SelectItem>\n                            ))}\n                          </SelectContent>\n                        </Select>\n                      </div>\n                    </div>\n                    <div className=\"flex flex-wrap justify-end gap-2 border-t pt-4\">\n                      <Button onClick={runGenerate}>\n                        <Sparkles className=\"h-4 w-4\" />\n                        Buatkan Soal dengan AI\n                      </Button>\n                    </div>\n                  </>\n                )}\n              </CardContent>\n            </Card>\n          </TabsContent>\n\n          <TabsContent value=\"manual\" className=\"mt-4 grid gap-4\">\n            <Card>\n              <CardContent className=\"grid gap-4 p-5\">\n                <div className=\"grid gap-2\">\n                  <Label htmlFor=\"pertanyaan\">Pertanyaan</Label>\n                  <Textarea\n                    id=\"pertanyaan\"\n                    rows={3}\n                    value={mPertanyaan}\n                    onChange={(e) => setMPertanyaan(e.target.value)}\n                    placeholder=\"Tulis pertanyaan…\"\n                  />\n                </div>\n                <div className=\"grid gap-4 sm:grid-cols-2\">\n                  <div className=\"grid gap-2\">\n                    <Label>Jenis Soal</Label>\n                    <Select value={mJenis} onValueChange={(v) => setMJenis(v as JenisSoal)}>\n                      <SelectTrigger>\n                        <SelectValue />\n                      </SelectTrigger>\n                      <SelectContent>\n                        {JENIS_SOAL.map((j) => (\n                          <SelectItem key={j} value={j}>\n                            {j}\n                          </SelectItem>\n                        ))}\n                      </SelectContent>\n                    </Select>\n                  </div>\n                  <div className=\"grid gap-2\">\n                    <Label htmlFor=\"kunci\">Kunci Jawaban</Label>\n                    <Input\n                      id=\"kunci\"\n                      value={mKunci}\n                      onChange={(e) => setMKunci(e.target.value)}\n                      placeholder={mJenis === \"Pilihan Ganda\" ? \"Misal: A\" : \"Poin jawaban ideal\"}\n                    />\n                  </div>\n                </div>\n                <div className=\"flex flex-wrap justify-end gap-2 border-t pt-4\">\n                  <Button variant=\"outline\" onClick={addManual}>\n                    <Plus className=\"h-4 w-4\" />\n                    Tambah ke Draf\n                  </Button>\n                  <Button disabled={draftSoal.length === 0} onClick={() => setMode(\"review\")}>\n                    Tinjau Draf ({draftSoal.length})\n                  </Button>\n                </div>\n              </CardContent>\n            </Card>\n          </TabsContent>\n        </Tabs>\n      </div>\n    );\n  }\n\n  if (mode === \"review\") {\n    return (\n      <div className=\"grid gap-5\">\n        <Button variant=\"ghost\" size=\"sm\" className=\"-ml-2 w-fit\" onClick={() => setMode(\"buat\")}>\n          <ArrowLeft className=\"h-4 w-4\" />\n          Kembali ke Form Soal\n        </Button>\n\n        <PageHeader\n          title=\"Hasil Draf Soal\"\n          subtitle={`${draftSoal.length} soal — ${topik || judul}. Tinjau, edit manual atau dengan AI, lalu simpan.`}\n          actions={\n            <>\n              <Button variant=\"outline\" onClick={runGenerate}>\n                <RefreshCw className=\"h-4 w-4\" />\n                Regenerasi\n              </Button>\n              <Button variant=\"secondary\" onClick={() => simpanKeBank(\"Draft\")}>\n                <Save className=\"h-4 w-4\" />\n                Simpan ke Bank Soal\n              </Button>\n              <Button onClick={() => simpanKeBank(\"Terbit\")}>\n                <Send className=\"h-4 w-4\" />\n                Publikasikan Soal\n              </Button>\n            </>\n          }\n        />\n\n        {draftSoal.map((s, i) => (\n          <Card key={s.id}>\n            <CardHeader className=\"flex-row items-start justify-between gap-3 space-y-0 pb-3\">\n              <CardTitle className=\"font-display text-base text-navy\">Soal {i + 1}</CardTitle>\n              <div className=\"flex flex-wrap gap-2\">\n                <Badge variant=\"secondary\">{s.jenis}</Badge>\n                <Button\n                  size=\"sm\"\n                  variant={editId === s.id ? \"secondary\" : \"outline\"}\n                  onClick={() => setEditId(editId === s.id ? null : s.id)}\n                >\n                  {editId === s.id ? <X className=\"h-4 w-4\" /> : <Pencil className=\"h-4 w-4\" />}\n                  {editId === s.id ? \"Selesai\" : \"Edit Manual\"}\n                </Button>\n                <Button size=\"sm\" variant=\"outline\" onClick={() => setAiTarget(s)}>\n                  <Sparkles className=\"h-4 w-4\" />\n                  Edit dengan AI\n                </Button>\n                <Button\n                  size=\"sm\"\n                  variant=\"ghost\"\n                  className=\"text-destructive hover:bg-destructive/10 hover:text-destructive\"\n                  onClick={() => setDraftSoal((prev) => prev.filter((x) => x.id !== s.id))}\n                >\n                  <Trash2 className=\"h-4 w-4\" />\n                </Button>\n              </div>\n            </CardHeader>\n            <CardContent className=\"grid gap-3 pt-0\">\n              {editId === s.id ? (\n                <>\n                  <Textarea\n                    rows={3}\n                    value={s.pertanyaan}\n                    onChange={(e) =>\n                      setDraftSoal((prev) =>\n                        prev.map((x) => (x.id === s.id ? { ...x, pertanyaan: e.target.value } : x)),\n                      )\n                    }\n                  />\n                  {s.opsi.length > 0 ? (\n                    <div className=\"grid gap-2\">\n                      {s.opsi.map((o, oi) => (\n                        <Input\n                          key={oi}\n                          value={o}\n                          onChange={(e) =>\n                            setDraftSoal((prev) =>\n                              prev.map((x) =>\n                                x.id === s.id\n                                  ? {\n                                      ...x,\n                                      opsi: x.opsi.map((v, vi) => (vi === oi ? e.target.value : v)),\n                                    }\n                                  : x,\n                              ),\n                            )\n                          }\n                        />\n                      ))}\n                    </div>\n                  ) : null}\n                  <div className=\"grid gap-2\">\n                    <Label>Kunci Jawaban</Label>\n                    <Input\n                      value={s.kunci}\n                      onChange={(e) =>\n                        setDraftSoal((prev) =>\n                          prev.map((x) => (x.id === s.id ? { ...x, kunci: e.target.value } : x)),\n                        )\n                      }\n                    />\n                  </div>\n                </>\n              ) : (\n                <>\n                  <p className=\"text-sm font-medium\">{s.pertanyaan}</p>\n                  {s.opsi.length > 0 ? (\n                    <ol className=\"grid gap-1 text-sm text-muted-foreground\">\n                      {s.opsi.map((o, oi) => (\n                        <li key={oi}>\n                          {String.fromCharCode(65 + oi)}. {o}\n                        </li>\n                      ))}\n                    </ol>\n                  ) : null}\n                  <p className=\"rounded-lg bg-primary-soft px-3 py-2 text-xs text-primary\">\n                    Kunci: {s.kunci}\n                  </p>\n                </>\n              )}\n            </CardContent>\n          </Card>\n        ))}\n\n        <Dialog\n          open={aiTarget !== null}\n          onOpenChange={(o) => !o && !aiLoading && setAiTarget(null)}\n        >\n          <DialogContent className=\"max-h-[90dvh] w-[calc(100vw-2rem)] sm:max-w-md overflow-y-auto overflow-x-hidden p-4 sm:p-6\">\n            <DialogHeader className=\"min-w-0\">\n              <DialogTitle className=\"font-display text-navy break-words\">\n                Edit Soal dengan AI\n              </DialogTitle>\n              <DialogDescription className=\"break-words\">\n                Pilih atau tulis instruksi revisi untuk soal ini.\n              </DialogDescription>\n            </DialogHeader>\n            {aiLoading ? (\n              <div className=\"grid place-items-center gap-3 py-10 text-center min-w-0 px-2\">\n                <Loader2 className=\"h-7 w-7 animate-spin text-primary\" />\n                <p className=\"text-sm text-muted-foreground break-words\">\n                  GuruPro AI sedang merevisi soal…\n                </p>\n              </div>\n            ) : (\n              <div className=\"grid gap-3 min-w-0\">\n                <div className=\"flex flex-wrap gap-2 min-w-0\">\n                  {INSTRUKSI_AI.map((i) => (\n                    <Button\n                      key={i}\n                      size=\"sm\"\n                      variant={instruksi === i ? \"secondary\" : \"outline\"}\n                      onClick={() => setInstruksi(i)}\n                    >\n                      {i}\n                    </Button>\n                  ))}\n                </div>\n                <Textarea\n                  rows={2}\n                  value={instruksi}\n                  onChange={(e) => setInstruksi(e.target.value)}\n                  placeholder=\"Misal: buat lebih sulit\"\n                  className=\"min-w-0 max-w-full break-words\"\n                />\n              </div>\n            )}\n            {!aiLoading ? (\n              <DialogFooter className=\"flex flex-col-reverse sm:flex-row sm:justify-end gap-2 w-full pt-2\">\n                <Button\n                  variant=\"ghost\"\n                  onClick={() => setAiTarget(null)}\n                  className=\"w-full sm:w-auto\"\n                >\n                  Batal\n                </Button>\n                <Button onClick={applyAiRevisi} className=\"w-full sm:w-auto\">\n                  <Sparkles className=\"h-4 w-4\" />\n                  Terapkan Revisi\n                </Button>\n              </DialogFooter>\n            ) : null}\n          </DialogContent>\n        </Dialog>\n      </div>\n    );\n  }\n\n  return (\n    <div className=\"grid gap-6\">\n      <PageHeader\n        title=\"Bank Soal\"\n        subtitle=\"Soal disimpan sebagai konten umum. Kelas dipilih saat Anda menerbitkannya sebagai tugas.\"\n        actions={\n          <Button\n            onClick={() => {\n              resetDraft();\n              setMode(\"buat\");\n            }}\n          >\n            <Plus className=\"h-4 w-4\" />\n            Buat Soal\n          </Button>\n        }\n      />\n\n      <div className=\"grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center\">\n        <div className=\"relative sm:max-w-xs\">\n          <Search className=\"absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground\" />\n          <Input\n            value={query}\n            onChange={(e) => setQuery(e.target.value)}\n            placeholder=\"Cari judul atau topik soal…\"\n            className=\"pl-9\"\n            aria-label=\"Cari soal\"\n          />\n        </div>\n        <Select\n          value={statusFilter}\n          onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}\n        >\n          <SelectTrigger className=\"sm:w-44\">\n            <SelectValue />\n          </SelectTrigger>\n          <SelectContent>\n            <SelectItem value=\"semua\">Semua status</SelectItem>\n            <SelectItem value=\"Draft\">Draft</SelectItem>\n            <SelectItem value=\"Terbit\">Terbit</SelectItem>\n          </SelectContent>\n        </Select>\n      </div>\n\n      {filtered.length === 0 ? (\n        <Card className=\"border-dashed\">\n          <CardContent className=\"flex flex-col items-center gap-3 py-14 text-center\">\n            <span className=\"grid h-14 w-14 place-items-center rounded-2xl bg-primary-soft text-primary\">\n              <FileQuestion className=\"h-7 w-7\" />\n            </span>\n            <p className=\"font-display font-semibold text-navy\">Bank soal masih kosong</p>\n            <p className=\"max-w-sm text-sm text-muted-foreground\">\n              Buat soal manual atau minta GuruPro AI menyusun soal dari modul ajar Anda.\n            </p>\n            <Button\n              onClick={() => {\n                resetDraft();\n                setMode(\"buat\");\n              }}\n            >\n              <Sparkles className=\"h-4 w-4\" />\n              Buat Soal\n            </Button>\n          </CardContent>\n        </Card>\n      ) : (\n        <>\n          {/* Mobile cards */}\n          <div className=\"grid gap-3 md:hidden\">\n            {filtered.map((p) => (\n              <Card key={p.id}>\n                <CardContent className=\"grid gap-3 p-4\">\n                  <div className=\"flex items-start justify-between gap-2\">\n                    <div className=\"min-w-0\">\n                      <p className=\"truncate font-display font-semibold text-navy\">{p.judul}</p>\n                      <p className=\"truncate text-xs text-muted-foreground\">{p.topik}</p>\n                    </div>\n                    <Badge\n                      variant=\"secondary\"\n                      className={p.status === \"Terbit\" ? \"bg-primary-soft text-primary\" : \"\"}\n                    >\n                      {p.status}\n                    </Badge>\n                  </div>\n                  <p className=\"text-xs text-muted-foreground\">\n                    {p.soal.length} soal · Kelas: {p.kelas.length ? p.kelas.join(\", \") : \"—\"}\n                  </p>\n                  <PaketActions\n                    paket={p}\n                    onOpen={() => {\n                      setJudul(p.judul);\n                      setTopik(p.topik);\n                      setModulId(p.modulId ?? \"\");\n                      setDraftSoal(p.soal);\n                      setPaketId(p.id);\n                      setMode(\"review\");\n                    }}\n                    onTerbitTugas={() => {\n                      setTerbitTarget(p);\n                      setKelasPilihan(p.kelas);\n                    }}\n                    onHapus={() => setHapus(p)}\n                  />\n                </CardContent>\n              </Card>\n            ))}\n          </div>\n\n          {/* Desktop table */}\n          <Card className=\"hidden md:block\">\n            <CardContent className=\"p-0\">\n              <Table>\n                <TableHeader>\n                  <TableRow>\n                    <TableHead>Judul / Topik</TableHead>\n                    <TableHead>Dipakai di Kelas</TableHead>\n                    <TableHead>Jumlah</TableHead>\n                    <TableHead>Status</TableHead>\n                    <TableHead className=\"text-right\">Aksi</TableHead>\n                  </TableRow>\n                </TableHeader>\n                <TableBody>\n                  {filtered.map((p) => (\n                    <TableRow key={p.id}>\n                      <TableCell className=\"max-w-[18rem]\">\n                        <span className=\"block truncate font-medium\">{p.judul}</span>\n                        <span className=\"block truncate text-xs text-muted-foreground\">\n                          {p.topik}\n                        </span>\n                      </TableCell>\n                      <TableCell className=\"text-sm text-muted-foreground\">\n                        {p.kelas.length ? p.kelas.join(\", \") : \"—\"}\n                      </TableCell>\n                      <TableCell>{p.soal.length}</TableCell>\n                      <TableCell>\n                        <Badge\n                          variant=\"secondary\"\n                          className={p.status === \"Terbit\" ? \"bg-primary-soft text-primary\" : \"\"}\n                        >\n                          {p.status}\n                        </Badge>\n                      </TableCell>\n                      <TableCell>\n                        <PaketActions\n                          align=\"end\"\n                          paket={p}\n                          onOpen={() => {\n                            setJudul(p.judul);\n                            setTopik(p.topik);\n                            setModulId(p.modulId ?? \"\");\n                            setDraftSoal(p.soal);\n                            setPaketId(p.id);\n                            setMode(\"review\");\n                          }}\n                          onTerbitTugas={() => {\n                            setTerbitTarget(p);\n                            setKelasPilihan(p.kelas);\n                          }}\n                          onHapus={() => setHapus(p)}\n                        />\n                      </TableCell>\n                    </TableRow>\n                  ))}\n                </TableBody>\n              </Table>\n            </CardContent>\n          </Card>\n        </>\n      )}\n\n      <Dialog open={terbitTarget !== null} onOpenChange={(o) => !o && setTerbitTarget(null)}>\n        <DialogContent className=\"max-h-[90dvh] w-[calc(100vw-2rem)] sm:max-w-md overflow-y-auto overflow-x-hidden p-4 sm:p-6\">\n          <DialogHeader className=\"min-w-0\">\n            <DialogTitle className=\"font-display text-navy break-words\">\n              Terbitkan sebagai Tugas\n            </DialogTitle>\n            <DialogDescription className=\"break-words\">\n              Pilih kelas tujuan untuk paket soal &ldquo;{terbitTarget?.judul}&rdquo;.\n            </DialogDescription>\n          </DialogHeader>\n          <div className=\"grid gap-2 min-w-0\">\n            {myKelas.length > 0 ? (\n              myKelas.map((k) => {\n                const labelKelas = `${k.tingkat} ${k.namaKelas}`;\n                return (\n                  <label\n                    key={k.id}\n                    className=\"flex items-center gap-3 rounded-lg border p-3 text-sm min-w-0 cursor-pointer hover:bg-muted/50\"\n                  >\n                    <Checkbox\n                      checked={kelasPilihan.includes(labelKelas)}\n                      onCheckedChange={(v) =>\n                        setKelasPilihan((prev) =>\n                          v ? [...prev, labelKelas] : prev.filter((x) => x !== labelKelas),\n                        )\n                      }\n                    />\n                    <span className=\"truncate font-medium\">{labelKelas}</span>\n                    {k.mapel ? (\n                      <span className=\"text-xs text-muted-foreground ml-auto\">{k.mapel}</span>\n                    ) : null}\n                  </label>\n                );\n              })\n            ) : (\n              <p className=\"text-xs text-muted-foreground p-3 border rounded-lg\">\n                Anda belum memiliki kelas. Buat kelas di menu Kelas Saya terlebih dahulu.\n              </p>\n            )}\n          </div>\n          <DialogFooter className=\"flex flex-col-reverse sm:flex-row sm:justify-end gap-2 w-full pt-2\">\n            <Button\n              variant=\"ghost\"\n              onClick={() => setTerbitTarget(null)}\n              className=\"w-full sm:w-auto\"\n            >\n              Batal\n            </Button>\n            <Button\n              onClick={() => {\n                if (kelasPilihan.length === 0) {\n                  toast.error(\"Pilih minimal satu kelas.\");\n                  return;\n                }\n                if (terbitTarget) void terbitkanSebagaiTugas(terbitTarget.id, kelasPilihan);\n                setTerbitTarget(null);\n                toast.success(\"Soal diterbitkan sebagai tugas.\");\n              }}\n              className=\"w-full sm:w-auto\"\n            >\n              <Send className=\"h-4 w-4\" />\n              Terbitkan\n            </Button>\n          </DialogFooter>\n        </DialogContent>\n      </Dialog>\n\n      <AlertDialog open={hapus !== null} onOpenChange={(o) => !o && setHapus(null)}>\n        <AlertDialogContent>\n          <AlertDialogHeader>\n            <AlertDialogTitle>Hapus paket soal ini?</AlertDialogTitle>\n            <AlertDialogDescription>\n              &ldquo;{hapus?.judul}&rdquo; beserta {hapus?.soal.length} soal akan dihapus permanen.\n            </AlertDialogDescription>\n          </AlertDialogHeader>\n          <AlertDialogFooter>\n            <AlertDialogCancel>Batal</AlertDialogCancel>\n            <AlertDialogAction\n              className=\"bg-destructive text-destructive-foreground hover:bg-destructive/90\"\n              onClick={() => {\n                if (hapus) void deletePaket(hapus.id);\n                setHapus(null);\n                toast.success(\"Paket soal dihapus.\");\n              }}\n            >\n              Hapus\n            </AlertDialogAction>\n          </AlertDialogFooter>\n        </AlertDialogContent>\n      </AlertDialog>\n    </div>\n  );\n}\n\nfunction PaketActions({\n  paket,\n  onOpen,\n  onTerbitTugas,\n  onHapus,\n  align = \"start\",\n}: {\n  paket: PaketSoal;\n  onOpen: () => void;\n  onTerbitTugas: () => void;\n  onHapus: () => void;\n  align?: \"start\" | \"end\";\n}) {\n  return (\n    <div className={`flex flex-wrap gap-2 ${align === \"end\" ? \"justify-end\" : \"\"}`}>\n      <Button size=\"sm\" variant=\"outline\" onClick={onOpen}>\n        <Pencil className=\"h-4 w-4\" />\n        Tinjau\n      </Button>\n      {paket.status === \"Draft\" ? (\n        <Button\n          size=\"sm\"\n          variant=\"secondary\"\n          onClick={() => {\n            void publishPaket(paket.id);\n            toast.success(\"Soal berhasil diterbitkan.\");\n          }}\n        >\n          <Send className=\"h-4 w-4\" />\n          Terbitkan\n        </Button>\n      ) : (\n        <Button size=\"sm\" variant=\"secondary\" onClick={onTerbitTugas}>\n          <Send className=\"h-4 w-4\" />\n          Terbitkan sebagai Tugas\n        </Button>\n      )}\n      <Button\n        size=\"sm\"\n        variant=\"ghost\"\n        aria-label=\"Duplikat paket soal\"\n        onClick={() => {\n          void duplicatePaket(paket.id);\n          toast.success(\"Paket soal diduplikasi sebagai draft.\");\n        }}\n      >\n        <Copy className=\"h-4 w-4\" />\n      </Button>\n      <Button\n        size=\"sm\"\n        variant=\"ghost\"\n        aria-label=\"Hapus paket soal\"\n        className=\"text-destructive hover:bg-destructive/10 hover:text-destructive\"\n        onClick={onHapus}\n      >\n        <Trash2 className=\"h-4 w-4\" />\n      </Button>\n    </div>\n  );\n}\n
+                ) : (
+                  <>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label>Pilih Modul Sumber (opsional)</Label>
+                        <Select value={modulId} onValueChange={setModulId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Tanpa modul sumber" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {moduls.map((m) => (
+                              <SelectItem key={m.id} value={m.id}>
+                                {m.judul}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="topik">Topik / Materi</Label>
+                        <Input
+                          id="topik"
+                          value={topik}
+                          onChange={(e) => setTopik(e.target.value)}
+                          placeholder="Misal: Turunan Fungsi Aljabar"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="jumlah">Jumlah Soal</Label>
+                        <Input
+                          id="jumlah"
+                          type="number"
+                          min={1}
+                          max={20}
+                          value={jumlah}
+                          onChange={(e) => setJumlah(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Tingkat Kesulitan</Label>
+                        <Select value={tingkat} onValueChange={(v) => setTingkat(v as Tingkat)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {TINGKAT.map((t) => (
+                              <SelectItem key={t} value={t}>
+                                {t}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Jenis Soal</Label>
+                        <Select value={jenis} onValueChange={(v) => setJenis(v as JenisSoal)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {JENIS_SOAL.map((j) => (
+                              <SelectItem key={j} value={j}>
+                                {j}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+                      <Button onClick={runGenerate}>
+                        <Sparkles className="h-4 w-4" />
+                        Buatkan Soal dengan AI
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="manual" className="mt-4 grid gap-4">
+            <Card>
+              <CardContent className="grid gap-4 p-5">
+                <div className="grid gap-2">
+                  <Label htmlFor="pertanyaan">Pertanyaan</Label>
+                  <Textarea
+                    id="pertanyaan"
+                    rows={3}
+                    value={mPertanyaan}
+                    onChange={(e) => setMPertanyaan(e.target.value)}
+                    placeholder="Tulis pertanyaan…"
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label>Jenis Soal</Label>
+                    <Select value={mJenis} onValueChange={(v) => setMJenis(v as JenisSoal)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {JENIS_SOAL.map((j) => (
+                          <SelectItem key={j} value={j}>
+                            {j}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="kunci">Kunci Jawaban</Label>
+                    <Input
+                      id="kunci"
+                      value={mKunci}
+                      onChange={(e) => setMKunci(e.target.value)}
+                      placeholder={mJenis === "Pilihan Ganda" ? "Misal: A" : "Poin jawaban ideal"}
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+                  <Button variant="outline" onClick={addManual}>
+                    <Plus className="h-4 w-4" />
+                    Tambah ke Draf
+                  </Button>
+                  <Button disabled={draftSoal.length === 0} onClick={() => setMode("review")}>
+                    Tinjau Draf ({draftSoal.length})
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    );
+  }
+
+  if (mode === "review") {
+    return (
+      <div className="grid gap-5">
+        <Button variant="ghost" size="sm" className="-ml-2 w-fit" onClick={() => setMode("buat")}>
+          <ArrowLeft className="h-4 w-4" />
+          Kembali ke Form Soal
+        </Button>
+
+        <PageHeader
+          title="Hasil Draf Soal"
+          subtitle={`${draftSoal.length} soal — ${topik || judul}. Tinjau, edit manual atau dengan AI, lalu simpan.`}
+          actions={
+            <>
+              <Button variant="outline" onClick={runGenerate}>
+                <RefreshCw className="h-4 w-4" />
+                Regenerasi
+              </Button>
+              <Button variant="secondary" onClick={() => simpanKeBank("Draft")}>
+                <Save className="h-4 w-4" />
+                Simpan ke Bank Soal
+              </Button>
+              <Button onClick={() => simpanKeBank("Terbit")}>
+                <Send className="h-4 w-4" />
+                Publikasikan Soal
+              </Button>
+            </>
+          }
+        />
+
+        {draftSoal.map((s, i) => (
+          <Card key={s.id}>
+            <CardHeader className="flex-row items-start justify-between gap-3 space-y-0 pb-3">
+              <CardTitle className="font-display text-base text-navy">Soal {i + 1}</CardTitle>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">{s.jenis}</Badge>
+                <Button
+                  size="sm"
+                  variant={editId === s.id ? "secondary" : "outline"}
+                  onClick={() => setEditId(editId === s.id ? null : s.id)}
+                >
+                  {editId === s.id ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+                  {editId === s.id ? "Selesai" : "Edit Manual"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setAiTarget(s)}>
+                  <Sparkles className="h-4 w-4" />
+                  Edit dengan AI
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => setDraftSoal((prev) => prev.filter((x) => x.id !== s.id))}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-3 pt-0">
+              {editId === s.id ? (
+                <>
+                  <Textarea
+                    rows={3}
+                    value={s.pertanyaan}
+                    onChange={(e) =>
+                      setDraftSoal((prev) =>
+                        prev.map((x) => (x.id === s.id ? { ...x, pertanyaan: e.target.value } : x)),
+                      )
+                    }
+                  />
+                  {s.opsi.length > 0 ? (
+                    <div className="grid gap-2">
+                      {s.opsi.map((o, oi) => (
+                        <Input
+                          key={oi}
+                          value={o}
+                          onChange={(e) =>
+                            setDraftSoal((prev) =>
+                              prev.map((x) =>
+                                x.id === s.id
+                                  ? {
+                                      ...x,
+                                      opsi: x.opsi.map((v, vi) => (vi === oi ? e.target.value : v)),
+                                    }
+                                  : x,
+                              ),
+                            )
+                          }
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="grid gap-2">
+                    <Label>Kunci Jawaban</Label>
+                    <Input
+                      value={s.kunci}
+                      onChange={(e) =>
+                        setDraftSoal((prev) =>
+                          prev.map((x) => (x.id === s.id ? { ...x, kunci: e.target.value } : x)),
+                        )
+                      }
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium">{s.pertanyaan}</p>
+                  {s.opsi.length > 0 ? (
+                    <ol className="grid gap-1 text-sm text-muted-foreground">
+                      {s.opsi.map((o, oi) => (
+                        <li key={oi}>
+                          {String.fromCharCode(65 + oi)}. {o}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                  <p className="rounded-lg bg-primary-soft px-3 py-2 text-xs text-primary">
+                    Kunci: {s.kunci}
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+
+        <Dialog
+          open={aiTarget !== null}
+          onOpenChange={(o) => !o && !aiLoading && setAiTarget(null)}
+        >
+          <DialogContent className="max-h-[90dvh] w-[calc(100vw-2rem)] sm:max-w-md overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+            <DialogHeader className="min-w-0">
+              <DialogTitle className="font-display text-navy break-words">
+                Edit Soal dengan AI
+              </DialogTitle>
+              <DialogDescription className="break-words">
+                Pilih atau tulis instruksi revisi untuk soal ini.
+              </DialogDescription>
+            </DialogHeader>
+            {aiLoading ? (
+              <div className="grid place-items-center gap-3 py-10 text-center min-w-0 px-2">
+                <Loader2 className="h-7 w-7 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground break-words">
+                  GuruPro AI sedang merevisi soal…
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-3 min-w-0">
+                <div className="flex flex-wrap gap-2 min-w-0">
+                  {INSTRUKSI_AI.map((i) => (
+                    <Button
+                      key={i}
+                      size="sm"
+                      variant={instruksi === i ? "secondary" : "outline"}
+                      onClick={() => setInstruksi(i)}
+                    >
+                      {i}
+                    </Button>
+                  ))}
+                </div>
+                <Textarea
+                  rows={2}
+                  value={instruksi}
+                  onChange={(e) => setInstruksi(e.target.value)}
+                  placeholder="Misal: buat lebih sulit"
+                  className="min-w-0 max-w-full break-words"
+                />
+              </div>
+            )}
+            {!aiLoading ? (
+              <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 w-full pt-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => setAiTarget(null)}
+                  className="w-full sm:w-auto"
+                >
+                  Batal
+                </Button>
+                <Button onClick={applyAiRevisi} className="w-full sm:w-auto">
+                  <Sparkles className="h-4 w-4" />
+                  Terapkan Revisi
+                </Button>
+              </DialogFooter>
+            ) : null}
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-6">
+      <PageHeader
+        title="Bank Soal"
+        subtitle="Soal disimpan sebagai konten umum. Kelas dipilih saat Anda menerbitkannya sebagai tugas."
+        actions={
+          <Button
+            onClick={() => {
+              resetDraft();
+              setMode("buat");
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            Buat Soal
+          </Button>
+        }
+      />
+
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div className="relative sm:max-w-xs">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Cari judul atau topik soal…"
+            className="pl-9"
+            aria-label="Cari soal"
+          />
+        </div>
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}
+        >
+          <SelectTrigger className="sm:w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="semua">Semua status</SelectItem>
+            <SelectItem value="Draft">Draft</SelectItem>
+            <SelectItem value="Terbit">Terbit</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {filtered.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
+            <span className="grid h-14 w-14 place-items-center rounded-2xl bg-primary-soft text-primary">
+              <FileQuestion className="h-7 w-7" />
+            </span>
+            <p className="font-display font-semibold text-navy">Bank soal masih kosong</p>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Buat soal manual atau minta GuruPro AI menyusun soal dari modul ajar Anda.
+            </p>
+            <Button
+              onClick={() => {
+                resetDraft();
+                setMode("buat");
+              }}
+            >
+              <Sparkles className="h-4 w-4" />
+              Buat Soal
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Mobile cards */}
+          <div className="grid gap-3 md:hidden">
+            {filtered.map((p) => (
+              <Card key={p.id}>
+                <CardContent className="grid gap-3 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-display font-semibold text-navy">{p.judul}</p>
+                      <p className="truncate text-xs text-muted-foreground">{p.topik}</p>
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className={p.status === "Terbit" ? "bg-primary-soft text-primary" : ""}
+                    >
+                      {p.status}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {p.soal.length} soal · Kelas: {p.kelas.length ? p.kelas.join(", ") : "—"}
+                  </p>
+                  <PaketActions
+                    paket={p}
+                    onOpen={() => {
+                      setJudul(p.judul);
+                      setTopik(p.topik);
+                      setModulId(p.modulId ?? "");
+                      setDraftSoal(p.soal);
+                      setPaketId(p.id);
+                      setMode("review");
+                    }}
+                    onTerbitTugas={() => {
+                      setTerbitTarget(p);
+                      setKelasPilihan(p.kelas);
+                    }}
+                    onHapus={() => setHapus(p)}
+                  />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <Card className="hidden md:block">
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Judul / Topik</TableHead>
+                    <TableHead>Dipakai di Kelas</TableHead>
+                    <TableHead>Jumlah</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Aksi</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="max-w-[18rem]">
+                        <span className="block truncate font-medium">{p.judul}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {p.topik}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {p.kelas.length ? p.kelas.join(", ") : "—"}
+                      </TableCell>
+                      <TableCell>{p.soal.length}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={p.status === "Terbit" ? "bg-primary-soft text-primary" : ""}
+                        >
+                          {p.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <PaketActions
+                          align="end"
+                          paket={p}
+                          onOpen={() => {
+                            setJudul(p.judul);
+                            setTopik(p.topik);
+                            setModulId(p.modulId ?? "");
+                            setDraftSoal(p.soal);
+                            setPaketId(p.id);
+                            setMode("review");
+                          }}
+                          onTerbitTugas={() => {
+                            setTerbitTarget(p);
+                            setKelasPilihan(p.kelas);
+                          }}
+                          onHapus={() => setHapus(p)}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      <Dialog open={terbitTarget !== null} onOpenChange={(o) => !o && setTerbitTarget(null)}>
+        <DialogContent className="max-h-[90dvh] w-[calc(100vw-2rem)] sm:max-w-md overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+          <DialogHeader className="min-w-0">
+            <DialogTitle className="font-display text-navy break-words">
+              Terbitkan sebagai Tugas
+            </DialogTitle>
+            <DialogDescription className="break-words">
+              Pilih kelas tujuan untuk paket soal &ldquo;{terbitTarget?.judul}&rdquo;.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 min-w-0">
+            {myKelas.length > 0 ? (
+              myKelas.map((k) => {
+                const labelKelas = `${k.tingkat} ${k.namaKelas}`;
+                return (
+                  <label
+                    key={k.id}
+                    className="flex items-center gap-3 rounded-lg border p-3 text-sm min-w-0 cursor-pointer hover:bg-muted/50"
+                  >
+                    <Checkbox
+                      checked={kelasPilihan.includes(labelKelas)}
+                      onCheckedChange={(v) =>
+                        setKelasPilihan((prev) =>
+                          v ? [...prev, labelKelas] : prev.filter((x) => x !== labelKelas),
+                        )
+                      }
+                    />
+                    <span className="truncate font-medium">{labelKelas}</span>
+                    {k.mapel ? (
+                      <span className="text-xs text-muted-foreground ml-auto">{k.mapel}</span>
+                    ) : null}
+                  </label>
+                );
+              })
+            ) : (
+              <p className="text-xs text-muted-foreground p-3 border rounded-lg">
+                Anda belum memiliki kelas. Buat kelas di menu Kelas Saya terlebih dahulu.
+              </p>
+            )}
+          </div>
+          <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 w-full pt-2">
+            <Button
+              variant="ghost"
+              onClick={() => setTerbitTarget(null)}
+              className="w-full sm:w-auto"
+            >
+              Batal
+            </Button>
+            <Button
+              onClick={() => {
+                if (kelasPilihan.length === 0) {
+                  toast.error("Pilih minimal satu kelas.");
+                  return;
+                }
+                if (terbitTarget) void terbitkanSebagaiTugas(terbitTarget.id, kelasPilihan);
+                setTerbitTarget(null);
+                toast.success("Soal diterbitkan sebagai tugas.");
+              }}
+              className="w-full sm:w-auto"
+            >
+              <Send className="h-4 w-4" />
+              Terbitkan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={hapus !== null} onOpenChange={(o) => !o && setHapus(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus paket soal ini?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{hapus?.judul}&rdquo; beserta {hapus?.soal.length} soal akan dihapus permanen.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (hapus) void deletePaket(hapus.id);
+                setHapus(null);
+                toast.success("Paket soal dihapus.");
+              }}
+            >
+              Hapus
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function PaketActions({
+  paket,
+  onOpen,
+  onTerbitTugas,
+  onHapus,
+  align = "start",
+}: {
+  paket: PaketSoal;
+  onOpen: () => void;
+  onTerbitTugas: () => void;
+  onHapus: () => void;
+  align?: "start" | "end";
+}) {
+  return (
+    <div className={`flex flex-wrap gap-2 ${align === "end" ? "justify-end" : ""}`}>
+      <Button size="sm" variant="outline" onClick={onOpen}>
+        <Pencil className="h-4 w-4" />
+        Tinjau
+      </Button>
+      {paket.status === "Draft" ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => {
+            void publishPaket(paket.id);
+            toast.success("Soal berhasil diterbitkan.");
+          }}
+        >
+          <Send className="h-4 w-4" />
+          Terbitkan
+        </Button>
+      ) : (
+        <Button size="sm" variant="secondary" onClick={onTerbitTugas}>
+          <Send className="h-4 w-4" />
+          Terbitkan sebagai Tugas
+        </Button>
+      )}
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-label="Duplikat paket soal"
+        onClick={() => {
+          void duplicatePaket(paket.id);
+          toast.success("Paket soal diduplikasi sebagai draft.");
+        }}
+      >
+        <Copy className="h-4 w-4" />
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-label="Hapus paket soal"
+        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+        onClick={onHapus}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
