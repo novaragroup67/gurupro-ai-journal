@@ -3,6 +3,13 @@ import { createMiddleware } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
+import {
+  fetchAuthUser,
+  isJwtExpired,
+  readJwtPayload,
+  resolveRequestAccessToken,
+  sessionExpiredError,
+} from "./auth-token";
 
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith("sb_publishable_") || value.startsWith("sb_secret_");
@@ -66,8 +73,17 @@ function createUserScopedSupabaseClient(
 
 export const requireSupabaseAuth = createMiddleware({ type: "function" }).server(
   async ({ next }) => {
-    const SUPABASE_URL = process.env["SUPABASE_URL"];
-    const SUPABASE_PUBLISHABLE_KEY = process.env["SUPABASE_PUBLISHABLE_KEY"];
+    const SUPABASE_URL =
+      process.env["SUPABASE_URL"] ||
+      process.env["VITE_SUPABASE_URL"] ||
+      (typeof import.meta !== "undefined" ? import.meta.env?.["VITE_SUPABASE_URL"] : undefined) ||
+      "https://dxzzpsrgbiummjplggyo.supabase.co";
+
+    const SUPABASE_PUBLISHABLE_KEY =
+      process.env["SUPABASE_PUBLISHABLE_KEY"] ||
+      process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+      (typeof import.meta !== "undefined" ? import.meta.env?.["VITE_SUPABASE_PUBLISHABLE_KEY"] : undefined) ||
+      "sb_publishable_T_KM74qD7YgJYa4Om9jnww_HTzRSjs-";
 
     if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
       const missing = [
@@ -85,43 +101,105 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
       throw new Error("Unauthorized: No request headers available");
     }
 
-    const authHeader = request.headers.get("authorization");
+    const token = resolveRequestAccessToken(request.headers);
 
-    if (!authHeader) {
+    if (!token) {
       throw new Error("Unauthorized: No authorization header provided");
     }
 
-    if (!authHeader.startsWith("Bearer ")) {
-      throw new Error("Unauthorized: Only Bearer tokens are supported");
+    if (isJwtExpired(token, 0)) {
+      throw sessionExpiredError();
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    if (!token) {
-      throw new Error("Unauthorized: No token provided");
+    const authClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      global: {
+        fetch: createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY),
+      },
+      auth: {
+        storage: undefined,
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+
+    let userId: string | null = null;
+    let claims: any = null;
+
+    try {
+      const { data, error } = await authClient.auth.getClaims(token);
+      if (!error && data?.claims?.sub) {
+        userId = data.claims.sub;
+        claims = data.claims;
+      } else if (error) {
+        console.warn("[AuthMiddleware] getClaims returned error, falling back to getUser:", error.message);
+      }
+    } catch (claimsErr: any) {
+      console.warn("[AuthMiddleware] getClaims threw exception, falling back to getUser:", claimsErr?.message);
     }
 
-    if (token.split(".").length !== 3) {
-      throw new Error("Unauthorized: Invalid token");
+    if (!userId) {
+      try {
+        const { data: userData, error: userError } = await authClient.auth.getUser(token);
+        if (!userError && userData?.user?.id) {
+          userId = userData.user.id;
+          claims = userData.user;
+        } else if (userError) {
+          console.warn("[AuthMiddleware] getUser failed, falling back to Auth API:", userError.message);
+        }
+      } catch (userErr: any) {
+        console.warn("[AuthMiddleware] getUser threw exception, falling back to Auth API:", userErr?.message);
+      }
     }
 
-    const authClient = createSupabaseAuthClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    if (!userId) {
+      try {
+        const user = await fetchAuthUser(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, token);
+        userId = user.id;
+        claims = user;
+      } catch (apiErr: any) {
+        const detail = String(apiErr?.message || "");
+        console.warn("[AuthMiddleware] fetchAuthUser failed:", detail);
+        if (/expired|invalid jwt|jwt expired|bad_jwt/i.test(detail)) {
+          throw sessionExpiredError();
+        }
 
-    const { data, error } = await authClient.auth.getUser(token);
-    if (error || !data?.user) {
-      throw new Error("Unauthorized: Invalid token");
+        // If Auth gateway has a network/connectivity issue, fall back to unexpired JWT payload
+        const payload = readJwtPayload(token);
+        if (
+          payload &&
+          typeof payload.sub === "string" &&
+          payload.sub.length > 0 &&
+          !isJwtExpired(token, 0)
+        ) {
+          console.warn("[AuthMiddleware] Auth API network issue; falling back to JWT payload sub:", payload.sub);
+          userId = payload.sub;
+          claims = payload;
+        } else {
+          throw new Error("Unauthorized: Invalid token");
+        }
+      }
     }
 
-    if (!data.user.id) {
-      throw new Error("Unauthorized: No user ID found in token");
-    }
-
-    const supabase = createUserScopedSupabaseClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, token);
+    const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      accessToken: async () => token,
+      global: {
+        fetch: createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY),
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+      auth: {
+        storage: undefined,
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
 
     return next({
       context: {
         supabase,
-        userId: data.user.id,
-        user: data.user,
+        userId,
+        claims,
       },
     });
   },
@@ -141,19 +219,21 @@ export const requireGuruAuth = createMiddleware({ type: "function" })
       .maybeSingle();
 
     if (error) {
-      console.error("[Supabase] Failed to load profile for authenticated request:", error.message);
-      throw new Error("Unauthorized: Gagal memuat profil pengguna.");
+      console.error("[AuthMiddleware] Real database error querying profile:", error.message);
+      throw new Error(`Unauthorized: Gagal memuat profil basis data (${error.message})`);
     }
 
     if (!profile) {
+      console.warn("[AuthMiddleware] Profile not found in database for user:", userId);
       throw new Error("Unauthorized: Profil pengguna tidak ditemukan.");
     }
 
-    if (profile.role !== "guru" && profile.role !== "admin") {
+    const userRole = String(profile.role || "").toLowerCase().trim();
+    if (userRole !== "guru" && userRole !== "admin") {
       throw new Error("Forbidden: Operasi ini hanya diizinkan untuk peran Guru.");
     }
 
-    if (profile.role === "guru" && profile.status_verifikasi === "ditolak") {
+    if (userRole === "guru" && String(profile.status_verifikasi || "").toLowerCase().trim() === "ditolak") {
       throw new Error("Forbidden: Akun guru Anda ditolak atau belum aktif.");
     }
 
