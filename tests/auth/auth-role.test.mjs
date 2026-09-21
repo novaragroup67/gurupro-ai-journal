@@ -201,7 +201,11 @@ let passed = 0;
 {
   function parseRegistrationError(error) {
     const errMsg = (error?.message || "").toLowerCase();
-    if (errMsg.includes("already registered") || errMsg.includes("user already exists")) {
+    if (
+      errMsg.includes("already registered") ||
+      errMsg.includes("already exists") ||
+      errMsg.includes("user already exists")
+    ) {
       return { code: "user_already_exists", message: "Email ini sudah terdaftar." };
     }
     if (errMsg.includes("rate limit") || errMsg.includes("too many requests")) {

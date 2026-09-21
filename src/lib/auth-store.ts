@@ -448,7 +448,11 @@ export async function registerGuru(
       let code: string | undefined = undefined;
       let userFriendlyMessage = error.message;
 
-      if (errMsg.includes("already registered") || errMsg.includes("user already exists")) {
+      if (
+        errMsg.includes("already registered") ||
+        errMsg.includes("already exists") ||
+        errMsg.includes("user already exists")
+      ) {
         code = "user_already_exists";
         userFriendlyMessage = "Email ini sudah terdaftar. Silakan login atau gunakan email lain.";
       } else if (errMsg.includes("rate limit") || errMsg.includes("too many requests")) {
@@ -509,7 +513,11 @@ export async function registerSiswa(
       let code: string | undefined = undefined;
       let userFriendlyMessage = error.message;
 
-      if (errMsg.includes("already registered") || errMsg.includes("user already exists")) {
+      if (
+        errMsg.includes("already registered") ||
+        errMsg.includes("already exists") ||
+        errMsg.includes("user already exists")
+      ) {
         code = "user_already_exists";
         userFriendlyMessage = "Email ini sudah terdaftar. Silakan login atau gunakan email lain.";
       } else if (errMsg.includes("rate limit") || errMsg.includes("too many requests")) {
