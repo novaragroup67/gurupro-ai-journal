@@ -261,6 +261,7 @@ function DetailKelasMonitoringPage() {
   // Filter modul ajar untuk kelas ini
   const modulKelas = allModuls.filter((m) => {
     if (!kelasDetail) return true;
+    if (m.kelasId && m.kelasId === kelasDetail.id) return true;
     const modulKelasStr = (m.kelas || "").toLowerCase();
     const namaKelasStr = (kelasDetail.namaKelas || "").toLowerCase();
     const tingkatStr = (kelasDetail.tingkat || "").toLowerCase();
@@ -268,10 +269,10 @@ function DetailKelasMonitoringPage() {
 
     return (
       modulKelasStr.includes(combinedStr) ||
-      modulKelasStr.includes(namaKelasStr) ||
-      (m.mapel && kelasDetail.mapel && m.mapel.toLowerCase() === kelasDetail.mapel.toLowerCase())
+      modulKelasStr.includes(namaKelasStr)
     );
   });
+
 
   // Filter tugas/soal untuk kelas ini
   const tugasKelas = allPakets.filter((p) => {
