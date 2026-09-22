@@ -63,6 +63,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useModuls } from "@/lib/modul-store";
 import { useKelas } from "@/lib/kelas-store";
+import { useTahunAjaran } from "@/lib/tahun-ajaran-store";
 import { uid } from "@/lib/cloud-store";
 
 import { INSTRUKSI_AI } from "@/lib/soal-ai";
@@ -113,11 +114,66 @@ type Mode = "bank" | "buat" | "review";
 
 function SoalPage() {
   const { profile, user, ready } = useAuth();
+  const currentGuruId = user?.id || profile.id;
   const { kelasList } = useKelas();
+  const { selectedYear } = useTahunAjaran(currentGuruId);
+
+  // Kelas milik guru pada tahun ajaran aktif
   const myKelas = useMemo(() => {
-    return kelasList.filter((k) => k.guruId === user?.id || k.guruId === profile?.id);
-  }, [kelasList, user?.id, profile?.id]);
+    return kelasList.filter(
+      (k) =>
+        (k.guruId === currentGuruId) &&
+        (!selectedYear || k.tahunAjaran === selectedYear),
+    );
+  }, [kelasList, currentGuruId, selectedYear]);
+
+  // Semua kelas milik guru untuk pemetaan lintas tahun
+  const allTeacherKelas = useMemo(() => {
+    return kelasList.filter((k) => k.guruId === currentGuruId);
+  }, [kelasList, currentGuruId]);
+
+  const teacherClassNamesInYear = useMemo(() => {
+    return new Set(myKelas.map((k) => `${k.tingkat} ${k.namaKelas}`.trim().toLowerCase()));
+  }, [myKelas]);
+
+  const otherYearClassNames = useMemo(() => {
+    if (!selectedYear) return new Set<string>();
+    return new Set(
+      allTeacherKelas
+        .filter((k) => k.tahunAjaran && k.tahunAjaran !== selectedYear)
+        .map((k) => `${k.tingkat} ${k.namaKelas}`.trim().toLowerCase()),
+    );
+  }, [allTeacherKelas, selectedYear]);
+
   const moduls = useModuls();
+  // Modul yang relevan dengan tahun terpilih
+  const myClassIdsInYear = useMemo(() => new Set(myKelas.map((k) => k.id)), [myKelas]);
+  const availableModulsInYear = useMemo(() => {
+    if (!selectedYear) return moduls;
+    return moduls.filter((m) => {
+      if (m.kelasId) return myClassIdsInYear.has(m.kelasId);
+      if (m.kelas) return teacherClassNamesInYear.has(m.kelas.trim().toLowerCase());
+      return true;
+    });
+  }, [moduls, selectedYear, myClassIdsInYear, teacherClassNamesInYear]);
+
+  // ID modul di tahun lain
+  const modulIdsInOtherYears = useMemo(() => {
+    if (!selectedYear) return new Set<string>();
+    const otherClassIds = new Set(
+      allTeacherKelas.filter((k) => k.tahunAjaran && k.tahunAjaran !== selectedYear).map((k) => k.id),
+    );
+    return new Set(
+      moduls
+        .filter((m) => {
+          if (m.kelasId && otherClassIds.has(m.kelasId)) return true;
+          if (m.kelas && otherYearClassNames.has(m.kelas.trim().toLowerCase())) return true;
+          return false;
+        })
+        .map((m) => m.id),
+    );
+  }, [allTeacherKelas, selectedYear, moduls, otherYearClassNames]);
+
   const generateAi = useServerFn(generateSoalAi);
   const reviseAi = useServerFn(reviseSoalAi);
   const pakets = usePaketSoal();
@@ -157,12 +213,39 @@ function SoalPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return pakets.filter(
-      (p) =>
+    return pakets.filter((p) => {
+      // Filter tahun ajaran melalui relasi kelas / modul
+      if (selectedYear) {
+        if (p.kelas && p.kelas.length > 0) {
+          const hasCurrentYearClass = p.kelas.some((label) =>
+            teacherClassNamesInYear.has(label.trim().toLowerCase()),
+          );
+          const hasOnlyOtherYearClasses = p.kelas.every((label) =>
+            otherYearClassNames.has(label.trim().toLowerCase()),
+          );
+          if (hasOnlyOtherYearClasses && !hasCurrentYearClass) {
+            return false;
+          }
+        }
+        if (p.modulId && modulIdsInOtherYears.has(p.modulId)) {
+          return false;
+        }
+      }
+
+      return (
         (statusFilter === "semua" || p.status === statusFilter) &&
-        (!q || p.judul.toLowerCase().includes(q) || p.topik.toLowerCase().includes(q)),
-    );
-  }, [pakets, query, statusFilter]);
+        (!q || p.judul.toLowerCase().includes(q) || p.topik.toLowerCase().includes(q))
+      );
+    });
+  }, [
+    pakets,
+    query,
+    statusFilter,
+    selectedYear,
+    teacherClassNamesInYear,
+    otherYearClassNames,
+    modulIdsInOtherYears,
+  ]);
 
   if (ready && profile.role !== "guru") {
     return (
@@ -412,7 +495,7 @@ function SoalPage() {
                             <SelectValue placeholder="Tanpa modul sumber" />
                           </SelectTrigger>
                           <SelectContent>
-                            {moduls.map((m) => (
+                            {availableModulsInYear.map((m) => (
                               <SelectItem key={m.id} value={m.id}>
                                 {m.judul}
                               </SelectItem>
