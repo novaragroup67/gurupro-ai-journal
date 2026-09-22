@@ -75,6 +75,7 @@ import {
   type Penugasan,
 } from "@/lib/penugasan-store";
 import { usePaketSoal } from "@/lib/soal-store";
+import { useTahunAjaran } from "@/lib/tahun-ajaran-store";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -664,6 +665,7 @@ function TeacherDashboard() {
   });
 
   const teacherId = user?.id || profile.id;
+  const { selectedYear } = useTahunAjaran(teacherId);
 
   useEffect(() => {
     void refreshPenugasanGuru();
@@ -673,15 +675,67 @@ function TeacherDashboard() {
     });
   }, [teacherId]);
 
-  // Real data calculations
-  const myClasses = Array.isArray(kelasList) ? kelasList.filter((k) => k.guruId === teacherId) : [];
-  const modulAktif = Array.isArray(moduls) ? moduls.filter((m) => m.status === "Terbit").length : 0;
-  const soalTerbit = Array.isArray(pakets) ? pakets.filter((p) => p.status === "Terbit").length : 0;
-  const assignmentList = Array.isArray(assignments) ? assignments : [];
+  // Real data calculations filtered by selectedYear
+  const myClasses = useMemo(() => {
+    const list = Array.isArray(kelasList) ? kelasList.filter((k) => k.guruId === teacherId) : [];
+    if (!selectedYear) return list;
+    return list.filter((k) => k.tahunAjaran === selectedYear);
+  }, [kelasList, teacherId, selectedYear]);
+
+  const myClassIds = useMemo(() => new Set(myClasses.map((c) => c.id)), [myClasses]);
+  const myClassNames = useMemo(
+    () => new Set(myClasses.map((c) => `${c.tingkat} ${c.namaKelas}`.trim().toLowerCase())),
+    [myClasses],
+  );
+
+  const modulAktif = useMemo(() => {
+    if (!Array.isArray(moduls)) return 0;
+    return moduls.filter((m) => {
+      if (m.status !== "Terbit") return false;
+      if (!selectedYear) return true;
+      if (m.kelasId) return myClassIds.has(m.kelasId);
+      if (m.kelas) return myClassNames.has(m.kelas.trim().toLowerCase());
+      return false;
+    }).length;
+  }, [moduls, selectedYear, myClassIds, myClassNames]);
+
+  const soalTerbit = useMemo(() => {
+    if (!Array.isArray(pakets)) return 0;
+    return pakets.filter((p) => p.status === "Terbit").length;
+  }, [pakets]);
+
+  const assignmentList = useMemo(() => {
+    const list = Array.isArray(assignments) ? assignments : [];
+    if (!selectedYear) return list;
+    return list.filter((a) =>
+      a.kelasTahunAjaran ? a.kelasTahunAjaran === selectedYear : myClassIds.has(a.kelasId),
+    );
+  }, [assignments, selectedYear, myClassIds]);
+
+  const yearTotalSubmitted = useMemo(() => {
+    return assignmentList.reduce((acc, a) => {
+      const stats = submissionSummary.submissionsPerPenugasan[a.id];
+      return acc + (stats?.submitted ?? 0);
+    }, 0);
+  }, [assignmentList, submissionSummary]);
+
+  const yearPerluDinilai = useMemo(() => {
+    return assignmentList.reduce((acc, a) => {
+      const stats = submissionSummary.submissionsPerPenugasan[a.id];
+      return acc + (stats?.perluDinilai ?? 0);
+    }, 0);
+  }, [assignmentList, submissionSummary]);
+
+  const yearSudahDinilai = useMemo(() => {
+    return assignmentList.reduce((acc, a) => {
+      const stats = submissionSummary.submissionsPerPenugasan[a.id];
+      return acc + (stats?.dinilai ?? 0);
+    }, 0);
+  }, [assignmentList, submissionSummary]);
 
   const gradingProgress =
-    submissionSummary.totalSubmitted > 0
-      ? Math.round((submissionSummary.sudahDinilai / submissionSummary.totalSubmitted) * 100)
+    yearTotalSubmitted > 0
+      ? Math.round((yearSudahDinilai / yearTotalSubmitted) * 100)
       : 0;
 
   // Tugas yang membutuhkan penilaian manual
@@ -697,7 +751,6 @@ function TeacherDashboard() {
     const notifs: Array<{ id: string; judul: string; detail: string; tipe: string }> = [];
 
     // 1. Siswa menunggu verifikasi masuk kelas
-    const myClassIds = new Set(myClasses.map((c) => c.id));
     const pendingMembers = Array.isArray(anggotaList)
       ? anggotaList.filter((a) => myClassIds.has(a.kelasId) && a.status === "menunggu")
       : [];
@@ -711,10 +764,10 @@ function TeacherDashboard() {
     }
 
     // 2. Tugas perlu dinilai
-    if (submissionSummary.perluDinilai > 0) {
+    if (yearPerluDinilai > 0) {
       notifs.push({
         id: "notif-need-grading",
-        judul: `${submissionSummary.perluDinilai} tugas siswa menunggu penilaian`,
+        judul: `${yearPerluDinilai} tugas siswa menunggu penilaian`,
         detail: "Pilihan ganda telah diauto-grade, periksa jawaban esai siswa.",
         tipe: "tugas",
       });
@@ -731,28 +784,28 @@ function TeacherDashboard() {
     }
 
     return notifs;
-  }, [myClasses, anggotaList, submissionSummary, modulAktif]);
+  }, [myClassIds, anggotaList, yearPerluDinilai, modulAktif]);
 
   const stats = [
     {
       label: "Modul Aktif",
       value: String(modulAktif),
       icon: BookOpen,
-      hint: `${moduls?.length ?? 0} modul tersimpan`,
+      hint: `${modulAktif} modul terbit (${selectedYear || "Semua"})`,
       to: "/modul-ajar" as const,
     },
     {
       label: "Tugas Masuk",
-      value: String(submissionSummary.totalSubmitted),
+      value: String(yearTotalSubmitted),
       icon: ClipboardList,
-      hint: `${assignmentList.length} penugasan dibuat`,
+      hint: `${assignmentList.length} penugasan (${selectedYear || "Semua"})`,
       to: "/penugasan" as const,
     },
     {
       label: "Perlu Dinilai",
-      value: String(submissionSummary.perluDinilai),
+      value: String(yearPerluDinilai),
       icon: CheckCircle2,
-      hint: `${submissionSummary.sudahDinilai} tugas selesai (${gradingProgress}%)`,
+      hint: `${yearSudahDinilai} tugas selesai (${gradingProgress}%)`,
       to: "/penilaian" as const,
     },
     {
@@ -772,7 +825,11 @@ function TeacherDashboard() {
     <div className="grid gap-6">
       <PageHeader
         title="Selamat datang kembali 👋"
-        subtitle="Kelola administrasi pembelajaran, modul ajar, dan tugas siswa dengan data riil GuruPro."
+        subtitle={
+          selectedYear
+            ? `Kelola administrasi pembelajaran, modul ajar, dan tugas siswa untuk Tahun Ajaran ${selectedYear}.`
+            : "Kelola administrasi pembelajaran, modul ajar, dan tugas siswa dengan data riil GuruPro."
+        }
         actions={
           <>
             <Button asChild variant="outline">
