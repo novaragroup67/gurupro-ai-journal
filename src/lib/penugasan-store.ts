@@ -18,6 +18,7 @@ export interface Penugasan {
   kelasNama?: string;
   kelasTingkat?: string;
   kelasMapel?: string;
+  kelasTahunAjaran?: string;
   paketSoalJudul?: string;
   totalSoal?: number;
   guruNama?: string;
@@ -84,7 +85,8 @@ export async function refreshPenugasanGuru(): Promise<Penugasan[]> {
           id,
           nama_kelas,
           tingkat,
-          mapel
+          mapel,
+          tahun_ajaran
         ),
         paket_soal:paket_soal_id (
           id,
@@ -120,6 +122,7 @@ export async function refreshPenugasanGuru(): Promise<Penugasan[]> {
         kelasNama: kelas?.nama_kelas || "",
         kelasTingkat: kelas?.tingkat || "",
         kelasMapel: kelas?.mapel || "",
+        kelasTahunAjaran: kelas?.tahun_ajaran || "",
         paketSoalJudul: paketSoal?.judul || "",
         totalSoal: soalList.length,
       };
@@ -160,6 +163,7 @@ export async function refreshPenugasanSiswa(): Promise<Penugasan[]> {
           nama_kelas,
           tingkat,
           mapel,
+          tahun_ajaran,
           guru_id
         )
       `,
@@ -202,6 +206,7 @@ export async function refreshPenugasanSiswa(): Promise<Penugasan[]> {
         kelasNama: kelas?.nama_kelas || "",
         kelasTingkat: kelas?.tingkat || "",
         kelasMapel: kelas?.mapel || "",
+        kelasTahunAjaran: kelas?.tahun_ajaran || "",
         guruNama: kelas?.guru_id ? guruMap[kelas.guru_id] || "Guru Pengampu" : "Guru Pengampu",
       };
     });

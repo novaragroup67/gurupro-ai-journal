@@ -1,4 +1,5 @@
 import { resetAllCloudStores } from "@/lib/cloud-store";
+import { resetTahunAjaranStore } from "@/lib/tahun-ajaran-store";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -418,6 +419,7 @@ export async function logout(): Promise<void> {
     console.error("[Auth] Sign out error:", err);
   } finally {
     resetAllCloudStores();
+    resetTahunAjaranStore();
     setState({
       ...LOGGED_OUT,
       ready: true,
