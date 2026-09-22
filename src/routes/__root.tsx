@@ -9,16 +9,25 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { Search } from "lucide-react";
+import { Calendar, Search } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { GuruProMark } from "@/components/gurupro-logo";
 import { NotificationMenu } from "@/components/notification-menu";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { initials, isAuthPublicPath, shortName, useAuth } from "@/lib/auth-store";
+import { useTahunAjaran } from "@/lib/tahun-ajaran-store";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -161,8 +170,55 @@ function AuthGate({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function TahunAjaranHeaderSelector({ userId }: { userId?: string }) {
+  const { availableYears, selectedYear, setSelectedYear, loading } = useTahunAjaran(userId);
+
+  if (loading && availableYears.length === 0) {
+    return (
+      <div className="flex items-center gap-1.5 rounded-md border border-border/70 bg-background/50 px-2.5 py-1 text-xs text-muted-foreground">
+        <Calendar className="h-3.5 w-3.5 animate-pulse text-primary" />
+        <span className="hidden sm:inline">Tahun Ajaran:</span>
+        <span className="font-medium animate-pulse">Memuat…</span>
+      </div>
+    );
+  }
+
+  if (availableYears.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="hidden text-xs font-medium text-muted-foreground lg:inline">
+        Tahun Ajaran:
+      </span>
+      <Select value={selectedYear} onValueChange={setSelectedYear}>
+        <SelectTrigger className="h-8 w-auto min-w-[110px] gap-1.5 px-2.5 text-xs font-semibold text-navy bg-background border-border shadow-xs hover:bg-muted/50">
+          <Calendar className="h-3.5 w-3.5 text-primary shrink-0" />
+          <SelectValue placeholder="Pilih Tahun" />
+        </SelectTrigger>
+        <SelectContent align="end">
+          {availableYears.map((y) => (
+            <SelectItem key={y.id || y.tahun} value={y.tahun} className="text-xs font-medium">
+              <span className="flex items-center gap-1.5">
+                {y.tahun}
+                {y.isActive ? (
+                  <Badge variant="secondary" className="h-4 px-1 text-[10px] bg-primary/10 text-primary">
+                    Aktif
+                  </Badge>
+                ) : null}
+              </span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 function AppShell() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
+  const isTeacher = profile?.role === "guru";
 
   return (
     <SidebarProvider>
@@ -179,6 +235,8 @@ function AppShell() {
               </span>
             </div>
             <div className="ml-auto flex items-center gap-2">
+              {isTeacher ? <TahunAjaranHeaderSelector userId={user?.id || profile.id} /> : null}
+
               <Button
                 variant="ghost"
                 size="icon"
