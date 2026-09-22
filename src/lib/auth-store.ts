@@ -459,6 +459,9 @@ export async function registerGuru(
       } else if (errMsg.includes("rate limit") || errMsg.includes("too many requests")) {
         code = "rate_limit";
         userFriendlyMessage = "Terlalu banyak permintaan pendaftaran. Tunggu beberapa saat lalu coba lagi.";
+      } else if (errMsg.includes("peran") && (errMsg.includes("tidak valid") || errMsg.includes("invalid"))) {
+        code = "invalid_role";
+        userFriendlyMessage = "Peran pendaftaran tidak valid. Hanya peran guru atau siswa yang diizinkan.";
       }
 
       return { ok: false, message: userFriendlyMessage, code };
@@ -535,6 +538,9 @@ export async function registerSiswa(
       } else if (errMsg.includes("rate limit") || errMsg.includes("too many requests")) {
         code = "rate_limit";
         userFriendlyMessage = "Terlalu banyak permintaan pendaftaran. Tunggu beberapa saat lalu coba lagi.";
+      } else if (errMsg.includes("peran") && (errMsg.includes("tidak valid") || errMsg.includes("invalid"))) {
+        code = "invalid_role";
+        userFriendlyMessage = "Peran pendaftaran tidak valid. Hanya peran guru atau siswa yang diizinkan.";
       }
 
       return { ok: false, message: userFriendlyMessage, code };
