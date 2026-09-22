@@ -342,6 +342,7 @@ export function useAuth(): {
 export async function login(
   email: string,
   password: string,
+  _remember?: boolean,
 ): Promise<LoginResult> {
   try {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -464,13 +465,24 @@ export async function registerGuru(
     }
 
     const user = data.user ?? undefined;
+
+    // Deteksi akun email sudah terdaftar via Supabase anti-enumeration (identities kosong)
+    if (user && Array.isArray(user.identities) && user.identities.length === 0) {
+      return {
+        ok: false,
+        message: "Email ini sudah terdaftar. Silakan login atau gunakan email lain.",
+        code: "user_already_exists",
+      };
+    }
+
     const needsConfirmation = !data.session && Boolean(user);
 
     const message = needsConfirmation
       ? "Pendaftaran berhasil! Tautan konfirmasi telah dikirim ke email Anda. Silakan cek kotak masuk atau spam."
       : "Pendaftaran berhasil! Akun Anda telah aktif.";
 
-    if (user) {
+    // Hanya sinkronkan profil jika sesi aktif berhasil dibuat (bukan flow konfirmasi email tertunda)
+    if (data.session && user) {
       void syncProfile(user);
     }
 
@@ -529,13 +541,24 @@ export async function registerSiswa(
     }
 
     const user = data.user ?? undefined;
+
+    // Deteksi akun email sudah terdaftar via Supabase anti-enumeration (identities kosong)
+    if (user && Array.isArray(user.identities) && user.identities.length === 0) {
+      return {
+        ok: false,
+        message: "Email ini sudah terdaftar. Silakan login atau gunakan email lain.",
+        code: "user_already_exists",
+      };
+    }
+
     const needsConfirmation = !data.session && Boolean(user);
 
     const message = needsConfirmation
       ? "Pendaftaran berhasil! Tautan konfirmasi telah dikirim ke email Anda. Silakan cek kotak masuk atau spam."
       : "Pendaftaran berhasil! Akun Anda telah aktif.";
 
-    if (user) {
+    // Hanya sinkronkan profil jika sesi aktif berhasil dibuat (bukan flow konfirmasi email tertunda)
+    if (data.session && user) {
       void syncProfile(user);
     }
 
