@@ -63,6 +63,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth-store";
 import { useKelasList } from "@/lib/kelas-store";
+import { useTahunAjaran } from "@/lib/tahun-ajaran-store";
 import {
   createDraftSubmission,
   getMyAnswers,
@@ -154,9 +155,34 @@ function PenugasanRoutePage() {
 // ==========================================
 
 function GuruPenugasanView() {
+  const { profile, user } = useAuth();
+  const currentGuruId = user?.id || profile.id;
   const { penugasanList, loading, reload } = usePenugasanGuru();
   const kelasList = useKelasList();
   const paketSoalList = usePaketSoal();
+  const { selectedYear } = useTahunAjaran(currentGuruId);
+
+  // Filter kelas guru untuk tahun ajaran yang dipilih
+  const myKelasListInYear = useMemo(() => {
+    return (kelasList || []).filter(
+      (k) =>
+        (k.guruId === currentGuruId) &&
+        (!selectedYear || k.tahunAjaran === selectedYear),
+    );
+  }, [kelasList, currentGuruId, selectedYear]);
+
+  const myKelasIdsInYear = useMemo(() => {
+    return new Set(myKelasListInYear.map((k) => k.id));
+  }, [myKelasListInYear]);
+
+  // Penugasan yang relevan dengan tahun ajaran aktif
+  const yearPenugasanList = useMemo(() => {
+    if (!selectedYear) return penugasanList;
+    return penugasanList.filter((p) => {
+      if (p.kelasTahunAjaran) return p.kelasTahunAjaran === selectedYear;
+      return myKelasIdsInYear.has(p.kelasId);
+    });
+  }, [penugasanList, selectedYear, myKelasIdsInYear]);
 
   const [filterTab, setFilterTab] = useState<"semua" | "published" | "draft" | "closed">("semua");
   const [openCreateModal, setOpenCreateModal] = useState(false);
@@ -323,19 +349,23 @@ function GuruPenugasanView() {
   };
 
   const filteredItems = useMemo(() => {
-    if (filterTab === "semua") return penugasanList;
-    return penugasanList.filter((p) => p.status === filterTab);
-  }, [penugasanList, filterTab]);
+    if (filterTab === "semua") return yearPenugasanList;
+    return yearPenugasanList.filter((p) => p.status === filterTab);
+  }, [yearPenugasanList, filterTab]);
 
-  const countPublished = penugasanList.filter((p) => p.status === "published").length;
-  const countDraft = penugasanList.filter((p) => p.status === "draft").length;
-  const countClosed = penugasanList.filter((p) => p.status === "closed").length;
+  const countPublished = yearPenugasanList.filter((p) => p.status === "published").length;
+  const countDraft = yearPenugasanList.filter((p) => p.status === "draft").length;
+  const countClosed = yearPenugasanList.filter((p) => p.status === "closed").length;
 
   return (
     <div className="grid gap-6">
       <PageHeader
         title="Penugasan Siswa"
-        subtitle="Hubungkan paket soal dengan kelas siswa, atur tenggat pengumpulan, dan pantau pengumpulan tugas siswa."
+        subtitle={
+          selectedYear
+            ? `Hubungkan paket soal dengan kelas siswa untuk Tahun Ajaran ${selectedYear}, atur tenggat, dan pantau pengumpulan tugas siswa.`
+            : "Hubungkan paket soal dengan kelas siswa, atur tenggat pengumpulan, dan pantau pengumpulan tugas siswa."
+        }
         actions={
           <Button onClick={openCreateDialog} className="gap-2 shadow-sm font-medium">
             <Plus className="h-4 w-4" />
@@ -605,9 +635,11 @@ function GuruPenugasanView() {
               <Label htmlFor="pilih-kelas">
                 Pilih Kelas Target <span className="text-destructive">*</span>
               </Label>
-              {kelasList.length === 0 ? (
+              {myKelasListInYear.length === 0 ? (
                 <p className="text-xs text-amber-600">
-                  Anda belum memiliki kelas. Silakan buat kelas terlebih dahulu di menu Kelas Saya.
+                  {selectedYear
+                    ? `Anda belum memiliki kelas untuk Tahun Ajaran ${selectedYear}. Silakan buat kelas terlebih dahulu di menu Kelas Saya.`
+                    : "Anda belum memiliki kelas. Silakan buat kelas terlebih dahulu di menu Kelas Saya."}
                 </p>
               ) : (
                 <Select value={selectedKelasId} onValueChange={setSelectedKelasId}>
@@ -615,7 +647,7 @@ function GuruPenugasanView() {
                     <SelectValue placeholder="-- Pilih Kelas --" />
                   </SelectTrigger>
                   <SelectContent>
-                    {kelasList.map((k) => (
+                    {myKelasListInYear.map((k) => (
                       <SelectItem key={k.id} value={k.id}>
                         {k.tingkat} {k.namaKelas} ({k.mapel})
                       </SelectItem>
