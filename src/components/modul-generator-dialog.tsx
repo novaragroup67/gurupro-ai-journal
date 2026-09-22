@@ -39,6 +39,7 @@ import { isRecoverableAuthError, withAuthRetry } from "@/integrations/supabase/a
 import { useAuth } from "@/lib/auth-store";
 import { uid } from "@/lib/cloud-store";
 import { useKelas } from "@/lib/kelas-store";
+import { useTahunAjaran } from "@/lib/tahun-ajaran-store";
 import { SUMBER_TIPE, type Modul, type SumberTipe } from "@/lib/modul-types";
 import { analisisSumberUrl, type SumberPreview } from "@/lib/sumber.functions";
 
@@ -67,12 +68,17 @@ export function ModulGeneratorDialog({
 }) {
   const { profile, user } = useAuth();
   const { kelasList, refresh: refreshKelas } = useKelas();
+  const { selectedYear } = useTahunAjaran(user?.id || profile?.id);
   const analisis = useServerFn(analisisSumberUrl);
   const generate = useServerFn(generateModulAi);
 
   const myKelasList = useMemo(() => {
-    return kelasList.filter((k) => k.guruId === user?.id || k.guruId === profile?.id);
-  }, [kelasList, user?.id, profile?.id]);
+    return kelasList.filter(
+      (k) =>
+        (k.guruId === user?.id || k.guruId === profile?.id) &&
+        (!selectedYear || k.tahunAjaran === selectedYear),
+    );
+  }, [kelasList, user?.id, profile?.id, selectedYear]);
 
   const mapelOptions = useMemo(() => {
     const options = new Set<string>();
@@ -119,7 +125,6 @@ export function ModulGeneratorDialog({
       }
     }
   }, [open, profile?.mapel, myKelasList, mapel, selectedKelasId]);
-
 
   const reset = () => {
     setPreview(null);
@@ -244,7 +249,6 @@ export function ModulGeneratorDialog({
         sections,
         slides: [],
       });
-
 
       if (hasil.catatanKeterbatasan) {
         toast.warning(`Catatan AI: ${hasil.catatanKeterbatasan}`);
