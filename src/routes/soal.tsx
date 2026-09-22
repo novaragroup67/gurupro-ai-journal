@@ -63,8 +63,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useModuls } from "@/lib/modul-store";
 import { useKelas } from "@/lib/kelas-store";
-import { KELAS } from "@/lib/modul-types";
 import { uid } from "@/lib/cloud-store";
+
 import { INSTRUKSI_AI } from "@/lib/soal-ai";
 import { generateSoalAi, reviseSoalAi } from "@/lib/ai.functions";
 import { supabase } from "@/integrations/supabase/client";
