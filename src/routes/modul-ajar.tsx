@@ -39,6 +39,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth-store";
+import { useKelas } from "@/lib/kelas-store";
+import { useTahunAjaran } from "@/lib/tahun-ajaran-store";
 import {
   addModul,
   deleteModul,
@@ -72,17 +74,51 @@ export const Route = createFileRoute("/modul-ajar")({
 type TabValue = "semua" | "draft" | "terbit";
 
 function ModulAjarPage() {
-  const { profile, ready } = useAuth();
+  const { profile, user, ready } = useAuth();
+  const currentGuruId = user?.id || profile.id;
   const moduls = useModuls();
+  const { kelasList } = useKelas();
+  const { selectedYear } = useTahunAjaran(currentGuruId);
   const [tab, setTab] = useState<TabValue>("semua");
   const [query, setQuery] = useState("");
   const [openGenerator, setOpenGenerator] = useState(false);
   const [editing, setEditing] = useState<Modul | null>(null);
   const [hapus, setHapus] = useState<Modul | null>(null);
 
+  const teacherClassesInYear = useMemo(() => {
+    const list = Array.isArray(kelasList) ? kelasList : [];
+    return list.filter(
+      (k) =>
+        (k.guruId === currentGuruId) &&
+        (!selectedYear || k.tahunAjaran === selectedYear),
+    );
+  }, [kelasList, currentGuruId, selectedYear]);
+
+  const teacherClassIdsInYear = useMemo(() => {
+    return new Set(teacherClassesInYear.map((k) => k.id));
+  }, [teacherClassesInYear]);
+
+  const teacherClassNamesInYear = useMemo(() => {
+    return new Set(
+      teacherClassesInYear.map((k) => `${k.tingkat} ${k.namaKelas}`.trim().toLowerCase()),
+    );
+  }, [teacherClassesInYear]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return moduls.filter((m) => {
+      // Filter Tahun Ajaran berbasis relasi kelas guru
+      if (selectedYear) {
+        if (m.kelasId) {
+          if (!teacherClassIdsInYear.has(m.kelasId)) return false;
+        } else if (m.kelas) {
+          const cleanName = m.kelas.trim().toLowerCase();
+          if (!teacherClassNamesInYear.has(cleanName)) return false;
+        } else {
+          return false;
+        }
+      }
+
       const byTab =
         tab === "semua" ? true : tab === "draft" ? m.status === "Draft" : m.status === "Terbit";
       const byQuery =
@@ -92,7 +128,7 @@ function ModulAjarPage() {
         m.kelas.toLowerCase().includes(q);
       return byTab && byQuery;
     });
-  }, [moduls, tab, query]);
+  }, [moduls, tab, query, selectedYear, teacherClassIdsInYear, teacherClassNamesInYear]);
 
   if (ready && profile.role === "siswa") {
     return <SiswaModulAjarView />;
@@ -140,7 +176,11 @@ function ModulAjarPage() {
     <div className="grid gap-6">
       <PageHeader
         title="Modul Ajar"
-        subtitle="Susun modul dibantu AI dari berbagai sumber, edit, lalu publikasikan."
+        subtitle={
+          selectedYear
+            ? `Susun dan kelola modul ajar untuk Tahun Ajaran ${selectedYear}, edit, lalu publikasikan.`
+            : "Susun modul dibantu AI dari berbagai sumber, edit, lalu publikasikan."
+        }
         actions={
           <Button onClick={() => setOpenGenerator(true)}>
             <Plus className="h-4 w-4" />
@@ -181,11 +221,14 @@ function ModulAjarPage() {
                 <BookOpen className="h-7 w-7" />
               </span>
               <p className="font-display font-semibold text-navy">
-                Belum ada modul di tampilan ini
+                {selectedYear
+                  ? `Belum Ada Modul di Tahun Ajaran ${selectedYear}`
+                  : "Belum ada modul di tampilan ini"}
               </p>
               <p className="max-w-sm text-sm text-muted-foreground">
-                Susun modul pertama Anda dari CP/ATP, eBook, teks, atau link luar — dibantu GuruPro
-                AI.
+                {selectedYear
+                  ? `Tidak ada modul pembelajaran yang terhubung dengan kelas pada tahun ajaran ${selectedYear}. Anda dapat menyusun modul baru atau memilih tahun ajaran lain di header.`
+                  : "Susun modul pertama Anda dari CP/ATP, eBook, teks, atau link luar — dibantu GuruPro AI."}
               </p>
               <Button onClick={() => setOpenGenerator(true)}>
                 <Sparkles className="h-4 w-4" />

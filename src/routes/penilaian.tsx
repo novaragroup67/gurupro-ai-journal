@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/lib/auth-store";
 import { useKelas } from "@/lib/kelas-store";
+import { useTahunAjaran } from "@/lib/tahun-ajaran-store";
 import {
   formatNilai,
   getKelasRekapData,
@@ -85,13 +86,18 @@ function Page() {
 function GuruRekapNilaiView() {
   const { profile, user } = useAuth();
   const { kelasList, loading: loadingClasses } = useKelas();
-
-  // Filter hanya kelas milik guru yang login
   const currentUserId = user?.id || profile?.id;
-  const teacherClasses = useMemo(() => {
+  const { selectedYear } = useTahunAjaran(currentUserId);
+
+  // Filter hanya kelas milik guru yang login pada tahun ajaran yang dipilih
+  const allTeacherClasses = useMemo(() => {
     const list = Array.isArray(kelasList) ? kelasList : [];
     return list.filter((k) => k && k.guruId === currentUserId);
   }, [kelasList, currentUserId]);
+
+  const teacherClasses = useMemo(() => {
+    return allTeacherClasses.filter((k) => !selectedYear || k.tahunAjaran === selectedYear);
+  }, [allTeacherClasses, selectedYear]);
 
   const [selectedKelasId, setSelectedKelasId] = useState<string>("");
   const [rekapData, setRekapData] = useState<KelasRekapData | null>(null);
@@ -99,10 +105,15 @@ function GuruRekapNilaiView() {
   const [rekapError, setRekapError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Default pilih kelas pertama
+  // Responsif terhadap perubahan daftar kelas / tahun ajaran
   useEffect(() => {
-    if (teacherClasses.length > 0 && !selectedKelasId) {
-      setSelectedKelasId(teacherClasses[0].id);
+    if (teacherClasses.length > 0) {
+      if (!teacherClasses.some((k) => k.id === selectedKelasId)) {
+        setSelectedKelasId(teacherClasses[0].id);
+      }
+    } else {
+      setSelectedKelasId("");
+      setRekapData(null);
     }
   }, [teacherClasses, selectedKelasId]);
 
@@ -173,15 +184,24 @@ function GuruRekapNilaiView() {
       <div className="grid gap-6">
         <PageHeader
           title="Rekapitulasi Nilai Siswa"
-          subtitle="Pantau nilai tugas, kuis, dan rata-rata capaian belajar murid per kelas secara terintegrasi."
+          subtitle={
+            selectedYear
+              ? `Pantau nilai tugas, kuis, dan rata-rata capaian belajar murid untuk Tahun Ajaran ${selectedYear}.`
+              : "Pantau nilai tugas, kuis, dan rata-rata capaian belajar murid per kelas secara terintegrasi."
+          }
         />
         <Card className="border-dashed py-12 text-center">
           <CardContent className="space-y-4">
             <School className="mx-auto h-12 w-12 text-muted-foreground/30" />
-            <h3 className="font-display text-lg font-bold text-navy">Belum Ada Kelas Dibuat</h3>
+            <h3 className="font-display text-lg font-bold text-navy">
+              {allTeacherClasses.length > 0
+                ? `Belum Ada Kelas di Tahun Ajaran ${selectedYear || "Ini"}`
+                : "Belum Ada Kelas Dibuat"}
+            </h3>
             <p className="mx-auto max-w-md text-sm text-muted-foreground">
-              Anda belum memiliki kelas aktif. Buat kelas terlebih dahulu dan publikasikan penugasan
-              untuk mulai merekap capaian nilai siswa.
+              {allTeacherClasses.length > 0
+                ? `Anda memiliki kelas di tahun ajaran lain. Pilih tahun ajaran yang sesuai melalui selector di header atau tambahkan kelas baru di menu Kelas Saya.`
+                : "Anda belum memiliki kelas aktif. Buat kelas terlebih dahulu dan publikasikan penugasan untuk mulai merekap capaian nilai siswa."}
             </p>
             <Button asChild className="gap-2">
               <Link to="/kelas">

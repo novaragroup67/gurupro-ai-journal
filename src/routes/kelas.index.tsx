@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useTahunAjaran } from "@/lib/tahun-ajaran-store";
 import {
   Card,
   CardContent,
@@ -70,13 +71,15 @@ function KelasListPage() {
   const navigate = useNavigate();
   const { profile, user, ready } = useAuth();
   const { kelasList, anggotaList, refresh } = useKelas();
+  const currentGuruId = user?.id || profile.id;
+  const { availableYears, selectedYear, activeYear } = useTahunAjaran(currentGuruId);
 
   // Dialog buat kelas baru
   const [openCreateModal, setOpenCreateModal] = useState(false);
   const [namaKelas, setNamaKelas] = useState("");
   const [tingkat, setTingkat] = useState("XI");
   const [mapel, setMapel] = useState(profile.mapel || "");
-  const [tahunAjaran, setTahunAjaran] = useState("2025/2026");
+  const [tahunAjaran, setTahunAjaran] = useState(selectedYear || activeYear || "");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -85,6 +88,11 @@ function KelasListPage() {
     }
   }, [profile?.mapel, mapel]);
 
+  useEffect(() => {
+    if (selectedYear) {
+      setTahunAjaran(selectedYear);
+    }
+  }, [selectedYear]);
 
   // Status copy feedback per kelas id
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
@@ -108,9 +116,15 @@ function KelasListPage() {
     );
   }
 
-  // Filter kelas milik guru yang sedang login
+  // Filter kelas milik guru yang sedang login untuk Tahun Ajaran aktif
   const guruId = user?.id || profile.id;
-  const myKelasList = kelasList.filter((k) => (guruId ? k.guruId === guruId : true));
+  const allMyKelas = kelasList.filter((k) => (guruId ? k.guruId === guruId : true));
+  const myKelasList = allMyKelas.filter((k) => {
+    if (selectedYear) {
+      return k.tahunAjaran === selectedYear;
+    }
+    return true;
+  });
 
   const getLinkUndangan = (kode: string) => {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://gurupro.app";
@@ -163,7 +177,7 @@ function KelasListPage() {
         namaKelas: namaKelas.trim(),
         tingkat: tingkat.trim(),
         mapel: mapel.trim(),
-        tahunAjaran: tahunAjaran.trim() || "2025/2026",
+        tahunAjaran: tahunAjaran.trim() || selectedYear || activeYear || "2026/2027",
         guruId: currentGuruId,
       });
 
@@ -191,7 +205,11 @@ function KelasListPage() {
     <div className="grid gap-6">
       <PageHeader
         title="Kelas Saya"
-        subtitle="Kelola kelas, bagikan kode/link undangan ke siswa, dan pantau aktivitas belajar."
+        subtitle={
+          selectedYear
+            ? `Kelola kelas untuk Tahun Ajaran ${selectedYear}, bagikan kode/link undangan ke siswa, dan pantau aktivitas belajar.`
+            : "Kelola kelas, bagikan kode/link undangan ke siswa, dan pantau aktivitas belajar."
+        }
         actions={
           <Dialog open={openCreateModal} onOpenChange={setOpenCreateModal}>
             <DialogTrigger asChild>
@@ -240,13 +258,28 @@ function KelasListPage() {
 
                     <div className="grid gap-1.5">
                       <Label htmlFor="tahunAjaran">Tahun Ajaran</Label>
-                      <Input
-                        id="tahunAjaran"
-                        placeholder="2025/2026"
-                        value={tahunAjaran}
-                        onChange={(e) => setTahunAjaran(e.target.value)}
-                        required
-                      />
+                      {availableYears.length > 0 ? (
+                        <Select value={tahunAjaran} onValueChange={setTahunAjaran}>
+                          <SelectTrigger id="tahunAjaran">
+                            <SelectValue placeholder="Pilih tahun ajaran" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableYears.map((y) => (
+                              <SelectItem key={y.id || y.tahun} value={y.tahun}>
+                                {y.tahun} {y.isActive ? "(Aktif)" : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          id="tahunAjaran"
+                          placeholder="2026/2027"
+                          value={tahunAjaran}
+                          onChange={(e) => setTahunAjaran(e.target.value)}
+                          required
+                        />
+                      )}
                     </div>
                   </div>
 
@@ -289,11 +322,14 @@ function KelasListPage() {
               <School className="h-8 w-8" />
             </div>
             <h3 className="mt-4 font-display text-lg font-bold text-navy">
-              Belum Ada Kelas Pembelajaran
+              {allMyKelas.length > 0
+                ? `Belum Ada Kelas di Tahun Ajaran ${selectedYear || "Ini"}`
+                : "Belum Ada Kelas Pembelajaran"}
             </h3>
             <p className="mt-1 max-w-md text-sm text-muted-foreground">
-              Mulai buat kelas pertama Anda untuk mendapatkan kode unik dan tautan undangan yang
-              dapat dibagikan kepada para siswa.
+              {allMyKelas.length > 0
+                ? `Anda memiliki kelas di tahun ajaran lain. Buat kelas baru untuk tahun ajaran ${selectedYear || "ini"} atau alihkan tahun ajaran melalui selector di header.`
+                : "Mulai buat kelas pertama Anda untuk mendapatkan kode unik dan tautan undangan yang dapat dibagikan kepada para siswa."}
             </p>
             <Button className="mt-6 gap-2" onClick={() => setOpenCreateModal(true)}>
               <Plus className="h-4 w-4" />
