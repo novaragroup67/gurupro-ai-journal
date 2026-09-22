@@ -7,6 +7,7 @@ type Row = {
   id: string;
   judul: string;
   kelas: string;
+  kelas_id: string | null;
   mapel: string;
   status: string;
   sumber_tipe: string;
@@ -26,6 +27,7 @@ function toModul(row: Row): Modul {
     id: row.id,
     judul: row.judul,
     kelas: row.kelas,
+    kelasId: row.kelas_id || undefined,
     mapel: row.mapel,
     status: (row.status as ModulStatus) ?? "Draft",
     sumberTipe: (row.sumber_tipe as SumberTipe) ?? "Link Luar",
@@ -45,6 +47,7 @@ function toRow(modul: Partial<Modul>) {
   return {
     judul: modul.judul ?? "",
     kelas: modul.kelas ?? "",
+    kelas_id: modul.kelasId || null,
     mapel: modul.mapel ?? "",
     status: modul.status ?? "Draft",
     sumber_tipe: modul.sumberTipe ?? "Link Luar",
@@ -57,6 +60,7 @@ function toRow(modul: Partial<Modul>) {
     slides: (modul.slides ?? []) as unknown as never,
   };
 }
+
 
 const store = createCloudStore<Modul>(async () => {
   const { data, error } = await supabase
