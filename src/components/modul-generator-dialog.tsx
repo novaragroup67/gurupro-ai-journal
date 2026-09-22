@@ -39,7 +39,7 @@ import { isRecoverableAuthError, withAuthRetry } from "@/integrations/supabase/a
 import { useAuth } from "@/lib/auth-store";
 import { uid } from "@/lib/cloud-store";
 import { useKelas } from "@/lib/kelas-store";
-import { MAPEL, SUMBER_TIPE, type Modul, type SumberTipe } from "@/lib/modul-types";
+import { SUMBER_TIPE, type Modul, type SumberTipe } from "@/lib/modul-types";
 import { analisisSumberUrl, type SumberPreview } from "@/lib/sumber.functions";
 
 const ICONS: Record<SumberTipe, typeof Target> = {
@@ -66,7 +66,7 @@ export function ModulGeneratorDialog({
   onGenerated: (draft: Omit<Modul, "id" | "createdAt" | "updatedAt">) => void | Promise<void>;
 }) {
   const { profile, user } = useAuth();
-  const { kelasList } = useKelas();
+  const { kelasList, refresh: refreshKelas } = useKelas();
   const analisis = useServerFn(analisisSumberUrl);
   const generate = useServerFn(generateModulAi);
 
@@ -80,13 +80,13 @@ export function ModulGeneratorDialog({
     myKelasList.forEach((k) => {
       if (k.mapel?.trim()) options.add(k.mapel.trim());
     });
-    MAPEL.forEach((m) => options.add(m));
     return Array.from(options);
   }, [profile?.mapel, myKelasList]);
 
   const [sumberTipe, setSumberTipe] = useState<SumberTipe>("Link Luar");
   const [sumberInput, setSumberInput] = useState("");
   const [topik, setTopik] = useState("");
+  const [selectedKelasId, setSelectedKelasId] = useState<string>("");
   const [kelas, setKelas] = useState("");
   const [mapel, setMapel] = useState("");
   const [fileName, setFileName] = useState("");
@@ -97,14 +97,29 @@ export function ModulGeneratorDialog({
 
   useEffect(() => {
     if (open) {
+      void refreshKelas();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
       if (profile?.mapel && !mapel) {
         setMapel(profile.mapel);
       }
-      if (myKelasList.length > 0 && !kelas) {
-        setKelas(`${myKelasList[0].tingkat} ${myKelasList[0].namaKelas}`);
+      if (myKelasList.length > 0) {
+        const found = myKelasList.find((k) => k.id === selectedKelasId);
+        if (!found) {
+          const first = myKelasList[0];
+          setSelectedKelasId(first.id);
+          setKelas(`${first.tingkat} ${first.namaKelas}`);
+          if (first.mapel && !mapel && !profile?.mapel) {
+            setMapel(first.mapel);
+          }
+        }
       }
     }
-  }, [open, profile?.mapel, myKelasList, mapel, kelas]);
+  }, [open, profile?.mapel, myKelasList, mapel, selectedKelasId]);
+
 
   const reset = () => {
     setPreview(null);
@@ -209,10 +224,16 @@ export function ModulGeneratorDialog({
         .filter(Boolean)
         .join("\n\n");
 
+      const targetClass = myKelasList.find((k) => k.id === selectedKelasId);
+      const finalKelasLabel = targetClass ? `${targetClass.tingkat} ${targetClass.namaKelas}` : (kelas || "");
+      const finalKelasId = targetClass ? targetClass.id : (selectedKelasId || undefined);
+      const finalMapel = mapel.trim() || profile?.mapel?.trim() || "";
+
       await onGenerated({
         judul: hasil.judul,
-        kelas,
-        mapel,
+        kelas: finalKelasLabel,
+        kelasId: finalKelasId,
+        mapel: finalMapel,
         status: "Draft",
         sumberTipe,
         sumberInput: isLink ? (preview?.url ?? sumberInput) : konten.slice(0, 4000),
@@ -223,6 +244,7 @@ export function ModulGeneratorDialog({
         sections,
         slides: [],
       });
+
 
       if (hasil.catatanKeterbatasan) {
         toast.warning(`Catatan AI: ${hasil.catatanKeterbatasan}`);
@@ -433,22 +455,43 @@ export function ModulGeneratorDialog({
               </div>
               <div className="grid gap-2 min-w-0">
                 <Label>Mata Pelajaran</Label>
-                <Select value={mapel} onValueChange={setMapel}>
-                  <SelectTrigger className="min-w-0 w-full">
-                    <SelectValue placeholder="Pilih Mapel" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {mapelOptions.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {m}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {mapelOptions.length > 0 ? (
+                  <Select value={mapel} onValueChange={setMapel}>
+                    <SelectTrigger className="min-w-0 w-full">
+                      <SelectValue placeholder="Pilih Mapel" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {mapelOptions.map((m) => (
+                        <SelectItem key={m} value={m}>
+                          {m} {m === profile?.mapel ? "(Mapel Profil)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={mapel}
+                    onChange={(e) => setMapel(e.target.value)}
+                    placeholder="Mata pelajaran (misal: Matematika)"
+                    className="min-w-0"
+                  />
+                )}
               </div>
               <div className="grid gap-2 min-w-0">
                 <Label>Kelas</Label>
-                <Select value={kelas} onValueChange={setKelas}>
+                <Select
+                  value={selectedKelasId}
+                  onValueChange={(val) => {
+                    setSelectedKelasId(val);
+                    const found = myKelasList.find((k) => k.id === val);
+                    if (found) {
+                      setKelas(`${found.tingkat} ${found.namaKelas}`);
+                      if (found.mapel && !mapel) {
+                        setMapel(found.mapel);
+                      }
+                    }
+                  }}
+                >
                   <SelectTrigger className="min-w-0 w-full">
                     <SelectValue
                       placeholder={
@@ -463,7 +506,7 @@ export function ModulGeneratorDialog({
                       myKelasList.map((k) => {
                         const val = `${k.tingkat} ${k.namaKelas}`;
                         return (
-                          <SelectItem key={k.id} value={val}>
+                          <SelectItem key={k.id} value={k.id}>
                             {val} {k.mapel ? `(${k.mapel})` : ""}
                           </SelectItem>
                         );
@@ -476,6 +519,7 @@ export function ModulGeneratorDialog({
                   </SelectContent>
                 </Select>
               </div>
+
             </div>
           </div>
         )}
