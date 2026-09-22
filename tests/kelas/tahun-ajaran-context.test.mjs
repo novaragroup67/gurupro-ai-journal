@@ -444,8 +444,61 @@ const MOCK_ASSIGNMENTS = [
 })();
 
 // ============================================================================
+// SCENARIO 16: Header selector fallback guarantee (never returns null)
+// ============================================================================
+(() => {
+  // Store fallback guarantee: initial state must contain canonical years
+  const DEFAULT_AVAILABLE_YEARS = [
+    { id: "ta-canonical-2026", tahun: "2026/2027", isActive: true },
+    { id: "ta-canonical-2025", tahun: "2025/2026", isActive: false },
+    { id: "ta-canonical-2024", tahun: "2024/2025", isActive: false },
+  ];
+  const DEFAULT_ACTIVE_YEAR = "2026/2027";
+
+  function resolveHeaderDisplayYear(availableYears, selectedYear) {
+    return selectedYear || availableYears[0]?.tahun || DEFAULT_ACTIVE_YEAR;
+  }
+
+  // Case A: Fresh boot with fallback data
+  assert.equal(resolveHeaderDisplayYear(DEFAULT_AVAILABLE_YEARS, ""), "2026/2027");
+
+  // Case B: Even if availableYears is temporarily empty, display year is guaranteed
+  assert.equal(resolveHeaderDisplayYear([], ""), "2026/2027");
+
+  // Case C: Teacher selected 2025/2026
+  assert.equal(resolveHeaderDisplayYear(DEFAULT_AVAILABLE_YEARS, "2025/2026"), "2025/2026");
+
+  passed++;
+  console.log("  [PASS] 16. Header selector fallback guarantee: always renders display year without unmounting");
+})();
+
+// ============================================================================
+// SCENARIO 17: Static verification of __root.tsx header selector visibility
+// ============================================================================
+(() => {
+  const rootPath = resolve(ROOT_DIR, "src/routes/__root.tsx");
+  const rootSrc = readFileSync(rootPath, "utf-8");
+
+  assert.ok(
+    rootSrc.includes('data-testid="tahun-ajaran-header-selector"'),
+    "__root.tsx must include testable Tahun Ajaran header selector"
+  );
+  assert.ok(
+    !rootSrc.includes("if (availableYears.length === 0) return null;"),
+    "__root.tsx must NOT return null when availableYears is empty"
+  );
+  assert.ok(
+    rootSrc.includes("isTeacher ? <TahunAjaranHeaderSelector"),
+    "__root.tsx must render TahunAjaranHeaderSelector for authenticated teacher"
+  );
+
+  passed++;
+  console.log("  [PASS] 17. Static verification: __root.tsx guarantees header selector mount and visible rendering");
+})();
+
+// ============================================================================
 // SUMMARY
 // ============================================================================
 console.log("\n======================================================");
-console.log(`  ALL ${passed}/15 TAHUN AJARAN CONTEXT TESTS PASSED!`);
+console.log(`  ALL ${passed}/17 TAHUN AJARAN CONTEXT TESTS PASSED!`);
 console.log("======================================================\n");

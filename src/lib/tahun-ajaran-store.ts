@@ -7,6 +7,14 @@ export interface TahunAjaranItem {
   isActive: boolean;
 }
 
+export const DEFAULT_AVAILABLE_YEARS: TahunAjaranItem[] = [
+  { id: "ta-canonical-2026", tahun: "2026/2027", isActive: true },
+  { id: "ta-canonical-2025", tahun: "2025/2026", isActive: false },
+  { id: "ta-canonical-2024", tahun: "2024/2025", isActive: false },
+];
+
+export const DEFAULT_ACTIVE_YEAR = "2026/2027";
+
 interface TahunAjaranState {
   availableYears: TahunAjaranItem[];
   selectedYear: string;
@@ -14,17 +22,6 @@ interface TahunAjaranState {
   loading: boolean;
   error: string | null;
 }
-
-let cachedState: TahunAjaranState = {
-  availableYears: [],
-  selectedYear: "",
-  activeYear: "",
-  loading: true,
-  error: null,
-};
-
-const listeners = new Set<() => void>();
-const emitChange = () => listeners.forEach((l) => l());
 
 function getStorageKey(userId?: string): string {
   return userId ? `gurupro_selected_tahun_ajaran_${userId}` : "gurupro_selected_tahun_ajaran";
@@ -52,11 +49,37 @@ function setStoredYear(year: string, userId?: string): void {
   }
 }
 
+function getInitialState(): TahunAjaranState {
+  let initialSelected = DEFAULT_ACTIVE_YEAR;
+  if (typeof window !== "undefined") {
+    try {
+      const stored = getStoredYear();
+      if (stored && DEFAULT_AVAILABLE_YEARS.some((y) => y.tahun === stored)) {
+        initialSelected = stored;
+      }
+    } catch {
+      // Ignore
+    }
+  }
+  return {
+    availableYears: DEFAULT_AVAILABLE_YEARS,
+    selectedYear: initialSelected,
+    activeYear: DEFAULT_ACTIVE_YEAR,
+    loading: false,
+    error: null,
+  };
+}
+
+let cachedState: TahunAjaranState = getInitialState();
+
+const listeners = new Set<() => void>();
+const emitChange = () => listeners.forEach((l) => l());
+
 export function resetTahunAjaranStore(): void {
   cachedState = {
-    availableYears: [],
-    selectedYear: "",
-    activeYear: "",
+    availableYears: DEFAULT_AVAILABLE_YEARS,
+    selectedYear: DEFAULT_ACTIVE_YEAR,
+    activeYear: DEFAULT_ACTIVE_YEAR,
     loading: false,
     error: null,
   };
@@ -102,7 +125,12 @@ export async function refreshTahunAjaran(userId?: string): Promise<TahunAjaranSt
 
     const yearsMap = new Map<string, TahunAjaranItem>();
 
-    // Masukkan data master
+    // Pre-populate canonical default academic years so the list is never empty
+    DEFAULT_AVAILABLE_YEARS.forEach((d) => {
+      yearsMap.set(d.tahun, { ...d });
+    });
+
+    // Masukkan data master dari Supabase (overwrite fallback dengan data asli)
     (masterRows || []).forEach((r) => {
       const cleanTahun = r.tahun.trim();
       if (cleanTahun) {
@@ -133,20 +161,25 @@ export async function refreshTahunAjaran(userId?: string): Promise<TahunAjaranSt
 
     // Tentukan tahun aktif canonical
     const activeItem = availableYears.find((y) => y.isActive);
-    const canonicalActiveYear = activeItem ? activeItem.tahun : availableYears[0]?.tahun || "";
+    const canonicalActiveYear = activeItem ? activeItem.tahun : DEFAULT_ACTIVE_YEAR;
 
     // Tentukan tahun terpilih:
     // Prioritas: 1. Stored user selection (jika masih valid di availableYears)
-    //            2. Active year canonical
-    //            3. Tahun teratas
+    //            2. Currently selected year jika masih valid
+    //            3. Active year canonical
+    //            4. Tahun pertama di daftar
     const stored = getStoredYear(userId);
     let resolvedYear = "";
     if (stored && availableYears.some((y) => y.tahun === stored)) {
       resolvedYear = stored;
+    } else if (cachedState.selectedYear && availableYears.some((y) => y.tahun === cachedState.selectedYear)) {
+      resolvedYear = cachedState.selectedYear;
     } else if (canonicalActiveYear) {
       resolvedYear = canonicalActiveYear;
     } else if (availableYears.length > 0) {
       resolvedYear = availableYears[0].tahun;
+    } else {
+      resolvedYear = DEFAULT_ACTIVE_YEAR;
     }
 
     if (resolvedYear) {
@@ -166,6 +199,9 @@ export async function refreshTahunAjaran(userId?: string): Promise<TahunAjaranSt
     const errorMsg = err instanceof Error ? err.message : "Gagal memuat tahun ajaran.";
     cachedState = {
       ...cachedState,
+      availableYears: cachedState.availableYears.length > 0 ? cachedState.availableYears : DEFAULT_AVAILABLE_YEARS,
+      selectedYear: cachedState.selectedYear || DEFAULT_ACTIVE_YEAR,
+      activeYear: cachedState.activeYear || DEFAULT_ACTIVE_YEAR,
       loading: false,
       error: errorMsg,
     };
@@ -197,11 +233,19 @@ export function useTahunAjaran(currentUserId?: string) {
   );
 
   useEffect(() => {
-    // Muat data jika belum dimuat atau kosong
-    if (state.availableYears.length === 0 && !state.error) {
-      void refreshTahunAjaran(currentUserId);
+    // Sinkronisasi tahun tersimpan untuk user ini jika ada
+    if (currentUserId) {
+      const stored = getStoredYear(currentUserId);
+      if (stored && stored !== state.selectedYear && state.availableYears.some((y) => y.tahun === stored)) {
+        setSelectedTahunAjaran(stored, currentUserId);
+      }
     }
-  }, [currentUserId, state.availableYears.length, state.error]);
+  }, [currentUserId, state.selectedYear, state.availableYears]);
+
+  useEffect(() => {
+    // Muat data master dari Supabase pada mount / perubahan user
+    void refreshTahunAjaran(currentUserId);
+  }, [currentUserId]);
 
   return {
     ...state,

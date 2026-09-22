@@ -28,6 +28,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { initials, isAuthPublicPath, shortName, useAuth } from "@/lib/auth-store";
 import { useTahunAjaran } from "@/lib/tahun-ajaran-store";
+import { cn } from "@/lib/utils";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -171,45 +172,53 @@ function AuthGate({ children }: { children: ReactNode }) {
 }
 
 function TahunAjaranHeaderSelector({ userId }: { userId?: string }) {
-  const { availableYears, selectedYear, setSelectedYear, loading } = useTahunAjaran(userId);
+  const { availableYears, selectedYear, setSelectedYear } = useTahunAjaran(userId);
 
-  if (loading && availableYears.length === 0) {
-    return (
-      <div className="flex items-center gap-1.5 rounded-md border border-border/70 bg-background/50 px-2.5 py-1 text-xs text-muted-foreground">
-        <Calendar className="h-3.5 w-3.5 animate-pulse text-primary" />
-        <span className="hidden sm:inline">Tahun Ajaran:</span>
-        <span className="font-medium animate-pulse">Memuat…</span>
-      </div>
-    );
-  }
-
-  if (availableYears.length === 0) {
-    return null;
-  }
+  const displayYear = selectedYear || availableYears[0]?.tahun || "2026/2027";
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div
+      className="flex shrink-0 items-center gap-1.5"
+      data-testid="tahun-ajaran-header-selector"
+    >
       <span className="hidden text-xs font-medium text-muted-foreground lg:inline">
         Tahun Ajaran:
       </span>
-      <Select value={selectedYear} onValueChange={setSelectedYear}>
-        <SelectTrigger className="h-8 w-auto min-w-[110px] gap-1.5 px-2.5 text-xs font-semibold text-navy bg-background border-border shadow-xs hover:bg-muted/50">
+      <Select value={displayYear} onValueChange={setSelectedYear}>
+        <SelectTrigger
+          aria-label="Pilih Tahun Ajaran"
+          className="h-8 w-auto min-w-[96px] sm:min-w-[110px] gap-1 sm:gap-1.5 px-2 sm:px-2.5 text-xs font-semibold text-navy bg-background border-border shadow-xs hover:bg-muted/50 focus:ring-1 focus:ring-primary shrink-0"
+        >
           <Calendar className="h-3.5 w-3.5 text-primary shrink-0" />
-          <SelectValue placeholder="Pilih Tahun" />
+          <SelectValue placeholder="Pilih Tahun">
+            {displayYear}
+          </SelectValue>
         </SelectTrigger>
-        <SelectContent align="end">
-          {availableYears.map((y) => (
-            <SelectItem key={y.id || y.tahun} value={y.tahun} className="text-xs font-medium">
-              <span className="flex items-center gap-1.5">
-                {y.tahun}
-                {y.isActive ? (
-                  <Badge variant="secondary" className="h-4 px-1 text-[10px] bg-primary/10 text-primary">
-                    Aktif
-                  </Badge>
-                ) : null}
-              </span>
-            </SelectItem>
-          ))}
+        <SelectContent align="end" className="min-w-[145px] sm:min-w-[160px]">
+          {availableYears.map((y) => {
+            const isCurrent = y.tahun === displayYear;
+            return (
+              <SelectItem
+                key={y.id || y.tahun}
+                value={y.tahun}
+                className="text-xs font-medium cursor-pointer"
+              >
+                <div className="flex items-center justify-between w-full gap-2">
+                  <span className={cn(isCurrent && "font-semibold text-primary")}>
+                    {y.tahun}
+                  </span>
+                  {y.isActive ? (
+                    <Badge
+                      variant="secondary"
+                      className="h-4 px-1 text-[10px] font-semibold bg-primary/10 text-primary border-primary/20 shrink-0"
+                    >
+                      Aktif
+                    </Badge>
+                  ) : null}
+                </div>
+              </SelectItem>
+            );
+          })}
         </SelectContent>
       </Select>
     </div>
@@ -217,8 +226,17 @@ function TahunAjaranHeaderSelector({ userId }: { userId?: string }) {
 }
 
 function AppShell() {
-  const { profile, user } = useAuth();
-  const isTeacher = profile?.role === "guru";
+  const { profile, user, isGuru: authIsGuru } = useAuth();
+  
+  // Robust teacher role detection across store, auth metadata, and profile
+  const isTeacher =
+    Boolean(authIsGuru) ||
+    profile?.role?.toLowerCase()?.trim() === "guru" ||
+    (user?.user_metadata?.role as string)?.toLowerCase()?.trim() === "guru" ||
+    (Boolean(user) &&
+      profile?.role !== "siswa" &&
+      profile?.role !== "admin" &&
+      (Boolean(profile?.mapel) || Boolean(profile?.nip)));
 
   return (
     <SidebarProvider>
@@ -226,22 +244,22 @@ function AppShell() {
         <AppSidebar />
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-card/85 px-4 backdrop-blur sm:px-6">
+          <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-2 sm:gap-3 border-b bg-card/85 px-3 sm:px-6 backdrop-blur">
             <SidebarTrigger className="shrink-0" />
-            <div className="flex min-w-0 flex-1 items-center gap-2 md:hidden">
+            <div className="flex items-center gap-1.5 md:hidden shrink-0">
               <GuruProMark className="h-7 w-7 shrink-0" />
-              <span className="font-display text-base font-bold text-navy">
+              <span className="font-display text-sm font-bold text-navy hidden xs:inline sm:text-base">
                 Guru<span className="text-primary">Pro</span>
               </span>
             </div>
-            <div className="ml-auto flex items-center gap-2">
-              {isTeacher ? <TahunAjaranHeaderSelector userId={user?.id || profile.id} /> : null}
+            <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+              {isTeacher ? <TahunAjaranHeaderSelector userId={user?.id || profile?.id} /> : null}
 
               <Button
                 variant="ghost"
                 size="icon"
                 aria-label="Cari"
-                className="hidden sm:inline-flex"
+                className="hidden sm:inline-flex shrink-0"
               >
                 <Search className="h-4 w-4" />
               </Button>
@@ -249,17 +267,17 @@ function AppShell() {
 
               <Link
                 to="/profil"
-                className="flex min-w-0 items-center gap-2 rounded-full border bg-background py-1 pl-1 pr-3"
+                className="flex shrink-0 items-center gap-2 rounded-full border bg-background py-1 pl-1 pr-1.5 sm:pr-3 max-w-[140px] sm:max-w-[200px]"
               >
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-gradient text-xs font-bold text-navy-foreground">
-                  {initials(profile.nama)}
+                  {initials(profile?.nama)}
                 </span>
                 <span className="hidden min-w-0 leading-tight sm:block">
                   <span className="block truncate text-xs font-semibold">
-                    {shortName(profile.nama)}
+                    {shortName(profile?.nama)}
                   </span>
                   <span className="block truncate text-[11px] text-muted-foreground">
-                    {profile.mapel}
+                    {profile?.mapel}
                   </span>
                 </span>
               </Link>
