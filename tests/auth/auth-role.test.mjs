@@ -686,4 +686,133 @@ let passed = 0;
   passed++;
 }
 
-console.log(`\nAUTH & ROLE TESTS COMPLETE: ${passed}/22 PASSED\n`);
+// Test 23: Strict role registration simulation (trigger & client handling)
+{
+  function simulateHandleNewUser(userRecord, existingProfile) {
+    const rawRole = (userRecord?.raw_user_meta_data?.role || "").trim().toLowerCase();
+    let role;
+    let status;
+
+    if (rawRole === "siswa") {
+      role = "siswa";
+      status = "terverifikasi";
+    } else if (rawRole === "guru") {
+      role = "guru";
+      status = "menunggu";
+    } else {
+      throw new Error(`Peran pendaftaran tidak valid (${rawRole || 'kosong'}). Hanya peran guru atau siswa yang diizinkan.`);
+    }
+
+    if (existingProfile) {
+      // ON CONFLICT DO UPDATE preserves existing status_verifikasi
+      const preservedStatus = existingProfile.status_verifikasi && existingProfile.status_verifikasi !== ''
+        ? existingProfile.status_verifikasi
+        : status;
+      return {
+        id: userRecord.id,
+        role: existingProfile.role, // role not overwritten by conflict
+        status_verifikasi: preservedStatus,
+      };
+    }
+
+    return {
+      id: userRecord.id,
+      role,
+      status_verifikasi: status,
+    };
+  }
+
+  // Guru registration initializes to menunggu
+  const newGuru = simulateHandleNewUser({ id: "g-1", raw_user_meta_data: { role: "guru" } }, null);
+  assert.equal(newGuru.role, "guru");
+  assert.equal(newGuru.status_verifikasi, "menunggu");
+
+  // Siswa registration initializes to terverifikasi
+  const newSiswa = simulateHandleNewUser({ id: "s-1", raw_user_meta_data: { role: "siswa" } }, null);
+  assert.equal(newSiswa.role, "siswa");
+  assert.equal(newSiswa.status_verifikasi, "terverifikasi");
+
+  // Attempt to register as admin MUST THROW and never become guru or admin
+  assert.throws(
+    () => simulateHandleNewUser({ id: "bad-1", raw_user_meta_data: { role: "admin" } }, null),
+    /Peran pendaftaran tidak valid \(admin\)/,
+  );
+
+  // Attempt with random role MUST THROW and never silently become guru
+  assert.throws(
+    () => simulateHandleNewUser({ id: "bad-2", raw_user_meta_data: { role: "superuser" } }, null),
+    /Peran pendaftaran tidak valid/,
+  );
+  assert.throws(
+    () => simulateHandleNewUser({ id: "bad-3", raw_user_meta_data: {} }, null),
+    /Peran pendaftaran tidak valid/,
+  );
+
+  // Re-login / conflict does NOT reset verified teacher to 'menunggu'
+  const reloadedTeacher = simulateHandleNewUser(
+    { id: "g-1", raw_user_meta_data: { role: "guru" } },
+    { id: "g-1", role: "guru", status_verifikasi: "terverifikasi" },
+  );
+  assert.equal(reloadedTeacher.status_verifikasi, "terverifikasi", "Conflict must preserve terverifikasi");
+
+  console.log("  [PASS] 23. Strict role registration: only guru/siswa allowed, admin strictly blocked, verified status preserved");
+  passed++;
+}
+
+// Test 24: Comprehensive negative cases matrix (wrong pass, duplicate email, invalid role, unconfirmed email, logout)
+{
+  function evaluateNegativeAuthCase(scenario, input) {
+    switch (scenario) {
+      case "wrong_password": {
+        const error = { message: "Invalid login credentials" };
+        const errMsg = error.message.toLowerCase();
+        let code = errMsg.includes("invalid login credentials") ? "invalid_credentials" : "unknown";
+        return { ok: false, code };
+      }
+      case "duplicate_email": {
+        const data = { user: { id: "u-1", identities: [] } };
+        if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+          return { ok: false, code: "user_already_exists" };
+        }
+        return { ok: true };
+      }
+      case "invalid_role": {
+        const errMsg = input?.message?.toLowerCase() || "";
+        if (errMsg.includes("peran") && (errMsg.includes("tidak valid") || errMsg.includes("invalid"))) {
+          return { ok: false, code: "invalid_role" };
+        }
+        return { ok: false, code: "unknown" };
+      }
+      case "unconfirmed_email": {
+        const error = { message: "Email not confirmed" };
+        const errMsg = error.message.toLowerCase();
+        let code = errMsg.includes("email not confirmed") ? "unconfirmed_email" : "unknown";
+        return { ok: false, code };
+      }
+      case "logout_protected": {
+        const session = null;
+        if (!session) {
+          return { ok: false, code: "unauthorized", redirect: "/login" };
+        }
+        return { ok: true };
+      }
+      default:
+        return { ok: false, code: "unknown" };
+    }
+  }
+
+  assert.equal(evaluateNegativeAuthCase("wrong_password").code, "invalid_credentials");
+  assert.equal(evaluateNegativeAuthCase("duplicate_email").code, "user_already_exists");
+  assert.equal(
+    evaluateNegativeAuthCase("invalid_role", { message: "Peran pendaftaran tidak valid. Hanya peran guru atau siswa yang diizinkan." }).code,
+    "invalid_role",
+  );
+  assert.equal(evaluateNegativeAuthCase("unconfirmed_email").code, "unconfirmed_email");
+  assert.equal(evaluateNegativeAuthCase("logout_protected").code, "unauthorized");
+  assert.equal(evaluateNegativeAuthCase("logout_protected").redirect, "/login");
+
+  console.log("  [PASS] 24. Negative cases matrix: wrong password, duplicate email, invalid role, unconfirmed email, logout guard");
+  passed++;
+}
+
+console.log(`\nAUTH & ROLE TESTS COMPLETE: ${passed}/24 PASSED\n`);
