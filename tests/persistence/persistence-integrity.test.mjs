@@ -37,22 +37,22 @@ console.log("\n--- SECTION 1: ENVIRONMENT & CANONICAL PROJECT CONSISTENCY ---");
 
   assert.match(
     envContent,
-    new RegExp(`SUPABASE_PROJECT_ID=["']?${CANONICAL_PROJECT_ID}["']?`),
+    new RegExp(`SUPABASE_PROJECT_ID=[\"']?${CANONICAL_PROJECT_ID}[\"']?`),
     "SUPABASE_PROJECT_ID must match canonical project dxzzpsrgbiummjplggyo",
   );
   assert.match(
     envContent,
-    new RegExp(`https://${CANONICAL_PROJECT_ID}\\.supabase\\.co`),
+    new RegExp(`https://${CANONICAL_PROJECT_ID}\\\\.supabase\\\\.co`),
     "SUPABASE_URL must point to canonical project dxzzpsrgbiummjplggyo",
   );
   assert.match(
     envContent,
-    new RegExp(`VITE_SUPABASE_PROJECT_ID=["']?${CANONICAL_PROJECT_ID}["']?`),
+    new RegExp(`VITE_SUPABASE_PROJECT_ID=[\"']?${CANONICAL_PROJECT_ID}[\"']?`),
     "VITE_SUPABASE_PROJECT_ID must match canonical project dxzzpsrgbiummjplggyo",
   );
   assert.match(
     envContent,
-    new RegExp(`VITE_SUPABASE_URL=["']?https://${CANONICAL_PROJECT_ID}\\.supabase\\.co`),
+    new RegExp(`VITE_SUPABASE_URL=[\"']?https://${CANONICAL_PROJECT_ID}\\\\.supabase\\\\.co`),
     "VITE_SUPABASE_URL must point to canonical project dxzzpsrgbiummjplggyo",
   );
 
@@ -68,7 +68,7 @@ console.log("\n--- SECTION 1: ENVIRONMENT & CANONICAL PROJECT CONSISTENCY ---");
 
   assert.match(
     exampleContent,
-    new RegExp(`https://${CANONICAL_PROJECT_ID}\\.supabase\\.co`),
+    new RegExp(`https://${CANONICAL_PROJECT_ID}\\\\.supabase\\\\.co`),
     ".env.example must reference canonical project dxzzpsrgbiummjplggyo",
   );
 
@@ -285,6 +285,7 @@ console.log("\n--- SECTION 4: FULL CRUD PERSISTENCE VALIDATION ---");
   const modulPayload = {
     judul: "Ekosistem Biologi X",
     kelas: "Kelas X-1",
+    kelasId: "b851b4e0-9999-4c12-8888-0123456789ab",
     mapel: "Biologi",
     status: "Draft",
     sumberTipe: "Link Luar",
@@ -298,6 +299,7 @@ console.log("\n--- SECTION 4: FULL CRUD PERSISTENCE VALIDATION ---");
   const dbRow = {
     judul: modulPayload.judul,
     kelas: modulPayload.kelas,
+    kelas_id: modulPayload.kelasId || null,
     mapel: modulPayload.mapel,
     status: modulPayload.status,
     sumber_tipe: modulPayload.sumberTipe,
@@ -306,8 +308,10 @@ console.log("\n--- SECTION 4: FULL CRUD PERSISTENCE VALIDATION ---");
   };
 
   assert.equal(dbRow.judul, "Ekosistem Biologi X");
+  assert.equal(dbRow.kelas_id, "b851b4e0-9999-4c12-8888-0123456789ab");
   assert.equal(dbRow.sumber_tipe, "Link Luar");
   assert.equal(dbRow.sumber_input, "https://id.wikipedia.org/wiki/Ekosistem");
+
 
   passed++;
   console.log("  [PASS] 8. Modul store payload transforms accurately for Supabase moduls table");
