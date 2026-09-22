@@ -234,31 +234,12 @@ export const requireGuruAuth = createMiddleware({ type: "function" })
       console.warn("[AuthMiddleware] Exception querying profiles:", err?.message);
     }
 
-    // Fail-safe role fallback: jika profil DB gagal diakses karena RLS / koneksi,
-    // gunakan klaim autentikasi Supabase yang sudah diverifikasi oleh requireSupabaseAuth
-    if (!profile) {
-      const claimRole = String(
-        claims?.user_metadata?.role ||
-        claims?.app_metadata?.role ||
-        claims?.role ||
-        ""
-      ).toLowerCase().trim();
-
-      if (claimRole === "guru" || claimRole === "admin") {
-        console.info(`[AuthMiddleware] Using verified auth token metadata role (${claimRole}) for user:`, userId);
-        profile = {
-          role: claimRole,
-          status_verifikasi: "terverifikasi",
-        };
-      }
-    }
-
     if (!profile) {
       if (dbError) {
-        console.error("[AuthMiddleware] Failed to query profiles and no claim role:", dbError.message);
+        console.error("[AuthMiddleware] Failed to query profiles:", dbError.message);
         throw new Error(`Forbidden: Gagal memuat profil basis data (${dbError.message})`);
       }
-      console.warn("[AuthMiddleware] Profile not found in database and claims for user:", userId);
+      console.warn("[AuthMiddleware] Profile not found in database for user:", userId);
       throw new Error("Forbidden: Profil pengguna tidak ditemukan.");
     }
 
@@ -267,8 +248,14 @@ export const requireGuruAuth = createMiddleware({ type: "function" })
       throw new Error("Forbidden: Operasi ini hanya diizinkan untuk peran Guru.");
     }
 
-    if (userRole === "guru" && String(profile.status_verifikasi || "").toLowerCase().trim() === "ditolak") {
-      throw new Error("Forbidden: Akun guru Anda ditolak atau belum aktif.");
+    if (userRole === "guru") {
+      const status = String(profile.status_verifikasi || "").toLowerCase().trim();
+      if (status === "menunggu") {
+        throw new Error("Forbidden: Akun guru Anda sedang menunggu verifikasi.");
+      }
+      if (status === "ditolak" || status === "nonaktif") {
+        throw new Error("Forbidden: Akun guru Anda ditolak atau belum aktif.");
+      }
     }
 
     return next({
