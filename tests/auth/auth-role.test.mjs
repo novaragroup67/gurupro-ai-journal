@@ -423,41 +423,18 @@ let passed = 0;
         if (!userError && userData?.user?.id) {
           userId = userData.user.id;
           claims = userData.user;
-        } else if (userError) {
-          console.warn("[AuthMiddleware] getUser failed, falling back to Auth API:", userError.message);
         }
-      } catch (userErr: any) {
-        console.warn("[AuthMiddleware] getUser threw exception, falling back to Auth API:", userErr?.message);
+      } catch {
+        // ignore and try Auth API
       }
     }
 
     if (!userId) {
-      try {
-        const user = await fetchAuthUser(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, token);
-        userId = user.id;
-        claims = user;
-      } catch (apiErr: any) {
-        const detail = String(apiErr?.message || "");
-        console.warn("[AuthMiddleware] fetchAuthUser failed:", detail);
-        if (/expired|invalid jwt|jwt expired|bad_jwt/i.test(detail)) {
-          throw sessionExpiredError();
-        }
-
-        // If Auth gateway has a network/connectivity issue, fall back to unexpired JWT payload
-        const payload = readJwtPayload(token);
-        if (
-          payload &&
-          typeof payload.sub === "string" &&
-          payload.sub.length > 0 &&
-          !isJwtExpired(token, 0)
-        ) {
-          console.warn("[AuthMiddleware] Auth API network issue; falling back to JWT payload sub:", payload.sub);
-          userId = payload.sub;
-          claims = payload;
-        } else {
-          throw new Error("Unauthorized: Invalid token");
-        }
+      if (!authApiUser?.id) {
+        throw new Error("Unauthorized: Invalid token");
       }
+      userId = authApiUser.id;
+      claims = authApiUser;
     }
 
     return { userId, claims };
