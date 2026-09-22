@@ -13,7 +13,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
@@ -75,9 +75,16 @@ function KelasListPage() {
   const [openCreateModal, setOpenCreateModal] = useState(false);
   const [namaKelas, setNamaKelas] = useState("");
   const [tingkat, setTingkat] = useState("XI");
-  const [mapel, setMapel] = useState(profile.mapel || "Matematika");
+  const [mapel, setMapel] = useState(profile.mapel || "");
   const [tahunAjaran, setTahunAjaran] = useState("2025/2026");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (profile?.mapel && !mapel) {
+      setMapel(profile.mapel);
+    }
+  }, [profile?.mapel, mapel]);
+
 
   // Status copy feedback per kelas id
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
