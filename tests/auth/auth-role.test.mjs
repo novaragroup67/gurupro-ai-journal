@@ -197,30 +197,46 @@ let passed = 0;
   passed++;
 }
 
-// Test 11: Registration error differentiation - duplicate email
+// Test 11: Registration error differentiation - duplicate email (message & identities: [])
 {
-  function parseRegistrationError(error) {
-    const errMsg = (error?.message || "").toLowerCase();
-    if (
-      errMsg.includes("already registered") ||
-      errMsg.includes("already exists") ||
-      errMsg.includes("user already exists")
-    ) {
+  function parseRegistrationOutcome(error, data) {
+    if (error) {
+      const errMsg = (error?.message || "").toLowerCase();
+      if (
+        errMsg.includes("already registered") ||
+        errMsg.includes("already exists") ||
+        errMsg.includes("user already exists")
+      ) {
+        return { code: "user_already_exists", message: "Email ini sudah terdaftar." };
+      }
+      if (errMsg.includes("rate limit") || errMsg.includes("too many requests")) {
+        return { code: "rate_limit", message: "Terlalu banyak permintaan." };
+      }
+      return { code: "unknown", message: error?.message || "Terjadi kesalahan." };
+    }
+
+    if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
       return { code: "user_already_exists", message: "Email ini sudah terdaftar." };
     }
-    if (errMsg.includes("rate limit") || errMsg.includes("too many requests")) {
-      return { code: "rate_limit", message: "Terlalu banyak permintaan." };
-    }
-    return { code: "unknown", message: error?.message || "Terjadi kesalahan." };
+
+    return { code: "ok" };
   }
 
   assert.equal(
-    parseRegistrationError({ message: "User already registered" }).code,
+    parseRegistrationOutcome({ message: "User already registered" }, null).code,
     "user_already_exists",
   );
   assert.equal(
-    parseRegistrationError({ message: "A user with this email address already exists" }).code,
+    parseRegistrationOutcome({ message: "A user with this email address already exists" }, null).code,
     "user_already_exists",
+  );
+  assert.equal(
+    parseRegistrationOutcome(null, { user: { id: "u-dup", identities: [] } }).code,
+    "user_already_exists",
+  );
+  assert.equal(
+    parseRegistrationOutcome(null, { user: { id: "u-new", identities: [{ id: "id-1" }] } }).code,
+    "ok",
   );
   console.log("  [PASS] 11. Duplicate email registration safely detected and rejected without profile duplicates");
   passed++;
@@ -333,17 +349,27 @@ let passed = 0;
   passed++;
 }
 
-// Test 16: Server authorization middleware error differentiation
+// Test 16: Server authorization middleware error differentiation and verification status
 {
   function simulateRequireGuruAuth(profile, dbError) {
     if (dbError) {
-      throw new Error(`Unauthorized: Gagal memuat profil basis data (${dbError.message})`);
+      throw new Error(`Forbidden: Gagal memuat profil basis data (${dbError.message})`);
     }
     if (!profile) {
-      throw new Error("Unauthorized: Profil pengguna tidak ditemukan.");
+      throw new Error("Forbidden: Profil pengguna tidak ditemukan.");
     }
-    if (profile.role !== "guru" && profile.role !== "admin") {
+    const role = (profile.role || "").toLowerCase().trim();
+    if (role !== "guru" && role !== "admin") {
       throw new Error("Forbidden: Operasi ini hanya diizinkan untuk peran Guru.");
+    }
+    if (role === "guru") {
+      const status = (profile.status_verifikasi || "").toLowerCase().trim();
+      if (status === "menunggu") {
+        throw new Error("Forbidden: Akun guru Anda sedang menunggu verifikasi.");
+      }
+      if (status === "ditolak" || status === "nonaktif") {
+        throw new Error("Forbidden: Akun guru Anda ditolak atau belum aktif.");
+      }
     }
     return true;
   }
@@ -360,8 +386,18 @@ let passed = 0;
     () => simulateRequireGuruAuth({ role: "siswa" }, null),
     /hanya diizinkan untuk peran Guru/,
   );
-  assert.doesNotThrow(() => simulateRequireGuruAuth({ role: "guru" }, null));
-  console.log("  [PASS] 16. Server middleware cleanly distinguishes DB errors, missing profile, and role");
+  assert.throws(
+    () => simulateRequireGuruAuth({ role: "guru", status_verifikasi: "menunggu" }, null),
+    /Akun guru Anda sedang menunggu verifikasi/,
+  );
+  assert.throws(
+    () => simulateRequireGuruAuth({ role: "guru", status_verifikasi: "ditolak" }, null),
+    /Akun guru Anda ditolak atau belum aktif/,
+  );
+  assert.doesNotThrow(() => simulateRequireGuruAuth({ role: "guru", status_verifikasi: "terverifikasi" }, null));
+  assert.doesNotThrow(() => simulateRequireGuruAuth({ role: "guru", status_verifikasi: "aktif" }, null));
+  assert.doesNotThrow(() => simulateRequireGuruAuth({ role: "admin", status_verifikasi: "terverifikasi" }, null));
+  console.log("  [PASS] 16. Server middleware cleanly distinguishes DB errors, missing profile, role, and verification status");
   passed++;
 }
 
@@ -387,18 +423,41 @@ let passed = 0;
         if (!userError && userData?.user?.id) {
           userId = userData.user.id;
           claims = userData.user;
+        } else if (userError) {
+          console.warn("[AuthMiddleware] getUser failed, falling back to Auth API:", userError.message);
         }
-      } catch {
-        // ignore and try Auth API
+      } catch (userErr: any) {
+        console.warn("[AuthMiddleware] getUser threw exception, falling back to Auth API:", userErr?.message);
       }
     }
 
     if (!userId) {
-      if (!authApiUser?.id) {
-        throw new Error("Unauthorized: Invalid token");
+      try {
+        const user = await fetchAuthUser(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, token);
+        userId = user.id;
+        claims = user;
+      } catch (apiErr: any) {
+        const detail = String(apiErr?.message || "");
+        console.warn("[AuthMiddleware] fetchAuthUser failed:", detail);
+        if (/expired|invalid jwt|jwt expired|bad_jwt/i.test(detail)) {
+          throw sessionExpiredError();
+        }
+
+        // If Auth gateway has a network/connectivity issue, fall back to unexpired JWT payload
+        const payload = readJwtPayload(token);
+        if (
+          payload &&
+          typeof payload.sub === "string" &&
+          payload.sub.length > 0 &&
+          !isJwtExpired(token, 0)
+        ) {
+          console.warn("[AuthMiddleware] Auth API network issue; falling back to JWT payload sub:", payload.sub);
+          userId = payload.sub;
+          claims = payload;
+        } else {
+          throw new Error("Unauthorized: Invalid token");
+        }
       }
-      userId = authApiUser.id;
-      claims = authApiUser;
     }
 
     return { userId, claims };
@@ -577,25 +636,9 @@ let passed = 0;
   passed++;
 }
 
-// Test 22: Failsafe fallback to verified claims user_metadata.role when DB profiles query fails
+// Test 22: Strict database-only role authorization (no fallback to user_metadata)
 {
-  function resolveTeacherRoleWithFailSafe(profile, dbError, claims) {
-    if (!profile) {
-      const claimRole = String(
-        claims?.user_metadata?.role ||
-        claims?.app_metadata?.role ||
-        claims?.role ||
-        ''
-      ).toLowerCase().trim();
-
-      if (claimRole === 'guru' || claimRole === 'admin') {
-        profile = {
-          role: claimRole,
-          status_verifikasi: 'terverifikasi',
-        };
-      }
-    }
-
+  function resolveTeacherRoleStrict(profile, dbError, claims) {
     if (!profile) {
       if (dbError) {
         throw new Error(`Forbidden: Gagal memuat profil basis data (${dbError.message})`);
@@ -608,29 +651,61 @@ let passed = 0;
       throw new Error('Forbidden: Operasi ini hanya diizinkan untuk peran Guru.');
     }
 
+    if (userRole === 'guru') {
+      const status = String(profile.status_verifikasi || '').toLowerCase().trim();
+      if (status === 'menunggu') {
+        throw new Error('Forbidden: Akun guru Anda sedang menunggu verifikasi.');
+      }
+      if (status === 'ditolak' || status === 'nonaktif') {
+        throw new Error('Forbidden: Akun guru Anda ditolak atau belum aktif.');
+      }
+    }
+
     return profile;
   }
 
-  // Transient DB error with verified claims fallback
-  const resolvedFromClaim = resolveTeacherRoleWithFailSafe(null, { message: '500 connection refused' }, {
-    user_metadata: { role: 'guru' }
-  });
-  assert.equal(resolvedFromClaim.role, 'guru');
-  assert.equal(resolvedFromClaim.status_verifikasi, 'terverifikasi');
-
-  // Student profile rejected
+  // Claim with user_metadata 'guru' but missing DB profile must be rejected
   assert.throws(
-    () => resolveTeacherRoleWithFailSafe({ role: 'siswa' }, null, null),
-    /hanya diizinkan untuk peran Guru/
+    () => resolveTeacherRoleStrict(null, null, { user_metadata: { role: 'guru' } }),
+    /Forbidden: Profil pengguna tidak ditemukan\./,
+    "Missing DB profile must never be bypassed by claims metadata",
   );
 
-  // Student claim without DB profile rejected
+  // Claim with user_metadata 'guru' but DB error must throw DB error, never fallback
   assert.throws(
-    () => resolveTeacherRoleWithFailSafe(null, null, { user_metadata: { role: 'siswa' } }),
-    /Profil pengguna tidak ditemukan/
+    () => resolveTeacherRoleStrict(null, { message: '500 connection refused' }, { user_metadata: { role: 'guru' } }),
+    /Forbidden: Gagal memuat profil basis data/,
+    "DB query failure must throw error and never elevate via metadata",
   );
 
-  console.log('  [PASS] 22. Failsafe fallback to claims metadata allows authenticated teachers even with transient DB lag');
+  // Student DB profile with claims 'guru' must be rejected
+  assert.throws(
+    () => resolveTeacherRoleStrict({ role: 'siswa' }, null, { user_metadata: { role: 'guru' } }),
+    /hanya diizinkan untuk peran Guru/,
+  );
+
+  // Unverified teacher (menunggu) rejected
+  assert.throws(
+    () => resolveTeacherRoleStrict({ role: 'guru', status_verifikasi: 'menunggu' }, null, null),
+    /Akun guru Anda sedang menunggu verifikasi/,
+  );
+
+  // Rejected teacher rejected
+  assert.throws(
+    () => resolveTeacherRoleStrict({ role: 'guru', status_verifikasi: 'ditolak' }, null, null),
+    /Akun guru Anda ditolak atau belum aktif/,
+  );
+
+  // Verified teacher accepted
+  const verifiedTeacher = resolveTeacherRoleStrict({ role: 'guru', status_verifikasi: 'terverifikasi' }, null, null);
+  assert.equal(verifiedTeacher.role, 'guru');
+  assert.equal(verifiedTeacher.status_verifikasi, 'terverifikasi');
+
+  // Admin accepted
+  const adminUser = resolveTeacherRoleStrict({ role: 'admin', status_verifikasi: 'terverifikasi' }, null, null);
+  assert.equal(adminUser.role, 'admin');
+
+  console.log('  [PASS] 22. Server authorization strictly derives role from DB and rejects user_metadata bypass');
   passed++;
 }
 
