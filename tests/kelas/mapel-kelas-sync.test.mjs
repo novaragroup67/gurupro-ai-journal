@@ -140,7 +140,11 @@ console.log("\n--- SECTION 2: KELAS PERSISTENCE & TEACHER ISOLATION ---");
 
 // Test 4: Teacher class isolation: Guru A cannot view or manage Guru B's classes
 (() => {
-  const allDatabaseClasses = [\n    { id: "k-1", guru_id: "guru-A", nama_kelas: "X MIPA 1", mapel: "Matematika" },\n    { id: "k-2", guru_id: "guru-A", nama_kelas: "XI MIPA 1", mapel: "Matematika" },\n    { id: "k-3", guru_id: "guru-B", nama_kelas: "XII IPS 1", mapel: "Sosiologi" },\n  ];
+  const allDatabaseClasses = [
+    { id: "k-1", guru_id: "guru-A", nama_kelas: "X MIPA 1", mapel: "Matematika" },
+    { id: "k-2", guru_id: "guru-A", nama_kelas: "XI MIPA 1", mapel: "Matematika" },
+    { id: "k-3", guru_id: "guru-B", nama_kelas: "XII IPS 1", mapel: "Sosiologi" },
+  ];
 
   // RLS emulation: (auth.uid() = guru_id)
   function queryTeacherClasses(currentUserId) {
@@ -167,11 +171,52 @@ console.log("\n--- SECTION 3: MODUL AJAR & KELAS_ID LINKAGE ---");
 
 // Test 5: Modul payload stores real kelas_id (UUID) in Supabase moduls table
 (() => {
-  function toRow(modul) {\n    return {\n      judul: modul.judul ?? "",\n      kelas: modul.kelas ?? "",\n      kelas_id: modul.kelasId || null,\n      mapel: modul.mapel ?? "",\n      status: modul.status ?? "Draft",\n      sumber_tipe: modul.sumberTipe ?? "Link Luar",\n      sumber_input: modul.sumberInput ?? "",\n      sumber_url: modul.sumberUrl ?? null,\n      sumber_judul: modul.sumberJudul ?? null,\n      sumber_kutipan: modul.sumberKutipan ?? null,\n      ringkasan: modul.ringkasan ?? "",\n      sections: modul.sections ?? [],\n      slides: modul.slides ?? [],\n    };\n  }
+  function toRow(modul) {
+    return {
+      judul: modul.judul ?? "",
+      kelas: modul.kelas ?? "",
+      kelas_id: modul.kelasId || null,
+      mapel: modul.mapel ?? "",
+      status: modul.status ?? "Draft",
+      sumber_tipe: modul.sumberTipe ?? "Link Luar",
+      sumber_input: modul.sumberInput ?? "",
+      sumber_url: modul.sumberUrl ?? null,
+      sumber_judul: modul.sumberJudul ?? null,
+      sumber_kutipan: modul.sumberKutipan ?? null,
+      ringkasan: modul.ringkasan ?? "",
+      sections: modul.sections ?? [],
+      slides: modul.slides ?? [],
+    };
+  }
 
-  function toModul(row) {\n    return {\n      id: row.id,\n      judul: row.judul,\n      kelas: row.kelas,\n      kelasId: row.kelas_id || undefined,\n      mapel: row.mapel,\n      status: row.status ?? "Draft",\n      sumberTipe: row.sumber_tipe ?? "Link Luar",\n      sumberInput: row.sumber_input ?? "",\n      ringkasan: row.ringkasan ?? "",\n      sections: row.sections ?? [],\n      slides: row.slides ?? [],\n    };\n  }
+  function toModul(row) {
+    return {
+      id: row.id,
+      judul: row.judul,
+      kelas: row.kelas,
+      kelasId: row.kelas_id || undefined,
+      mapel: row.mapel,
+      status: row.status ?? "Draft",
+      sumberTipe: row.sumber_tipe ?? "Link Luar",
+      sumberInput: row.sumber_input ?? "",
+      ringkasan: row.ringkasan ?? "",
+      sections: row.sections ?? [],
+      slides: row.slides ?? [],
+    };
+  }
 
-  const modulInput = {\n    judul: "Gelombang Elektromagnetik",\n    kelas: "XII IPA 1",\n    kelasId: "b851b4e0-5555-4c12-8888-0123456789ab",\n    mapel: "Fisika",\n    status: "Terbit",\n    sumberTipe: "Teks",\n    sumberInput: "Materi tentang spektrum gelombang elektromagnetik.",\n    ringkasan: "Ringkasan materi",\n    sections: [],\n    slides: [],\n  };
+  const modulInput = {
+    judul: "Gelombang Elektromagnetik",
+    kelas: "XII IPA 1",
+    kelasId: "b851b4e0-5555-4c12-8888-0123456789ab",
+    mapel: "Fisika",
+    status: "Terbit",
+    sumberTipe: "Teks",
+    sumberInput: "Materi tentang spektrum gelombang elektromagnetik.",
+    ringkasan: "Ringkasan materi",
+    sections: [],
+    slides: [],
+  };
 
   const dbRow = toRow(modulInput);
   assert.equal(dbRow.kelas_id, "b851b4e0-5555-4c12-8888-0123456789ab", "kelas_id must be stored in database row");
@@ -237,9 +282,15 @@ console.log("\n--- SECTION 3: MODUL AJAR & KELAS_ID LINKAGE ---");
     });
   }
 
-  const classes = [\n    { id: "kelas-101", guru_id: "guru-A", nama_kelas: "XI IPA 1", tingkat: "XI" },\n    { id: "kelas-102", guru_id: "guru-A", nama_kelas: "XI IPA 2", tingkat: "XI" },\n  ];
+  const classes = [
+    { id: "kelas-101", guru_id: "guru-A", nama_kelas: "XI IPA 1", tingkat: "XI" },
+    { id: "kelas-102", guru_id: "guru-A", nama_kelas: "XI IPA 2", tingkat: "XI" },
+  ];
 
-  const memberships = [\n    { id: "m-1", siswa_id: "siswa-andi", kelas_id: "kelas-101", status: "aktif" },\n    { id: "m-2", siswa_id: "siswa-budi", kelas_id: "kelas-102", status: "menunggu" }, // Belum aktif\n  ];
+  const memberships = [
+    { id: "m-1", siswa_id: "siswa-andi", kelas_id: "kelas-101", status: "aktif" },
+    { id: "m-2", siswa_id: "siswa-budi", kelas_id: "kelas-102", status: "menunggu" }, // Belum aktif
+  ];
 
   // Andi is active in kelas-101
   const andiCanSeeModul101 = isSiswaEligibleForModul({
