@@ -178,31 +178,34 @@ export function TahunAjaranHeaderSelector({ userId }: { userId?: string }) {
 
   return (
     <div
-      className="flex shrink-0 items-center gap-1.5"
+      className="flex shrink-0 items-center gap-1.5 sm:gap-2"
       data-testid="tahun-ajaran-header-selector"
     >
-      <span className="hidden text-xs font-medium text-muted-foreground lg:inline">
+      <span className="hidden text-xs font-medium text-muted-foreground sm:inline-flex items-center gap-1 shrink-0">
+        <Calendar className="h-3.5 w-3.5 text-primary shrink-0" />
         Tahun Ajaran:
       </span>
       <Select value={displayYear} onValueChange={setSelectedYear}>
         <SelectTrigger
           data-testid="tahun-ajaran-select-trigger"
           aria-label="Pilih Tahun Ajaran"
-          className="h-8 w-auto min-w-[96px] sm:min-w-[110px] gap-1 sm:gap-1.5 px-2 sm:px-2.5 text-xs font-semibold text-navy bg-background border-border shadow-xs hover:bg-muted/50 focus:ring-1 focus:ring-primary shrink-0 cursor-pointer"
+          className="h-8.5 w-auto min-w-[105px] sm:min-w-[125px] gap-1.5 px-2.5 text-xs font-semibold text-navy bg-background border-border shadow-xs hover:bg-muted/50 hover:border-primary/40 focus:ring-2 focus:ring-primary/20 shrink-0 cursor-pointer rounded-lg transition-all"
         >
-          <Calendar className="h-3.5 w-3.5 text-primary shrink-0" />
+          <span className="sm:hidden">
+            <Calendar className="h-3.5 w-3.5 text-primary shrink-0" />
+          </span>
           <SelectValue placeholder="Pilih Tahun">
             {displayYear}
           </SelectValue>
         </SelectTrigger>
-        <SelectContent align="end" className="min-w-[145px] sm:min-w-[160px]">
+        <SelectContent align="start" className="min-w-[150px] sm:min-w-[165px] z-50">
           {availableYears.map((y) => {
             const isCurrent = y.tahun === displayYear;
             return (
               <SelectItem
                 key={y.id || y.tahun}
                 value={y.tahun}
-                className="text-xs font-medium cursor-pointer"
+                className="text-xs font-medium cursor-pointer py-2"
               >
                 <div className="flex items-center justify-between w-full gap-2">
                   <span className={cn(isCurrent && "font-semibold text-primary")}>
@@ -245,15 +248,19 @@ function AppShell() {
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-2 sm:gap-3 border-b bg-card/85 px-3 sm:px-6 backdrop-blur">
-            <SidebarTrigger className="shrink-0" />
-            <div className="flex items-center gap-1.5 md:hidden shrink-0">
-              <GuruProMark className="h-7 w-7 shrink-0" />
-              <span className="font-display text-sm font-bold text-navy hidden xs:inline sm:text-base">
-                Guru<span className="text-primary">Pro</span>
-              </span>
-            </div>
-            <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <SidebarTrigger className="shrink-0" />
+              <div className="flex items-center gap-1.5 md:hidden shrink-0">
+                <GuruProMark className="h-7 w-7 shrink-0" />
+                <span className="font-display text-sm font-bold text-navy hidden xs:inline sm:text-base">
+                  Guru<span className="text-primary">Pro</span>
+                </span>
+              </div>
+              <div className="h-5 w-px bg-border/80 hidden sm:block shrink-0" />
               {isTeacher ? <TahunAjaranHeaderSelector userId={user?.id || profile?.id} /> : null}
+            </div>
+
+            <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
 
               <Button
                 variant="ghost"
