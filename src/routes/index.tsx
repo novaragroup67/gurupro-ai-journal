@@ -29,11 +29,22 @@ import {
   MessageSquare,
   Search,
   ExternalLink,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,6 +77,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  adminDeleteTeacher,
   adminUpdateTeacherProfile,
   getAdminStats,
   getSystemLogs,
@@ -1072,6 +1084,8 @@ function AdminDashboard() {
   });
   const [savingProfile, setSavingProfile] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
+  const [teacherToDelete, setTeacherToDelete] = useState<TeacherAdminItem | null>(null);
+  const [deletingTeacher, setDeletingTeacher] = useState(false);
 
   // Dialog Tindak Lanjut Bug Report
   const [selectedBug, setSelectedBug] = useState<BugReportItem | null>(null);
@@ -1171,6 +1185,28 @@ function AdminDashboard() {
       }
     } finally {
       setSendingReset(false);
+    }
+  };
+
+  const handleConfirmDeleteTeacher = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!teacherToDelete) return;
+
+    setDeletingTeacher(true);
+    try {
+      const res = await adminDeleteTeacher(teacherToDelete.id);
+      if (res.ok) {
+        toast.success(res.message);
+        if (selectedTeacher?.id === teacherToDelete.id) {
+          setSelectedTeacher(null);
+        }
+        setTeacherToDelete(null);
+        await loadAdminData();
+      } else {
+        toast.error(res.message);
+      }
+    } finally {
+      setDeletingTeacher(false);
     }
   };
 
@@ -1516,6 +1552,16 @@ function AdminDashboard() {
                               >
                                 <Edit3 className="h-3 w-3" />
                                 Kelola
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                title="Hapus Akun Guru"
+                                onClick={() => setTeacherToDelete(t)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           </TableCell>
@@ -1997,6 +2043,27 @@ function AdminDashboard() {
                         Kirim Reset Email
                       </Button>
                     </div>
+
+                    <div className="border-t pt-3 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold text-destructive flex items-center gap-1.5">
+                            <Trash2 className="h-3.5 w-3.5" /> Hapus Akun Guru Permanen
+                          </p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            Hapus akun ini dari database. Seluruh modul, penugasan, dan kelas terkait akan dibersihkan untuk menghemat ruang penyimpanan.
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="h-7 text-xs gap-1.5 shrink-0"
+                          onClick={() => setTeacherToDelete(selectedTeacher)}
+                        >
+                          <Trash2 className="h-3 w-3" /> Hapus Akun
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </TabsContent>
               </Tabs>
@@ -2096,6 +2163,47 @@ function AdminDashboard() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ALERT DIALOG: KONFIRMASI HAPUS AKUN GURU */}
+      <AlertDialog
+        open={Boolean(teacherToDelete)}
+        onOpenChange={(open) => !open && !deletingTeacher && setTeacherToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive flex items-center gap-2">
+              <Trash2 className="h-5 w-5" /> Hapus Akun Guru Permanen?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-xs">
+              <p>
+                Anda akan menghapus akun guru <strong>{teacherToDelete?.nama}</strong> (
+                {teacherToDelete?.email}) secara permanen dari sistem.
+              </p>
+              <div className="rounded-md bg-destructive/10 border border-destructive/20 p-2.5 text-[11px] text-destructive leading-relaxed">
+                ⚠️ <strong>Peringatan:</strong> Seluruh modul ajar, paket soal, kelas pembelajaran, dan penugasan yang dibuat oleh guru ini akan dibersihkan dari penyimpanan database untuk menghemat kapasitas. Tindakan ini tidak dapat dibatalkan.
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingTeacher}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDeleteTeacher}
+              disabled={deletingTeacher}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground gap-1.5"
+            >
+              {deletingTeacher ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Menghapus...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-3.5 w-3.5" /> Ya, Hapus Akun
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

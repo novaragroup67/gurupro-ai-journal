@@ -370,3 +370,34 @@ export async function sendTeacherPasswordReset(
   }
 }
 
+/**
+ * Menghapus akun guru secara permanen beserta seluruh data terkait (kelas, modul, penugasan).
+ * Membutuhkan hak akses Administrator (is_admin()).
+ */
+export async function adminDeleteTeacher(
+  teacherId: string,
+): Promise<{ ok: boolean; message: string }> {
+  try {
+    if (!teacherId) {
+      return { ok: false, message: "ID Guru tidak valid." };
+    }
+
+    const { data, error } = await supabase.rpc("admin_delete_teacher", {
+      _teacher_id: teacherId,
+    });
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+
+    const res = data as { success?: boolean; message?: string } | null;
+    return {
+      ok: res?.success ?? true,
+      message: res?.message ?? "Akun guru berhasil dihapus secara permanen.",
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal menghapus akun guru.";
+    return { ok: false, message: msg };
+  }
+}
+

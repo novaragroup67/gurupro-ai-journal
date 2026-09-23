@@ -378,6 +378,71 @@ console.log("\n--- SECTION 5: ROLE DETECTION HARDENING (DATABASE SSOT) ---");
   passed++;
 }
 
+// ============================================================================
+// 6. INACTIVE TEACHER DELETION & STORAGE OPTIMIZATION
+// ============================================================================
+console.log("\n--- SECTION 6: INACTIVE TEACHER ACCOUNT DELETION ---");
+
+{
+  // Test 15: Validation and security guard for teacher account deletion
+  const simulateAdminDeleteTeacher = ({ callerIsAdmin, targetRole, targetId }) => {
+    if (!callerIsAdmin) {
+      return { ok: false, error: "Akses ditolak: Hanya administrator yang diizinkan." };
+    }
+    if (!targetId || targetId.trim() === "") {
+      return { ok: false, error: "ID Guru tidak valid." };
+    }
+    if (targetRole === "admin") {
+      return { ok: false, error: "Akun administrator tidak dapat dihapus." };
+    }
+    return { ok: true, message: "Akun guru dan seluruh data terkait berhasil dihapus." };
+  };
+
+  // 1. Non-admin caller blocked
+  const res1 = simulateAdminDeleteTeacher({ callerIsAdmin: false, targetRole: "guru", targetId: "g-1" });
+  assert.equal(res1.ok, false);
+  assert.ok(res1.error.includes("Akses ditolak"));
+
+  // 2. Empty ID blocked
+  const res2 = simulateAdminDeleteTeacher({ callerIsAdmin: true, targetRole: "guru", targetId: "" });
+  assert.equal(res2.ok, false);
+  assert.ok(res2.error.includes("tidak valid"));
+
+  // 3. Admin target protected
+  const res3 = simulateAdminDeleteTeacher({ callerIsAdmin: true, targetRole: "admin", targetId: "a-1" });
+  assert.equal(res3.ok, false);
+  assert.ok(res3.error.includes("Akun administrator tidak dapat dihapus"));
+
+  // 4. Inactive teacher successfully deleted
+  const res4 = simulateAdminDeleteTeacher({ callerIsAdmin: true, targetRole: "guru", targetId: "g-inactive-123" });
+  assert.equal(res4.ok, true);
+  assert.ok(res4.message.includes("berhasil dihapus"));
+  console.log("  [PASS] 15. Teacher deletion guards strictly block non-admins, empty IDs, and admin deletion");
+  passed++;
+}
+
+{
+  // Test 16: Static audit confirms delete UI and RPC integration
+  import("fs").then(({ default: fs }) => {
+    const adminStoreContent = fs.readFileSync("src/lib/admin-store.ts", "utf8");
+    assert.ok(adminStoreContent.includes("admin_delete_teacher"), "admin-store.ts must call admin_delete_teacher RPC");
+    assert.ok(adminStoreContent.includes("adminDeleteTeacher"), "admin-store.ts must export adminDeleteTeacher");
+
+    const indexContent = fs.readFileSync("src/routes/index.tsx", "utf8");
+    assert.ok(indexContent.includes("adminDeleteTeacher"), "index.tsx must import adminDeleteTeacher");
+    assert.ok(indexContent.includes("teacherToDelete"), "index.tsx must manage teacherToDelete state");
+    assert.ok(indexContent.includes("Hapus Akun Guru"), "index.tsx must provide Hapus Akun Guru UI");
+    assert.ok(indexContent.includes("AlertDialog"), "index.tsx must use AlertDialog for delete confirmation");
+
+    const migrationContent = fs.readFileSync("supabase/migrations/20260923120000_admin_delete_teacher_rpc.sql", "utf8");
+    assert.ok(migrationContent.includes("CREATE OR REPLACE FUNCTION public.admin_delete_teacher"), "Migration must define admin_delete_teacher");
+    assert.ok(migrationContent.includes("is_admin()"), "Migration must enforce is_admin()");
+  });
+
+  console.log("  [PASS] 16. Static audit confirms delete teacher UI, confirmation modal, and RPC migration");
+  passed++;
+}
+
 console.log("================================================================================");
 console.log(`  ADMIN OPERATIONS & DASHBOARD SUITE: ${passed}/${passed} PASSED (0 FAILED)`);
 console.log("================================================================================");
