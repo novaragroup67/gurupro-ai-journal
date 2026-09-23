@@ -30,7 +30,11 @@ function getStorageKey(userId?: string): string {
 function getStoredYear(userId?: string): string | null {
   if (typeof window === "undefined") return null;
   try {
-    return sessionStorage.getItem(getStorageKey(userId));
+    if (userId) {
+      const userSpecific = sessionStorage.getItem(getStorageKey(userId));
+      if (userSpecific) return userSpecific;
+    }
+    return sessionStorage.getItem("gurupro_selected_tahun_ajaran");
   } catch {
     return null;
   }
@@ -40,9 +44,15 @@ function setStoredYear(year: string, userId?: string): void {
   if (typeof window === "undefined") return;
   try {
     if (year) {
-      sessionStorage.setItem(getStorageKey(userId), year);
+      sessionStorage.setItem("gurupro_selected_tahun_ajaran", year);
+      if (userId) {
+        sessionStorage.setItem(getStorageKey(userId), year);
+      }
     } else {
-      sessionStorage.removeItem(getStorageKey(userId));
+      sessionStorage.removeItem("gurupro_selected_tahun_ajaran");
+      if (userId) {
+        sessionStorage.removeItem(getStorageKey(userId));
+      }
     }
   } catch {
     // Ignore sessionStorage errors
