@@ -171,7 +171,7 @@ function AuthGate({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function TahunAjaranHeaderSelector({ userId }: { userId?: string }) {
+export function TahunAjaranHeaderSelector({ userId }: { userId?: string }) {
   const { availableYears, selectedYear, setSelectedYear } = useTahunAjaran(userId);
 
   const displayYear = selectedYear || availableYears[0]?.tahun || "2026/2027";
@@ -186,8 +186,9 @@ function TahunAjaranHeaderSelector({ userId }: { userId?: string }) {
       </span>
       <Select value={displayYear} onValueChange={setSelectedYear}>
         <SelectTrigger
+          data-testid="tahun-ajaran-select-trigger"
           aria-label="Pilih Tahun Ajaran"
-          className="h-8 w-auto min-w-[96px] sm:min-w-[110px] gap-1 sm:gap-1.5 px-2 sm:px-2.5 text-xs font-semibold text-navy bg-background border-border shadow-xs hover:bg-muted/50 focus:ring-1 focus:ring-primary shrink-0"
+          className="h-8 w-auto min-w-[96px] sm:min-w-[110px] gap-1 sm:gap-1.5 px-2 sm:px-2.5 text-xs font-semibold text-navy bg-background border-border shadow-xs hover:bg-muted/50 focus:ring-1 focus:ring-primary shrink-0 cursor-pointer"
         >
           <Calendar className="h-3.5 w-3.5 text-primary shrink-0" />
           <SelectValue placeholder="Pilih Tahun">
@@ -235,8 +236,7 @@ function AppShell() {
     (user?.user_metadata?.role as string)?.toLowerCase()?.trim() === "guru" ||
     (Boolean(user) &&
       profile?.role !== "siswa" &&
-      profile?.role !== "admin" &&
-      (Boolean(profile?.mapel) || Boolean(profile?.nip)));
+      profile?.role !== "admin");
 
   return (
     <SidebarProvider>
