@@ -484,6 +484,10 @@ const MOCK_ASSIGNMENTS = [
     "__root.tsx must include testable Tahun Ajaran header selector"
   );
   assert.ok(
+    rootSrc.includes('data-testid="tahun-ajaran-select-trigger"'),
+    "__root.tsx must include testable Tahun Ajaran SelectTrigger"
+  );
+  assert.ok(
     !rootSrc.includes("if (availableYears.length === 0) return null;"),
     "__root.tsx must NOT return null when availableYears is empty"
   );
