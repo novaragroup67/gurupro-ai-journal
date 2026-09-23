@@ -242,3 +242,131 @@ export async function getSystemLogs(limit = 30): Promise<SystemLogItem[]> {
     throw err;
   }
 }
+
+export interface TeacherClassItem {
+  id: string;
+  namaKelas: string;
+  tingkat: string;
+  mapel: string;
+  tahunAjaran: string;
+  kodeKelas: string;
+  jumlahSiswa: number;
+}
+
+/**
+ * Mengambil daftar kelas yang diampu oleh seorang guru (untuk inspeksi admin).
+ */
+export async function getTeacherClasses(teacherId: string): Promise<TeacherClassItem[]> {
+  try {
+    const { data: kelasRows, error: kError } = await supabase
+      .from("kelas")
+      .select("id, nama_kelas, tingkat, mapel, tahun_ajaran, kode_kelas")
+      .eq("guru_id", teacherId)
+      .order("created_at", { ascending: false });
+
+    if (kError) {
+      console.error("[AdminStore] Gagal mengambil kelas guru:", kError.message);
+      return [];
+    }
+
+    const { data: anggotaRows } = await supabase
+      .from("kelas_anggota")
+      .select("kelas_id")
+      .eq("status", "aktif");
+
+    const counts: Record<string, number> = {};
+    for (const a of anggotaRows || []) {
+      counts[a.kelas_id] = (counts[a.kelas_id] || 0) + 1;
+    }
+
+    return (kelasRows || []).map((k) => ({
+      id: k.id,
+      namaKelas: k.nama_kelas,
+      tingkat: k.tingkat,
+      mapel: k.mapel,
+      tahunAjaran: k.tahun_ajaran,
+      kodeKelas: k.kode_kelas,
+      jumlahSiswa: counts[k.id] || 0,
+    }));
+  } catch (err) {
+    console.error("[AdminStore] Error getTeacherClasses:", err);
+    return [];
+  }
+}
+
+/**
+ * Memperbarui data profil guru oleh Admin.
+ */
+export async function adminUpdateTeacherProfile(
+  teacherId: string,
+  data: {
+    nama: string;
+    nip: string;
+    sekolah: string;
+    mapel: string;
+    telepon: string;
+  },
+): Promise<{ ok: boolean; message: string }> {
+  try {
+    const { error } = await supabase.rpc("admin_update_teacher_profile", {
+      _teacher_id: teacherId,
+      _nama: data.nama.trim(),
+      _nip: data.nip.trim(),
+      _sekolah: data.sekolah.trim(),
+      _mapel: data.mapel.trim(),
+      _telepon: data.telepon.trim(),
+    });
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+
+    return { ok: true, message: `Data guru ${data.nama} berhasil diperbarui.` };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal memperbarui profil guru.";
+    return { ok: false, message: msg };
+  }
+}
+
+/**
+ * Mengirimkan tautan reset kata sandi resmi ke email guru via Supabase Auth.
+ */
+export async function sendTeacherPasswordReset(
+  email: string,
+): Promise<{ ok: boolean; message: string }> {
+  try {
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      return { ok: false, message: "Alamat email tidak valid." };
+    }
+
+    const redirectUrl =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/login`
+        : undefined;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: redirectUrl,
+    });
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+
+    await logSystemEvent(
+      "info",
+      "admin_triggered_password_reset",
+      `Admin mengirim permintaan reset password untuk email: ${cleanEmail}`,
+      { email: cleanEmail },
+    );
+
+    return {
+      ok: true,
+      message: `Tautan reset kata sandi telah dikirim ke ${cleanEmail}. Guru dapat memeriksa kotak masuk emailnya.`,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal mengirim permintaan reset password.";
+    return { ok: false, message: msg };
+  }
+}
+

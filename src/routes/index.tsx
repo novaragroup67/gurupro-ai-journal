@@ -23,6 +23,12 @@ import {
   UserCheck,
   Users,
   X,
+  Bug,
+  Edit3,
+  KeyRound,
+  MessageSquare,
+  Search,
+  ExternalLink,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -43,6 +49,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -51,15 +64,27 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
+  adminUpdateTeacherProfile,
   getAdminStats,
   getSystemLogs,
+  getTeacherClasses,
   getTeachersList,
+  sendTeacherPasswordReset,
   updateTeacherVerification,
   type AdminStats,
   type SystemLogItem,
   type TeacherAdminItem,
+  type TeacherClassItem,
 } from "@/lib/admin-store";
+import {
+  getAllBugReports,
+  updateBugReportStatus,
+  type BugPriority,
+  type BugReportItem,
+  type BugStatus,
+} from "@/lib/bug-report-store";
 import { useAuth } from "@/lib/auth-store";
 import { ajukanGabung, getKelasBySiswa, useKelas } from "@/lib/kelas-store";
 import { getPublishedModulsForSiswa, useModuls } from "@/lib/modul-store";
@@ -1003,7 +1028,7 @@ function TeacherDashboard() {
   );
 }
 
-// ==================== DASHBOARD ADMIN (OPERATIONAL & MONITORING) ====================
+// ==================== DASHBOARD ADMIN (OPERATIONAL CONTROL CENTER) ====================
 
 function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats>({
@@ -1018,21 +1043,55 @@ function AdminDashboard() {
   });
   const [teachers, setTeachers] = useState<TeacherAdminItem[]>([]);
   const [logs, setLogs] = useState<SystemLogItem[]>([]);
+  const [bugReports, setBugReports] = useState<BugReportItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Filter Guru
   const [teacherFilter, setTeacherFilter] = useState<"semua" | "menunggu" | "terverifikasi" | "ditolak">("semua");
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [teacherSearch, setTeacherSearch] = useState("");
+  const [updatingTeacherId, setUpdatingTeacherId] = useState<string | null>(null);
+
+  // Filter Bug Reports
+  const [bugStatusFilter, setBugStatusFilter] = useState<BugStatus | "semua">("semua");
+  const [bugRoleFilter, setBugRoleFilter] = useState<"semua" | "guru" | "siswa">("semua");
+
+  // Filter Log
+  const [logLevelFilter, setLogLevelFilter] = useState<"semua" | "error" | "auth_failure" | "warn" | "info">("semua");
+  const [logSearch, setLogSearch] = useState("");
+
+  // Dialog Kelola Guru
+  const [selectedTeacher, setSelectedTeacher] = useState<TeacherAdminItem | null>(null);
+  const [teacherClasses, setTeacherClasses] = useState<TeacherClassItem[]>([]);
+  const [loadingClasses, setLoadingClasses] = useState(false);
+  const [editForm, setEditForm] = useState({
+    nama: "",
+    nip: "",
+    sekolah: "",
+    mapel: "",
+    telepon: "",
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
+
+  // Dialog Tindak Lanjut Bug Report
+  const [selectedBug, setSelectedBug] = useState<BugReportItem | null>(null);
+  const [bugNewStatus, setBugNewStatus] = useState<BugStatus>("baru");
+  const [bugAdminNotes, setBugAdminNotes] = useState("");
+  const [updatingBug, setUpdatingBug] = useState(false);
 
   const loadAdminData = async () => {
     setLoading(true);
     try {
-      const [sData, tData, lData] = await Promise.all([
+      const [sData, tData, lData, bData] = await Promise.all([
         getAdminStats(),
         getTeachersList(),
-        getSystemLogs(25),
+        getSystemLogs(40),
+        getAllBugReports(),
       ]);
       setStats(sData);
       setTeachers(tData);
       setLogs(lData);
+      setBugReports(bData);
     } finally {
       setLoading(false);
     }
@@ -1042,8 +1101,8 @@ function AdminDashboard() {
     void loadAdminData();
   }, []);
 
-  const handleVerify = async (teacherId: string, status: "terverifikasi" | "ditolak") => {
-    setUpdatingId(teacherId);
+  const handleVerify = async (teacherId: string, status: "terverifikasi" | "ditolak" | "menunggu") => {
+    setUpdatingTeacherId(teacherId);
     try {
       const res = await updateTeacherVerification(teacherId, status);
       if (res.ok) {
@@ -1053,20 +1112,145 @@ function AdminDashboard() {
         toast.error(res.message);
       }
     } finally {
-      setUpdatingId(null);
+      setUpdatingTeacherId(null);
+    }
+  };
+
+  const openTeacherModal = async (teacher: TeacherAdminItem) => {
+    setSelectedTeacher(teacher);
+    setEditForm({
+      nama: teacher.nama !== "-" ? teacher.nama : "",
+      nip: teacher.nip !== "-" ? teacher.nip : "",
+      sekolah: teacher.sekolah !== "-" ? teacher.sekolah : "",
+      mapel: teacher.mapel !== "-" ? teacher.mapel : "",
+      telepon: teacher.telepon !== "-" ? teacher.telepon : "",
+    });
+    setLoadingClasses(true);
+    try {
+      const classes = await getTeacherClasses(teacher.id);
+      setTeacherClasses(classes);
+    } finally {
+      setLoadingClasses(false);
+    }
+  };
+
+  const handleSaveTeacherProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTeacher) return;
+    if (!editForm.nama.trim()) {
+      toast.error("Nama guru tidak boleh kosong.");
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      const res = await adminUpdateTeacherProfile(selectedTeacher.id, editForm);
+      if (res.ok) {
+        toast.success(res.message);
+        setSelectedTeacher(null);
+        await loadAdminData();
+      } else {
+        toast.error(res.message);
+      }
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleSendPasswordReset = async () => {
+    if (!selectedTeacher || !selectedTeacher.email || selectedTeacher.email === "-") {
+      toast.error("Email guru tidak valid.");
+      return;
+    }
+    setSendingReset(true);
+    try {
+      const res = await sendTeacherPasswordReset(selectedTeacher.email);
+      if (res.ok) {
+        toast.success(res.message);
+      } else {
+        toast.error(res.message);
+      }
+    } finally {
+      setSendingReset(false);
+    }
+  };
+
+  const openBugModal = (bug: BugReportItem) => {
+    setSelectedBug(bug);
+    setBugNewStatus(bug.status);
+    setBugAdminNotes(bug.adminNotes || "");
+  };
+
+  const handleUpdateBugReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedBug) return;
+    setUpdatingBug(true);
+    try {
+      const res = await updateBugReportStatus(selectedBug.id, bugNewStatus, bugAdminNotes);
+      if (res.ok) {
+        toast.success(res.message);
+        setSelectedBug(null);
+        await loadAdminData();
+      } else {
+        toast.error(res.message);
+      }
+    } finally {
+      setUpdatingBug(false);
     }
   };
 
   const filteredTeachers = useMemo(() => {
-    if (teacherFilter === "semua") return teachers;
-    return teachers.filter((t) => t.statusVerifikasi === teacherFilter);
-  }, [teachers, teacherFilter]);
+    return teachers.filter((t) => {
+      if (teacherFilter !== "semua" && t.statusVerifikasi !== teacherFilter) {
+        return false;
+      }
+      if (teacherSearch.trim()) {
+        const q = teacherSearch.toLowerCase();
+        const matchName = t.nama.toLowerCase().includes(q);
+        const matchEmail = t.email.toLowerCase().includes(q);
+        const matchNip = t.nip.toLowerCase().includes(q);
+        const matchSekolah = t.sekolah.toLowerCase().includes(q);
+        const matchMapel = t.mapel.toLowerCase().includes(q);
+        if (!matchName && !matchEmail && !matchNip && !matchSekolah && !matchMapel) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [teachers, teacherFilter, teacherSearch]);
+
+  const filteredBugs = useMemo(() => {
+    return bugReports.filter((b) => {
+      if (bugStatusFilter !== "semua" && b.status !== bugStatusFilter) return false;
+      if (bugRoleFilter !== "semua" && b.reporterRole !== bugRoleFilter) return false;
+      return true;
+    });
+  }, [bugReports, bugStatusFilter, bugRoleFilter]);
+
+  const filteredLogs = useMemo(() => {
+    return logs.filter((l) => {
+      if (logLevelFilter !== "semua" && l.level !== logLevelFilter) return false;
+      if (logSearch.trim()) {
+        const q = logSearch.toLowerCase();
+        const matchMsg = l.message.toLowerCase().includes(q);
+        const matchEvent = l.eventType.toLowerCase().includes(q);
+        if (!matchMsg && !matchEvent) return false;
+      }
+      return true;
+    });
+  }, [logs, logLevelFilter, logSearch]);
+
+  const bugCounters = useMemo(() => {
+    const baru = bugReports.filter((b) => b.status === "baru").length;
+    const diproses = bugReports.filter((b) => b.status === "diproses").length;
+    const selesai = bugReports.filter((b) => b.status === "selesai").length;
+    return { baru, diproses, selesai, total: bugReports.length };
+  }, [bugReports]);
 
   return (
     <div className="grid gap-6">
       <PageHeader
         title="Dashboard Administrator 🛡️"
-        subtitle="Monitoring operasional sistem, verifikasi akun guru, dan kesehatan aplikasi GuruPro."
+        subtitle="Pusat kendali operasional GuruPro: monitoring sistem, verifikasi pendidik, manajemen akun, dan penanganan laporan kendala."
         actions={
           <Button
             variant="outline"
@@ -1082,7 +1266,7 @@ function AdminDashboard() {
       />
 
       {/* Kartu Statistik Operasional Riil */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
         <Card>
           <CardContent className="flex items-start gap-3 p-5">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
@@ -1139,7 +1323,7 @@ function AdminDashboard() {
               </p>
               <p className="text-sm font-medium">Kelas Aktif</p>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                {stats.totalAssignments} tugas dibuat
+                {stats.totalAssignments} tugas
               </p>
             </div>
           </CardContent>
@@ -1156,7 +1340,24 @@ function AdminDashboard() {
               </p>
               <p className="text-sm font-medium">Verifikasi Guru</p>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                {stats.pendingTeachers > 0 ? "Memerlukan tindakan" : "Semua diverifikasi"}
+                {stats.pendingTeachers > 0 ? "Perlu tindakan" : "Tuntas"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className={bugCounters.baru > 0 ? "border-red-300 bg-red-50/40" : ""}>
+          <CardContent className="flex items-start gap-3 p-5">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-red-100 text-red-700">
+              <Bug className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="font-display text-2xl font-bold leading-tight text-navy">
+                {bugCounters.baru}
+              </p>
+              <p className="text-sm font-medium">Laporan Baru</p>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                {bugCounters.diproses} diproses · {bugCounters.selesai} selesai
               </p>
             </div>
           </CardContent>
@@ -1165,43 +1366,60 @@ function AdminDashboard() {
 
       {/* Tab Konten Admin */}
       <Tabs defaultValue="guru" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="guru" className="gap-2">
+        <TabsList className="grid grid-cols-3 w-full max-w-xl">
+          <TabsTrigger value="guru" className="gap-2 text-xs">
             <UserCheck className="h-4 w-4" />
-            Verifikasi & Manajemen Guru
+            Manajemen Guru
           </TabsTrigger>
-          <TabsTrigger value="monitoring" className="gap-2">
+          <TabsTrigger value="laporan" className="gap-2 text-xs">
+            <Bug className="h-4 w-4 text-amber-600" />
+            Laporan Masalah ({bugCounters.baru})
+          </TabsTrigger>
+          <TabsTrigger value="monitoring" className="gap-2 text-xs">
             <ShieldAlert className="h-4 w-4" />
-            Monitoring Kesehatan & Error
+            Monitoring Log
           </TabsTrigger>
         </TabsList>
 
-        {/* TAB 1: MANAJEMEN GURU */}
+        {/* TAB 1: MANAJEMEN & VERIFIKASI GURU */}
         <TabsContent value="guru" className="space-y-4">
           <Card>
-            <CardHeader className="flex-row items-center justify-between gap-4 space-y-0 pb-4">
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 space-y-0 pb-4">
               <div>
                 <CardTitle className="font-display text-base text-navy">
-                  Daftar Akun Guru
+                  Daftar & Otorisasi Akun Guru
                 </CardTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Verifikasi dan atur otorisasi pengajar di platform GuruPro.
+                  Verifikasi status pengajar, tinjau kelas yang diampu, perbarui profil, dan kelola keamanan akun.
                 </p>
               </div>
-              <div className="flex gap-1 bg-muted p-1 rounded-lg text-xs">
-                {(["semua", "menunggu", "terverifikasi", "ditolak"] as const).map((filterKey) => (
-                  <button
-                    key={filterKey}
-                    onClick={() => setTeacherFilter(filterKey)}
-                    className={`px-3 py-1 rounded-md capitalize font-medium transition-colors ${
-                      teacherFilter === filterKey
-                        ? "bg-background text-foreground shadow-xs"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {filterKey}
-                  </button>
-                ))}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative w-full sm:w-48">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Cari guru, NIP, sekolah…"
+                    value={teacherSearch}
+                    onChange={(e) => setTeacherSearch(e.target.value)}
+                    className="h-8.5 pl-8 text-xs"
+                  />
+                </div>
+
+                <div className="flex gap-1 bg-muted p-1 rounded-lg text-xs">
+                  {(["semua", "menunggu", "terverifikasi", "ditolak"] as const).map((filterKey) => (
+                    <button
+                      key={filterKey}
+                      onClick={() => setTeacherFilter(filterKey)}
+                      className={`px-2.5 py-1 rounded-md capitalize font-medium transition-colors text-xs ${
+                        teacherFilter === filterKey
+                          ? "bg-background text-foreground shadow-xs"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {filterKey}
+                    </button>
+                  ))}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="px-0 pb-2 sm:px-6 sm:pb-6">
@@ -1212,7 +1430,7 @@ function AdminDashboard() {
                 </div>
               ) : filteredTeachers.length === 0 ? (
                 <div className="py-10 text-center text-sm text-muted-foreground">
-                  Tidak ada data guru untuk filter &quot;{teacherFilter}&quot;.
+                  Tidak ada akun guru yang cocok dengan pencarian atau filter &quot;{teacherFilter}&quot;.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -1236,7 +1454,7 @@ function AdminDashboard() {
                           </TableCell>
                           <TableCell className="font-mono text-xs">{t.nip || "—"}</TableCell>
                           <TableCell>
-                            <div>{t.sekolah}</div>
+                            <div className="font-medium text-xs text-navy">{t.sekolah}</div>
                             <div className="text-xs text-muted-foreground">{t.mapel}</div>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
@@ -1244,50 +1462,61 @@ function AdminDashboard() {
                           </TableCell>
                           <TableCell>
                             {t.statusVerifikasi === "terverifikasi" ? (
-                              <Badge className="bg-emerald-600 hover:bg-emerald-700 gap-1">
+                              <Badge className="bg-emerald-600 hover:bg-emerald-700 gap-1 text-[11px]">
                                 <Check className="h-3 w-3" />
                                 Terverifikasi
                               </Badge>
                             ) : t.statusVerifikasi === "menunggu" ? (
-                              <Badge variant="secondary" className="bg-amber-100 text-amber-800 gap-1">
+                              <Badge variant="secondary" className="bg-amber-100 text-amber-800 gap-1 text-[11px]">
                                 <Clock className="h-3 w-3" />
                                 Menunggu
                               </Badge>
                             ) : (
-                              <Badge variant="destructive" className="gap-1">
+                              <Badge variant="destructive" className="gap-1 text-[11px]">
                                 <X className="h-3 w-3" />
                                 Ditolak
                               </Badge>
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-1.5">
+                            <div className="flex justify-end items-center gap-1.5">
                               {t.statusVerifikasi !== "terverifikasi" && (
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="h-8 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                  className="h-7 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50 px-2"
                                   onClick={() => handleVerify(t.id, "terverifikasi")}
-                                  disabled={updatingId === t.id}
+                                  disabled={updatingTeacherId === t.id}
                                 >
-                                  {updatingId === t.id ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  {updatingTeacherId === t.id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
                                   ) : (
                                     "Setujui"
                                   )}
                                 </Button>
                               )}
+
                               {t.statusVerifikasi !== "ditolak" && (
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                                  className="h-7 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 px-2"
                                   onClick={() => handleVerify(t.id, "ditolak")}
-                                  disabled={updatingId === t.id}
+                                  disabled={updatingTeacherId === t.id}
                                 >
                                   Tolak
                                 </Button>
                               )}
+
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="h-7 text-xs gap-1 px-2.5"
+                                onClick={() => void openTeacherModal(t)}
+                              >
+                                <Edit3 className="h-3 w-3" />
+                                Kelola
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1300,28 +1529,210 @@ function AdminDashboard() {
           </Card>
         </TabsContent>
 
-        {/* TAB 2: SYSTEM HEALTH & ERROR MONITORING */}
+        {/* TAB 2: LAPORAN KENDALA / BUG REPORTS */}
+        <TabsContent value="laporan" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 space-y-0 pb-4">
+              <div>
+                <CardTitle className="font-display text-base text-navy flex items-center gap-2">
+                  <Bug className="h-4 w-4 text-amber-600" />
+                  Laporan Masalah & Masukan Pengguna
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Tinjau kendala teknis atau saran yang dilaporkan oleh guru dan siswa, ubah status, dan tambahkan catatan perbaikan.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Filter Peran */}
+                <Select
+                  value={bugRoleFilter}
+                  onValueChange={(val) => setBugRoleFilter(val as any)}
+                >
+                  <SelectTrigger className="h-8.5 w-32 text-xs">
+                    <SelectValue placeholder="Peran" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="semua" className="text-xs">Semua Peran</SelectItem>
+                    <SelectItem value="guru" className="text-xs">Guru</SelectItem>
+                    <SelectItem value="siswa" className="text-xs">Siswa</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Filter Status */}
+                <div className="flex gap-1 bg-muted p-1 rounded-lg text-xs">
+                  {(["semua", "baru", "diproses", "selesai"] as const).map((st) => (
+                    <button
+                      key={st}
+                      onClick={() => setBugStatusFilter(st)}
+                      className={`px-2.5 py-1 rounded-md capitalize font-medium transition-colors text-xs ${
+                        bugStatusFilter === st
+                          ? "bg-background text-foreground shadow-xs"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="px-0 pb-2 sm:px-6 sm:pb-6">
+              {loading ? (
+                <div className="py-12 text-center text-sm text-muted-foreground">
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
+                  <p className="mt-2">Memuat laporan kendala…</p>
+                </div>
+              ) : filteredBugs.length === 0 ? (
+                <div className="py-12 text-center">
+                  <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500/60" />
+                  <p className="mt-2 font-display text-sm font-semibold text-navy">
+                    Tidak Ada Laporan Kendala
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground max-w-sm mx-auto">
+                    Tidak ada laporan masalah yang sesuai dengan filter &quot;{bugStatusFilter}&quot;.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Pelapor</TableHead>
+                        <TableHead>Judul Masalah</TableHead>
+                        <TableHead>Halaman / Rute</TableHead>
+                        <TableHead>Urgensi</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Tanggal</TableHead>
+                        <TableHead className="text-right">Aksi</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredBugs.map((b) => (
+                        <TableRow key={b.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-navy text-xs">{b.reporterName}</span>
+                              <Badge variant="outline" className="text-[10px] uppercase font-bold px-1 py-0">
+                                {b.reporterRole}
+                              </Badge>
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">{b.reporterEmail}</div>
+                          </TableCell>
+
+                          <TableCell className="max-w-[16rem]">
+                            <div className="font-medium text-xs line-clamp-1">{b.title}</div>
+                            <div className="text-[11px] text-muted-foreground line-clamp-1">{b.description}</div>
+                          </TableCell>
+
+                          <TableCell className="font-mono text-xs text-muted-foreground">
+                            {b.route || "—"}
+                          </TableCell>
+
+                          <TableCell>
+                            {b.priority === "kritis" ? (
+                              <Badge className="bg-red-600 text-white text-[10px]">Kritis</Badge>
+                            ) : b.priority === "tinggi" ? (
+                              <Badge className="bg-amber-600 text-white text-[10px]">Tinggi</Badge>
+                            ) : b.priority === "sedang" ? (
+                              <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 text-[10px]">Sedang</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-emerald-700 border-emerald-300 text-[10px]">Rendah</Badge>
+                            )}
+                          </TableCell>
+
+                          <TableCell>
+                            {b.status === "baru" ? (
+                              <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-[10px] font-semibold">
+                                Baru
+                              </Badge>
+                            ) : b.status === "diproses" ? (
+                              <Badge variant="secondary" className="bg-amber-100 text-amber-800 text-[10px] font-semibold">
+                                Diproses
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-emerald-600 text-white text-[10px] font-semibold">
+                                Selesai
+                              </Badge>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {formatTanggal(b.createdAt)}
+                          </TableCell>
+
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs gap-1"
+                              onClick={() => openBugModal(b)}
+                            >
+                              <MessageSquare className="h-3 w-3" />
+                              Tindak Lanjuti
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* TAB 3: MONITORING LOG & SYSTEM HEALTH */}
         <TabsContent value="monitoring" className="space-y-4">
           <Card>
-            <CardHeader className="flex-row items-center justify-between gap-4 space-y-0 pb-4">
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 space-y-0 pb-4">
               <div>
                 <CardTitle className="font-display text-base text-navy">
                   Log Aktivitas & Error Sistem Riil
                 </CardTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Catatan otomatis kegagalan otentikasi, error database/API, dan event penting. Data
-                  sensitif disanitasi.
+                  Catatan otomatis kegagalan otentikasi, error database/API, dan event penting. Data sensitif disanitasi.
                 </p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void loadAdminData()}
-                className="gap-1.5 text-xs"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                Refresh Log
-              </Button>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative w-full sm:w-48">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Cari pesan / event…"
+                    value={logSearch}
+                    onChange={(e) => setLogSearch(e.target.value)}
+                    className="h-8.5 pl-8 text-xs"
+                  />
+                </div>
+
+                <Select
+                  value={logLevelFilter}
+                  onValueChange={(val) => setLogLevelFilter(val as any)}
+                >
+                  <SelectTrigger className="h-8.5 w-32 text-xs">
+                    <SelectValue placeholder="Level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="semua" className="text-xs">Semua Level</SelectItem>
+                    <SelectItem value="error" className="text-xs">Error</SelectItem>
+                    <SelectItem value="auth_failure" className="text-xs">Auth Failure</SelectItem>
+                    <SelectItem value="warn" className="text-xs">Warning</SelectItem>
+                    <SelectItem value="info" className="text-xs">Info</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void loadAdminData()}
+                  className="gap-1.5 text-xs h-8.5"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Refresh
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="px-0 pb-2 sm:px-6 sm:pb-6">
               {loading ? (
@@ -1329,14 +1740,14 @@ function AdminDashboard() {
                   <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
                   <p className="mt-2">Memuat log sistem…</p>
                 </div>
-              ) : logs.length === 0 ? (
+              ) : filteredLogs.length === 0 ? (
                 <div className="py-12 text-center">
                   <ShieldCheck className="mx-auto h-10 w-10 text-emerald-500/60" />
                   <p className="mt-2 font-display text-sm font-semibold text-navy">
                     Sistem Berjalan Normal
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground max-w-sm mx-auto">
-                    Belum ada insiden error atau kegagalan otentikasi yang tercatat dalam log sistem.
+                    Belum ada insiden error atau event yang sesuai dengan filter saat ini.
                   </p>
                 </div>
               ) : (
@@ -1352,25 +1763,25 @@ function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {logs.map((log) => (
+                      {filteredLogs.map((log) => (
                         <TableRow key={log.id}>
                           <TableCell>
                             {log.level === "error" ? (
-                              <Badge variant="destructive" className="gap-1">
+                              <Badge variant="destructive" className="gap-1 text-[11px]">
                                 <AlertTriangle className="h-3 w-3" />
                                 Error
                               </Badge>
                             ) : log.level === "auth_failure" ? (
-                              <Badge variant="secondary" className="bg-amber-100 text-amber-800 gap-1">
+                              <Badge variant="secondary" className="bg-amber-100 text-amber-800 gap-1 text-[11px]">
                                 <Clock className="h-3 w-3" />
                                 Auth Failure
                               </Badge>
                             ) : log.level === "warn" ? (
-                              <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+                              <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 text-[11px]">
                                 Warning
                               </Badge>
                             ) : (
-                              <Badge variant="outline" className="text-blue-600 border-blue-200">
+                              <Badge variant="outline" className="text-blue-600 border-blue-200 text-[11px]">
                                 Info
                               </Badge>
                             )}
@@ -1395,6 +1806,296 @@ function AdminDashboard() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* DIALOG 1: KELOLA GURU (PROFIL, KELAS READ-ONLY, KEAMANAN) */}
+      <Dialog open={Boolean(selectedTeacher)} onOpenChange={(open) => !open && setSelectedTeacher(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          {selectedTeacher && (
+            <div className="space-y-5">
+              <DialogHeader>
+                <div className="flex items-center gap-3">
+                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
+                    <UserCheck className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <DialogTitle className="font-display text-navy">
+                      Kelola Akun Guru: {selectedTeacher.nama}
+                    </DialogTitle>
+                    <DialogDescription className="text-xs">
+                      {selectedTeacher.email} · Terdaftar {formatTanggal(selectedTeacher.createdAt)}
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <Tabs defaultValue="profil" className="space-y-4">
+                <TabsList className="grid grid-cols-3 w-full">
+                  <TabsTrigger value="profil" className="text-xs">Edit Profil</TabsTrigger>
+                  <TabsTrigger value="kelas" className="text-xs">Kelas Diampu ({teacherClasses.length})</TabsTrigger>
+                  <TabsTrigger value="keamanan" className="text-xs">Keamanan Akun</TabsTrigger>
+                </TabsList>
+
+                {/* Sub-tab 1: Form Edit Profil */}
+                <TabsContent value="profil">
+                  <form onSubmit={handleSaveTeacherProfile} className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div className="grid gap-1">
+                        <Label htmlFor="t-nama">Nama Lengkap</Label>
+                        <Input
+                          id="t-nama"
+                          value={editForm.nama}
+                          onChange={(e) => setEditForm({ ...editForm, nama: e.target.value })}
+                          required
+                          className="h-8.5 text-xs"
+                        />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label htmlFor="t-nip">NIP</Label>
+                        <Input
+                          id="t-nip"
+                          value={editForm.nip}
+                          onChange={(e) => setEditForm({ ...editForm, nip: e.target.value })}
+                          className="h-8.5 text-xs font-mono"
+                        />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label htmlFor="t-sekolah">Sekolah / Instansi</Label>
+                        <Input
+                          id="t-sekolah"
+                          value={editForm.sekolah}
+                          onChange={(e) => setEditForm({ ...editForm, sekolah: e.target.value })}
+                          className="h-8.5 text-xs"
+                        />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label htmlFor="t-mapel">Mata Pelajaran Utama</Label>
+                        <Input
+                          id="t-mapel"
+                          value={editForm.mapel}
+                          onChange={(e) => setEditForm({ ...editForm, mapel: e.target.value })}
+                          className="h-8.5 text-xs"
+                        />
+                      </div>
+                      <div className="grid gap-1 sm:col-span-2">
+                        <Label htmlFor="t-telepon">Nomor Telepon / WhatsApp</Label>
+                        <Input
+                          id="t-telepon"
+                          value={editForm.telepon}
+                          onChange={(e) => setEditForm({ ...editForm, telepon: e.target.value })}
+                          className="h-8.5 text-xs"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end pt-2">
+                      <Button type="submit" size="sm" disabled={savingProfile} className="gap-1.5 text-xs">
+                        {savingProfile && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        Simpan Perubahan Profil
+                      </Button>
+                    </div>
+                  </form>
+                </TabsContent>
+
+                {/* Sub-tab 2: Daftar Kelas Diampu (Read-Only) */}
+                <TabsContent value="kelas">
+                  {loadingClasses ? (
+                    <div className="py-8 text-center text-xs text-muted-foreground">
+                      <Loader2 className="mx-auto h-5 w-5 animate-spin text-primary" />
+                      <p className="mt-2">Mengambil data kelas guru…</p>
+                    </div>
+                  ) : teacherClasses.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-muted-foreground">
+                      <School className="mx-auto h-6 w-6 text-muted-foreground/40 mb-1" />
+                      Guru ini belum membuat kelas pembelajaran.
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">Kelas</TableHead>
+                            <TableHead className="text-xs">Tingkat & Mapel</TableHead>
+                            <TableHead className="text-xs">Tahun Ajaran</TableHead>
+                            <TableHead className="text-xs">Kode</TableHead>
+                            <TableHead className="text-right text-xs">Siswa Aktif</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {teacherClasses.map((c) => (
+                            <TableRow key={c.id}>
+                              <TableCell className="font-semibold text-xs text-navy">{c.namaKelas}</TableCell>
+                              <TableCell className="text-xs">{c.tingkat} · {c.mapel}</TableCell>
+                              <TableCell className="text-xs">{c.tahunAjaran}</TableCell>
+                              <TableCell className="font-mono text-xs font-semibold">{c.kodeKelas}</TableCell>
+                              <TableCell className="text-right text-xs">
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {c.jumlahSiswa} siswa
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </TabsContent>
+
+                {/* Sub-tab 3: Keamanan & Status Akun */}
+                <TabsContent value="keamanan" className="space-y-4">
+                  <div className="rounded-lg border p-4 space-y-3 bg-muted/30">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-semibold text-navy">Status Verifikasi Akun</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Status saat ini: <span className="font-semibold capitalize">{selectedTeacher.statusVerifikasi}</span>
+                        </p>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <Button
+                          size="sm"
+                          variant={selectedTeacher.statusVerifikasi === "terverifikasi" ? "default" : "outline"}
+                          className="h-7 text-xs"
+                          onClick={async () => {
+                            await handleVerify(selectedTeacher.id, "terverifikasi");
+                            setSelectedTeacher({ ...selectedTeacher, statusVerifikasi: "terverifikasi" });
+                          }}
+                        >
+                          Verifikasi
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={selectedTeacher.statusVerifikasi === "ditolak" ? "destructive" : "outline"}
+                          className="h-7 text-xs"
+                          onClick={async () => {
+                            await handleVerify(selectedTeacher.id, "ditolak");
+                            setSelectedTeacher({ ...selectedTeacher, statusVerifikasi: "ditolak" });
+                          }}
+                        >
+                          Nonaktifkan / Tolak
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-3 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-semibold text-navy">Reset Kata Sandi</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Kirim tautan resmi reset kata sandi ke email: <b>{selectedTeacher.email}</b>
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1.5"
+                        onClick={handleSendPasswordReset}
+                        disabled={sendingReset}
+                      >
+                        {sendingReset ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <KeyRound className="h-3 w-3" />
+                        )}
+                        Kirim Reset Email
+                      </Button>
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+
+              <DialogFooter>
+                <Button variant="outline" size="sm" onClick={() => setSelectedTeacher(null)}>
+                  Tutup
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG 2: TINDAK LANJUT BUG REPORT */}
+      <Dialog open={Boolean(selectedBug)} onOpenChange={(open) => !open && setSelectedBug(null)}>
+        <DialogContent className="sm:max-w-lg">
+          {selectedBug && (
+            <form onSubmit={handleUpdateBugReport}>
+              <DialogHeader>
+                <div className="flex items-center gap-2">
+                  <span className="grid h-8 w-8 place-items-center rounded-lg bg-amber-100 text-amber-800">
+                    <Bug className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <DialogTitle className="font-display text-navy">Tindak Lanjut Laporan Masalah</DialogTitle>
+                    <DialogDescription className="text-xs">
+                      Pelapor: {selectedBug.reporterName} ({selectedBug.reporterRole}) · {formatTanggal(selectedBug.createdAt)}
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="grid gap-3 py-4 text-xs">
+                <div className="rounded-lg border bg-muted/40 p-3 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-navy">{selectedBug.title}</span>
+                    <Badge variant="outline" className="text-[10px] uppercase">
+                      {selectedBug.priority}
+                    </Badge>
+                  </div>
+                  <p className="text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                    {selectedBug.description}
+                  </p>
+                  {selectedBug.route && (
+                    <p className="text-[11px] font-mono text-muted-foreground pt-1 border-t">
+                      Rute: {selectedBug.route}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid gap-1">
+                  <Label htmlFor="bug-status" className="font-semibold">Ubah Status</Label>
+                  <Select
+                    value={bugNewStatus}
+                    onValueChange={(val) => setBugNewStatus(val as BugStatus)}
+                  >
+                    <SelectTrigger id="bug-status" className="h-8.5 text-xs">
+                      <SelectValue placeholder="Status laporan" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="baru" className="text-xs">🔵 Baru (Belum ditangani)</SelectItem>
+                      <SelectItem value="diproses" className="text-xs">🟡 Sedang Diproses (Investigasi / Perbaikan)</SelectItem>
+                      <SelectItem value="selesai" className="text-xs">🟢 Selesai (Masalah terselesaikan)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-1">
+                  <Label htmlFor="bug-notes" className="font-semibold">Catatan Tindak Lanjut Admin</Label>
+                  <Textarea
+                    id="bug-notes"
+                    rows={3}
+                    placeholder="Tuliskan catatan perbaikan atau informasi untuk pelapor/tim admin..."
+                    value={bugAdminNotes}
+                    onChange={(e) => setBugAdminNotes(e.target.value)}
+                    className="text-xs resize-none"
+                  />
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedBug(null)}
+                >
+                  Batal
+                </Button>
+                <Button type="submit" size="sm" disabled={updatingBug} className="gap-1.5">
+                  {updatingBug && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Simpan Perubahan
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

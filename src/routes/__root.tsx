@@ -13,6 +13,7 @@ import { Calendar, Search } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { BugReportDialog } from "@/components/bug-report-dialog";
 import { GuruProMark } from "@/components/gurupro-logo";
 import { NotificationMenu } from "@/components/notification-menu";
 import { Badge } from "@/components/ui/badge";
@@ -230,16 +231,10 @@ export function TahunAjaranHeaderSelector({ userId }: { userId?: string }) {
 }
 
 function AppShell() {
-  const { profile, user, isGuru: authIsGuru } = useAuth();
+  const { profile, user } = useAuth();
   
-  // Robust teacher role detection across store, auth metadata, and profile
-  const isTeacher =
-    Boolean(authIsGuru) ||
-    profile?.role?.toLowerCase()?.trim() === "guru" ||
-    (user?.user_metadata?.role as string)?.toLowerCase()?.trim() === "guru" ||
-    (Boolean(user) &&
-      profile?.role !== "siswa" &&
-      profile?.role !== "admin");
+  // Single Source of Truth (SSOT): Only database profile role === 'guru' is treated as teacher
+  const isTeacher = profile?.role?.toLowerCase()?.trim() === "guru";
 
   return (
     <SidebarProvider>
@@ -261,6 +256,12 @@ function AppShell() {
             </div>
 
             <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+              <BugReportDialog
+                triggerVariant="ghost"
+                triggerSize="sm"
+                triggerLabel="Lapor Masalah"
+                triggerClassName="hidden md:inline-flex h-8 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+              />
 
               <Button
                 variant="ghost"
