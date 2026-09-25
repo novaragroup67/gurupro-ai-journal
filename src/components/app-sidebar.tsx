@@ -11,7 +11,6 @@ import {
   School,
   Sparkles,
   UserRound,
-  UserCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -53,7 +52,6 @@ const mainItems = [
 ] as const;
 
 const secondaryItems = [
-  { title: "Verifikasi Akun Siswa", url: "/verifikasi", icon: UserCheck },
   { title: "Arsip Data", url: "/arsip", icon: Archive },
   { title: "Profil", url: "/profil", icon: UserRound },
 ] as const;
