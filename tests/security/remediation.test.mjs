@@ -81,14 +81,14 @@ console.log("\n--- TEST 2: Status Verifikasi Protection ---");
     return {
       ...input,
       role: "guru",
-      status_verifikasi: "menunggu", // Enforced default
+      status_verifikasi: "terverifikasi", // Instant verification default
     };
   }
 
   const newTeacher = createTeacherProfile({ id: "guru-789", nama: "Guru Baru" });
-  assert.equal(newTeacher.status_verifikasi, "menunggu", "New teacher status must start as 'menunggu'");
+  assert.equal(newTeacher.status_verifikasi, "terverifikasi", "New teacher status starts as 'terverifikasi'");
 
-  console.log("  [PASS] 2. User cannot modify status_verifikasi; new teachers default to 'menunggu'");
+  console.log("  [PASS] 2. User cannot modify status_verifikasi; new teachers default to 'terverifikasi'");
   passed++;
 }
 

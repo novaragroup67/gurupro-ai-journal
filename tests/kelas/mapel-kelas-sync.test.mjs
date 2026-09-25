@@ -27,7 +27,7 @@ console.log("\n--- SECTION 1: TEACHER MAPEL PERSISTENCE & SSOT ---");
       email: authRecord.email,
       nama: authRecord.raw_user_meta_data?.nama || authRecord.email.split("@")[0],
       role: rawRole,
-      status_verifikasi: rawRole === "guru" ? "menunggu" : "terverifikasi",
+      status_verifikasi: "terverifikasi",
       mapel: authRecord.raw_user_meta_data?.mapel || "",
     };
   }

@@ -149,7 +149,7 @@ export async function fetchProfileForUser(user: User): Promise<FetchProfileResul
     telepon: "",
     bio: "",
     role: "",
-    status_verifikasi: "menunggu",
+    status_verifikasi: "terverifikasi",
   };
 
   try {
@@ -202,7 +202,7 @@ export async function fetchProfileForUser(user: User): Promise<FetchProfileResul
         telepon: data.telepon || "",
         bio: data.bio || "",
         role: validatedRole,
-        status_verifikasi: data.status_verifikasi || (validatedRole === "guru" ? "menunggu" : "terverifikasi"),
+        status_verifikasi: data.status_verifikasi || "terverifikasi",
       },
     };
   } catch (err) {

@@ -163,7 +163,7 @@ async function run() {
     assert(!pErr && Boolean(profile), "Guru profile row successfully created in public.profiles");
     assert(profile.id === createdGuruUserId, "auth.users.id matches profiles.id strictly");
     assert(profile.role === "guru", "Guru profile role is strictly 'guru'");
-    assert(profile.status_verifikasi === "menunggu", "New Guru status_verifikasi starts as 'menunggu'");
+    assert(profile.status_verifikasi === "terverifikasi", "New Guru status_verifikasi starts as 'terverifikasi'");
   }
 
   // 2.2 Register valid Siswa
@@ -249,7 +249,7 @@ async function run() {
       .single();
 
     assert(!pErr && profile.role === "guru", "Authenticated Guru client fetches own profile cleanly");
-    assert(profile.status_verifikasi === "menunggu", "Profile status remains 'menunggu'");
+    assert(profile.status_verifikasi === "terverifikasi", "Profile status remains 'terverifikasi'");
 
     // Simulate page refresh (token refresh)
     const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession({
@@ -296,8 +296,7 @@ async function run() {
   // -------------------------------------------------------------------------
   console.log("\n--- SECTION 4: SERVER AUTHORIZATION & PROTECTED FEATURES ---");
 
-  // 4.1 Unverified teacher attempting privileged teacher action
-  // In auth-middleware.ts: status_verifikasi === 'menunggu' throws "Forbidden: Akun guru Anda sedang menunggu verifikasi."
+  // 4.1 Verified teacher has instant access to teacher features
   {
     const { data: checkProfile } = await authedGuruClient
       .from("profiles")
@@ -305,8 +304,8 @@ async function run() {
       .eq("id", createdGuruUserId)
       .single();
 
-    const isBlocked = checkProfile?.status_verifikasi === "menunggu";
-    assert(isBlocked, "Unverified teacher (status: menunggu) is correctly recognized for verification gate");
+    const isVerified = checkProfile?.status_verifikasi === "terverifikasi";
+    assert(isVerified, "Teacher (status: terverifikasi) has instant access and is active for all features");
   }
 
   // 4.2 Siswa attempting teacher action

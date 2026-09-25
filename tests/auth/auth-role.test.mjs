@@ -698,7 +698,7 @@ let passed = 0;
       status = "terverifikasi";
     } else if (rawRole === "guru") {
       role = "guru";
-      status = "menunggu";
+      status = "terverifikasi";
     } else {
       throw new Error(`Peran pendaftaran tidak valid (${rawRole || 'kosong'}). Hanya peran guru atau siswa yang diizinkan.`);
     }
@@ -722,10 +722,10 @@ let passed = 0;
     };
   }
 
-  // Guru registration initializes to menunggu
+  // Guru registration initializes to terverifikasi (instant access)
   const newGuru = simulateHandleNewUser({ id: "g-1", raw_user_meta_data: { role: "guru" } }, null);
   assert.equal(newGuru.role, "guru");
-  assert.equal(newGuru.status_verifikasi, "menunggu");
+  assert.equal(newGuru.status_verifikasi, "terverifikasi");
 
   // Siswa registration initializes to terverifikasi
   const newSiswa = simulateHandleNewUser({ id: "s-1", raw_user_meta_data: { role: "siswa" } }, null);
