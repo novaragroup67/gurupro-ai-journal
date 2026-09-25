@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth-store";
 import {
+  Archive,
   ArrowLeft,
   Copy,
   FileQuestion,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { archiveAcademicItem } from "@/lib/archive-store";
 
 import { PageHeader } from "@/components/page-header";
 import {
@@ -210,6 +212,8 @@ function SoalPage() {
   const [terbitTarget, setTerbitTarget] = useState<PaketSoal | null>(null);
   const [kelasPilihan, setKelasPilihan] = useState<string[]>([]);
   const [hapus, setHapus] = useState<PaketSoal | null>(null);
+  const [arsipTarget, setArsipTarget] = useState<PaketSoal | null>(null);
+  const [arsipLoading, setArsipLoading] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -911,6 +915,7 @@ function SoalPage() {
                       setTerbitTarget(p);
                       setKelasPilihan(p.kelas);
                     }}
+                    onArsip={() => setArsipTarget(p)}
                     onHapus={() => setHapus(p)}
                   />
                 </CardContent>
@@ -968,6 +973,7 @@ function SoalPage() {
                             setTerbitTarget(p);
                             setKelasPilihan(p.kelas);
                           }}
+                          onArsip={() => setArsipTarget(p)}
                           onHapus={() => setHapus(p)}
                         />
                       </TableCell>
@@ -1047,6 +1053,56 @@ function SoalPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Dialog Arsip Paket Soal */}
+      <AlertDialog
+        open={arsipTarget !== null}
+        onOpenChange={(o) => !o && !arsipLoading && setArsipTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display text-navy">
+              Arsipkan paket soal ini?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block font-medium text-foreground">
+                &ldquo;{arsipTarget?.judul}&rdquo;
+              </span>
+              <span className="block text-xs leading-relaxed">
+                Paket soal beserta seluruh butir soal di dalamnya akan dipindahkan ke Pusat Arsip dan
+                disembunyikan dari daftar bank soal aktif. Anda dapat memulihkannya kapan saja.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={arsipLoading}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={arsipLoading}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!arsipTarget) return;
+                setArsipLoading(true);
+                try {
+                  const res = await archiveAcademicItem("paket_soal", arsipTarget.id);
+                  if (!res.success) {
+                    toast.error(res.message);
+                    return;
+                  }
+                  toast.success("Paket soal berhasil diarsipkan ke Pusat Arsip.");
+                  setArsipTarget(null);
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Gagal mengarsipkan paket soal.");
+                } finally {
+                  setArsipLoading(false);
+                }
+              }}
+            >
+              {arsipLoading ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+              Arsipkan Paket Soal
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={hapus !== null} onOpenChange={(o) => !o && setHapus(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1078,12 +1134,14 @@ function PaketActions({
   paket,
   onOpen,
   onTerbitTugas,
+  onArsip,
   onHapus,
   align = "start",
 }: {
   paket: PaketSoal;
   onOpen: () => void;
   onTerbitTugas: () => void;
+  onArsip: () => void;
   onHapus: () => void;
   align?: "start" | "end";
 }) {
@@ -1121,6 +1179,16 @@ function PaketActions({
         }}
       >
         <Copy className="h-4 w-4" />
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-label="Arsipkan paket soal"
+        title="Arsipkan paket soal"
+        className="text-muted-foreground hover:text-foreground"
+        onClick={onArsip}
+      >
+        <Archive className="h-4 w-4" />
       </Button>
       <Button
         size="sm"

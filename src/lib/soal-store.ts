@@ -11,6 +11,9 @@ type Row = {
   kelas: string[] | null;
   soal: unknown;
   created_at: string;
+  is_archived?: boolean;
+  archived_at?: string | null;
+  archived_by?: string | null;
 };
 
 function toPaket(row: Row): PaketSoal {
@@ -23,6 +26,9 @@ function toPaket(row: Row): PaketSoal {
     kelas: row.kelas ?? [],
     soal: (Array.isArray(row.soal) ? row.soal : []) as Soal[],
     createdAt: row.created_at,
+    isArchived: Boolean(row.is_archived),
+    archivedAt: row.archived_at || null,
+    archivedBy: row.archived_by || null,
   };
 }
 
@@ -34,6 +40,9 @@ function toRow(paket: Partial<PaketSoal>) {
   if (paket.status !== undefined) row["status"] = paket.status;
   if (paket.kelas !== undefined) row["kelas"] = paket.kelas;
   if (paket.soal !== undefined) row["soal"] = paket.soal;
+  if (paket.isArchived !== undefined) row["is_archived"] = paket.isArchived;
+  if (paket.archivedAt !== undefined) row["archived_at"] = paket.archivedAt;
+  if (paket.archivedBy !== undefined) row["archived_by"] = paket.archivedBy;
   return row;
 }
 
@@ -41,6 +50,7 @@ const store = createCloudStore<PaketSoal>(async () => {
   const { data, error } = await supabase
     .from("paket_soal")
     .select("*")
+    .eq("is_archived", false)
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data as unknown as Row[]).map(toPaket);

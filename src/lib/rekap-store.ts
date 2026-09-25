@@ -189,6 +189,7 @@ export async function getKelasRekapData(kelasId: string): Promise<KelasRekapData
     .from("penugasan")
     .select("id, judul, deadline, status, created_at, kkm, remedial_enabled")
     .eq("kelas_id", kelasId)
+    .eq("is_archived", false)
     .in("status", ["published", "closed"])
     .order("created_at", { ascending: true });
 

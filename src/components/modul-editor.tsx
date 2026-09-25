@@ -31,7 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { unduhPdf, unduhPpt, unduhWord } from "@/lib/exporters";
+import { exportModulAjarPdf, unduhPdf, unduhPpt, unduhWord } from "@/lib/exporters";
 import { buatIlustrasi, buatSlides } from "@/lib/modul-ai";
 import type { Modul } from "@/lib/modul-types";
 import { useServerFn } from "@tanstack/react-start";
@@ -384,7 +384,18 @@ export function ModulEditor({
           ))}
 
           <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
-            <Button variant="outline" onClick={() => unduhPdf(modul)}>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  toast.info("Menyiapkan dokumen PDF Modul Ajar…");
+                  await exportModulAjarPdf(modul, { withIlustrasi: false });
+                  toast.success("Dokumen PDF berhasil diunduh.");
+                } catch {
+                  toast.error("Gagal membuat file PDF.");
+                }
+              }}
+            >
               <FileText className="h-4 w-4" />
               Unduh PDF
             </Button>
@@ -418,7 +429,15 @@ export function ModulEditor({
                 <Button
                   variant="outline"
                   disabled={!punyaIlustrasi}
-                  onClick={() => unduhPdf(modul, true)}
+                  onClick={async () => {
+                    try {
+                      toast.info("Menyiapkan dokumen PDF dengan ilustrasi…");
+                      await exportModulAjarPdf(modul, { withIlustrasi: true });
+                      toast.success("Dokumen PDF berilustrasi berhasil diunduh.");
+                    } catch {
+                      toast.error("Gagal membuat file PDF.");
+                    }
+                  }}
                 >
                   <FileText className="h-4 w-4" />
                   Unduh PDF dengan Ilustrasi

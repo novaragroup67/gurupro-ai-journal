@@ -33,6 +33,9 @@ export interface Modul {
   slides: Slide[];
   createdAt: string;
   updatedAt: string;
+  isArchived?: boolean;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
 }
 
 export const SUMBER_TIPE: SumberTipe[] = ["CP / ATP", "eBook / Dokumen", "Teks", "Link Luar"];

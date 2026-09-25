@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   AlertCircle,
+  Archive,
   ArrowLeft,
   Award,
   Calendar,
@@ -27,6 +28,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { archiveAcademicItem } from "@/lib/archive-store";
 
 import { PageHeader } from "@/components/page-header";
 import {
@@ -202,6 +204,8 @@ function GuruPenugasanView() {
   const [openCreateModal, setOpenCreateModal] = useState(false);
   const [editingPenugasan, setEditingPenugasan] = useState<Penugasan | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [targetArsip, setTargetArsip] = useState<Penugasan | null>(null);
+  const [arsipLoading, setArsipLoading] = useState(false);
 
   // Modal Review Pengumpulan Siswa
   const [viewingSubmissionsFor, setViewingSubmissionsFor] = useState<Penugasan | null>(null);
@@ -632,6 +636,16 @@ function GuruPenugasanView() {
                       <Button
                         size="sm"
                         variant="ghost"
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                        title="Arsipkan Penugasan"
+                        onClick={() => setTargetArsip(item)}
+                      >
+                        <Archive className="h-4 w-4" />
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="ghost"
                         className="h-8 w-8 p-0"
                         title="Edit Penugasan"
                         onClick={() => openEditDialog(item)}
@@ -896,6 +910,58 @@ function GuruPenugasanView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog Konfirmasi Arsip Penugasan */}
+      <AlertDialog
+        open={targetArsip !== null}
+        onOpenChange={(open) => !open && !arsipLoading && setTargetArsip(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display text-navy">
+              Arsipkan Penugasan Ini?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block font-medium text-foreground">
+                &ldquo;{targetArsip?.judul}&rdquo;
+              </span>
+              <span className="block text-xs leading-relaxed">
+                Tugas ini akan dipindahkan ke Pusat Arsip dan disembunyikan dari daftar aktif.
+                Seluruh data jawaban siswa, riwayat pengumpulan, dan nilai (termasuk nilai remedial)
+                tetap tersimpan aman di database dan dapat dipulihkan kembali kapan saja.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={arsipLoading}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={arsipLoading}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!targetArsip) return;
+                setArsipLoading(true);
+                try {
+                  const res = await archiveAcademicItem("penugasan", targetArsip.id);
+                  if (!res.success) {
+                    toast.error(res.message);
+                    return;
+                  }
+                  toast.success("Penugasan berhasil diarsipkan ke Pusat Arsip.");
+                  setTargetArsip(null);
+                  void reload();
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Gagal mengarsipkan penugasan.");
+                } finally {
+                  setArsipLoading(false);
+                }
+              }}
+            >
+              {arsipLoading ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+              Arsipkan Penugasan
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog Konfirmasi Hapus */}
       <AlertDialog open={Boolean(deletingId)} onOpenChange={(open) => !open && setDeletingId(null)}>

@@ -18,6 +18,9 @@ export interface Penugasan {
   remedialPaketSoalId?: string | null;
   createdAt: string;
   updatedAt: string;
+  isArchived?: boolean;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
   // Metadata join / hydration
   kelasNama?: string;
   kelasTingkat?: string;
@@ -93,6 +96,9 @@ export async function refreshPenugasanGuru(): Promise<Penugasan[]> {
         kkm,
         remedial_enabled,
         remedial_paket_soal_id,
+        is_archived,
+        archived_at,
+        archived_by,
         created_at,
         updated_at,
         kelas:kelas_id (
@@ -114,6 +120,7 @@ export async function refreshPenugasanGuru(): Promise<Penugasan[]> {
       `,
       )
       .eq("guru_id", userId)
+      .eq("is_archived", false)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -141,6 +148,9 @@ export async function refreshPenugasanGuru(): Promise<Penugasan[]> {
         remedialPaketSoalJudul: row.remedial_paket_soal?.judul || "",
         createdAt: row.created_at,
         updatedAt: row.updated_at,
+        isArchived: Boolean(row.is_archived),
+        archivedAt: row.archived_at || null,
+        archivedBy: row.archived_by || null,
         kelasNama: kelas?.nama_kelas || "",
         kelasTingkat: kelas?.tingkat || "",
         kelasMapel: kelas?.mapel || "",
@@ -193,6 +203,7 @@ export async function refreshPenugasanSiswa(): Promise<Penugasan[]> {
         )
       `,
       )
+      .eq("is_archived", false)
       .order("deadline", { ascending: true, nullsFirst: false });
 
     if (error) {

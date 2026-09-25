@@ -20,6 +20,9 @@ type Row = {
   slides: unknown;
   created_at: string;
   updated_at: string;
+  is_archived?: boolean;
+  archived_at?: string | null;
+  archived_by?: string | null;
 };
 
 function toModul(row: Row): Modul {
@@ -40,6 +43,9 @@ function toModul(row: Row): Modul {
     slides: (Array.isArray(row.slides) ? row.slides : []) as Slide[],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    isArchived: Boolean(row.is_archived),
+    archivedAt: row.archived_at || null,
+    archivedBy: row.archived_by || null,
   };
 }
 
@@ -58,6 +64,9 @@ function toRow(modul: Partial<Modul>) {
     ringkasan: modul.ringkasan ?? "",
     sections: (modul.sections ?? []) as unknown as never,
     slides: (modul.slides ?? []) as unknown as never,
+    is_archived: modul.isArchived ?? false,
+    archived_at: modul.archivedAt ?? null,
+    archived_by: modul.archivedBy ?? null,
   };
 }
 
@@ -66,6 +75,7 @@ const store = createCloudStore<Modul>(async () => {
   const { data, error } = await supabase
     .from("moduls")
     .select("*")
+    .eq("is_archived", false)
     .order("updated_at", { ascending: false });
   if (error) throw error;
   return (data as unknown as Row[]).map(toModul);
@@ -174,6 +184,7 @@ export async function getPublishedModulsForSiswa(): Promise<Modul[]> {
       .from("moduls")
       .select("*")
       .eq("status", "Terbit")
+      .eq("is_archived", false)
       .order("updated_at", { ascending: false });
 
     if (error) {

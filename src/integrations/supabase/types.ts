@@ -150,8 +150,11 @@ export type Database = {
       }
       moduls: {
         Row: {
+          archived_at: string | null
+          archived_by: string | null
           created_at: string
           id: string
+          is_archived: boolean
           judul: string
           kelas: string
           kelas_id: string | null
@@ -169,8 +172,11 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           id?: string
+          is_archived?: boolean
           judul?: string
           kelas?: string
           kelas_id?: string | null
@@ -188,8 +194,11 @@ export type Database = {
           user_id: string
         }
         Update: {
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           id?: string
+          is_archived?: boolean
           judul?: string
           kelas?: string
           kelas_id?: string | null
@@ -218,8 +227,11 @@ export type Database = {
       }
       paket_soal: {
         Row: {
+          archived_at: string | null
+          archived_by: string | null
           created_at: string
           id: string
+          is_archived: boolean
           judul: string
           kelas: string[]
           modul_id: string | null
@@ -230,8 +242,11 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           id?: string
+          is_archived?: boolean
           judul?: string
           kelas?: string[]
           modul_id?: string | null
@@ -242,8 +257,11 @@ export type Database = {
           user_id: string
         }
         Update: {
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           id?: string
+          is_archived?: boolean
           judul?: string
           kelas?: string[]
           modul_id?: string | null
@@ -265,11 +283,14 @@ export type Database = {
       }
       penugasan: {
         Row: {
+          archived_at: string | null
+          archived_by: string | null
           created_at: string
           deadline: string | null
           guru_id: string
           id: string
           instruksi: string | null
+          is_archived: boolean
           judul: string
           kelas_id: string
           kkm: number
@@ -280,11 +301,14 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           deadline?: string | null
           guru_id: string
           id?: string
           instruksi?: string | null
+          is_archived?: boolean
           judul: string
           kelas_id: string
           kkm?: number
@@ -295,11 +319,14 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           deadline?: string | null
           guru_id?: string
           id?: string
           instruksi?: string | null
+          is_archived?: boolean
           judul?: string
           kelas_id?: string
           kkm?: number
@@ -669,6 +696,10 @@ export type Database = {
         Args: { _status: string; _teacher_id: string }
         Returns: boolean
       }
+      archive_academic_item: {
+        Args: { _item_id: string; _item_type: string }
+        Returns: Json
+      }
       cari_kelas_by_kode: {
         Args: { _kode: string }
         Returns: {
@@ -693,6 +724,20 @@ export type Database = {
       get_remedial_soal_for_siswa: {
         Args: { _penugasan_id: string }
         Returns: Json
+      }
+      get_teacher_archived_items: {
+        Args: never
+        Returns: {
+          archived_at: string
+          deskripsi: string
+          extra_info: Json
+          id: string
+          item_type: string
+          judul: string
+          kelas_nama: string
+          mapel: string
+          tahun_ajaran: string
+        }[]
       }
       is_admin: { Args: never; Returns: boolean }
       is_guru_of_kelas: { Args: { p_kelas_id: string }; Returns: boolean }
@@ -729,6 +774,10 @@ export type Database = {
           _message: string
         }
         Returns: string
+      }
+      restore_academic_item: {
+        Args: { _item_id: string; _item_type: string }
+        Returns: Json
       }
       simpan_penilaian_guru: {
         Args: {

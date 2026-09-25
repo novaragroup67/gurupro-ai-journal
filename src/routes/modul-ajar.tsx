@@ -1,8 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
+  Archive,
   ArrowLeft,
   BookOpen,
   Eye,
+  Loader2,
   MoreVertical,
   Pencil,
   Plus,
@@ -13,6 +15,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { archiveAcademicItem } from "@/lib/archive-store";
 
 import { ModulEditor } from "@/components/modul-editor";
 import { ModulGeneratorDialog } from "@/components/modul-generator-dialog";
@@ -84,6 +87,8 @@ function ModulAjarPage() {
   const [openGenerator, setOpenGenerator] = useState(false);
   const [editing, setEditing] = useState<Modul | null>(null);
   const [hapus, setHapus] = useState<Modul | null>(null);
+  const [targetArsip, setTargetArsip] = useState<Modul | null>(null);
+  const [arsipLoading, setArsipLoading] = useState(false);
 
   const teacherClassesInYear = useMemo(() => {
     const list = Array.isArray(kelasList) ? kelasList : [];
@@ -307,6 +312,15 @@ function ModulAjarPage() {
                         {m.status === "Terbit" ? "Jadikan draft" : "Publikasikan"}
                       </DropdownMenuItem>
                       <DropdownMenuItem
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          setTargetArsip(m);
+                        }}
+                      >
+                        <Archive className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                        Arsipkan modul
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
                         className="text-destructive"
                         onSelect={(e) => {
                           e.preventDefault();
@@ -333,6 +347,56 @@ function ModulAjarPage() {
           setEditing(created);
         }}
       />
+
+      {/* Dialog Arsipkan Modul */}
+      <AlertDialog
+        open={targetArsip !== null}
+        onOpenChange={(o) => !o && !arsipLoading && setTargetArsip(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display text-navy">
+              Arsipkan modul ini?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block font-medium text-foreground">
+                &ldquo;{targetArsip?.judul}&rdquo;
+              </span>
+              <span className="block text-xs leading-relaxed">
+                Modul akan dipindahkan ke Pusat Arsip dan disembunyikan dari daftar aktif, namun dapat
+                dipulihkan kembali kapan saja dengan data yang tetap utuh.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={arsipLoading}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={arsipLoading}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!targetArsip) return;
+                setArsipLoading(true);
+                try {
+                  const res = await archiveAcademicItem("modul", targetArsip.id);
+                  if (!res.success) {
+                    toast.error(res.message);
+                    return;
+                  }
+                  toast.success("Modul berhasil diarsipkan ke Pusat Arsip.");
+                  setTargetArsip(null);
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Gagal mengarsipkan modul.");
+                } finally {
+                  setArsipLoading(false);
+                }
+              }}
+            >
+              {arsipLoading ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+              Arsipkan Modul
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={hapus !== null} onOpenChange={(o) => !o && setHapus(null)}>
         <AlertDialogContent>

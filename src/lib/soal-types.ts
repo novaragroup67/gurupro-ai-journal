@@ -19,6 +19,9 @@ export interface PaketSoal {
   kelas: string[];
   soal: Soal[];
   createdAt: string;
+  isArchived?: boolean;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
 }
 
 export const JENIS_SOAL: JenisSoal[] = ["Pilihan Ganda", "Esai"];

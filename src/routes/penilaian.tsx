@@ -8,6 +8,9 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock,
+  Download,
+  FileSpreadsheet,
+  FileText,
   GraduationCap,
   Loader2,
   MessageSquare,
@@ -17,6 +20,8 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { exportRekapNilaiCsv, exportRekapNilaiPdf } from "@/lib/exporters";
 
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -104,6 +109,51 @@ function GuruRekapNilaiView() {
   const [loadingRekap, setLoadingRekap] = useState(false);
   const [rekapError, setRekapError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const handleExportCsv = () => {
+    if (!rekapData) {
+      toast.error("Data rekapitulasi belum dimuat.");
+      return;
+    }
+    if (rekapData.siswaRows.length === 0) {
+      toast.warning("Tidak ada data siswa pada kelas ini untuk diekspor.");
+      return;
+    }
+    try {
+      setExportingCsv(true);
+      const res = exportRekapNilaiCsv(rekapData);
+      toast.success(`Berhasil mengekspor ${res.rowCount} baris data ke "${res.filename}".`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal mengekspor CSV.");
+    } finally {
+      setExportingCsv(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (!rekapData) {
+      toast.error("Data rekapitulasi belum dimuat.");
+      return;
+    }
+    if (rekapData.siswaRows.length === 0) {
+      toast.warning("Tidak ada data siswa pada kelas ini untuk diekspor.");
+      return;
+    }
+    try {
+      setExportingPdf(true);
+      const res = await exportRekapNilaiPdf(rekapData, {
+        guruNama: profile.nama || user?.email || "Guru Pengampu",
+        sekolahNama: profile.sekolah || undefined,
+      });
+      toast.success(`Laporan PDF "${res.filename}" berhasil dibuat dan diunduh.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal membuat laporan PDF.");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   // Responsif terhadap perubahan daftar kelas / tahun ajaran
   useEffect(() => {
@@ -224,20 +274,48 @@ function GuruRekapNilaiView() {
           subtitle="Pantau nilai tugas, kuis, dan rata-rata capaian belajar murid per kelas secara terintegrasi."
         />
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground shrink-0">Pilih Kelas:</span>
-          <Select value={selectedKelasId} onValueChange={setSelectedKelasId}>
-            <SelectTrigger className="w-[220px] bg-card font-medium shadow-xs">
-              <SelectValue placeholder="Pilih Kelas" />
-            </SelectTrigger>
-            <SelectContent>
-              {teacherClasses.map((k) => (
-                <SelectItem key={k.id} value={k.id}>
-                  {k.tingkat} {k.namaKelas} ({k.mapel})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground shrink-0">Pilih Kelas:</span>
+            <Select value={selectedKelasId} onValueChange={setSelectedKelasId}>
+              <SelectTrigger className="w-[200px] bg-card font-medium shadow-xs">
+                <SelectValue placeholder="Pilih Kelas" />
+              </SelectTrigger>
+              <SelectContent>
+                {teacherClasses.map((k) => (
+                  <SelectItem key={k.id} value={k.id}>
+                    {k.tingkat} {k.namaKelas} ({k.mapel})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportCsv}
+              disabled={loadingRekap || !rekapData || rekapData.siswaRows.length === 0 || exportingCsv}
+              className="gap-1.5 text-xs font-medium"
+              title="Ekspor rekapitulasi nilai kelas ini ke format CSV (Excel)"
+            >
+              <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+              {exportingCsv ? "Mengekspor…" : "Ekspor CSV"}
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportPdf}
+              disabled={loadingRekap || !rekapData || rekapData.siswaRows.length === 0 || exportingPdf}
+              className="gap-1.5 text-xs font-medium"
+              title="Unduh laporan resmi rekapitulasi nilai format PDF"
+            >
+              <FileText className="h-4 w-4 text-blue-600" />
+              {exportingPdf ? "Membuat PDF…" : "Unduh PDF"}
+            </Button>
+          </div>
         </div>
       </div>
 
