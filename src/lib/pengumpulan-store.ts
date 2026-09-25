@@ -60,6 +60,7 @@ export interface PenugasanRemedialPengumpulan {
   penugasanId: string;
   siswaId: string;
   originalPengumpulanId: string | null;
+  nilaiMurni: number | null;
   status: "draft" | "submitted";
   submittedAt: string | null;
   nilaiPg: number | null;
@@ -95,6 +96,7 @@ export interface TeacherRemedialSubmissionItem {
   penugasanId: string;
   siswaId: string;
   originalPengumpulanId: string | null;
+  nilaiMurni: number | null;
   status: "draft" | "submitted";
   submittedAt: string | null;
   nilaiPg: number | null;
@@ -721,6 +723,7 @@ export async function getMyRemedialSubmission(
       penugasanId: data.penugasan_id,
       siswaId: data.siswa_id,
       originalPengumpulanId: data.original_pengumpulan_id,
+      nilaiMurni: data.nilai_murni !== null ? Number(data.nilai_murni) : null,
       status: data.status as "draft" | "submitted",
       submittedAt: data.submitted_at,
       nilaiPg: data.nilai_pg !== null ? Number(data.nilai_pg) : null,
@@ -765,6 +768,7 @@ export async function startOrGetRemedialSubmission(
             penugasanId: row.penugasan_id,
             siswaId: row.siswa_id,
             originalPengumpulanId: row.original_pengumpulan_id,
+            nilaiMurni: row.nilai_murni !== null ? Number(row.nilai_murni) : null,
             status: row.status as "draft" | "submitted",
             submittedAt: row.submitted_at,
             nilaiPg: row.nilai_pg !== null ? Number(row.nilai_pg) : null,
@@ -933,6 +937,7 @@ export async function getTeacherRemedialSubmissions(
         penugasan_id,
         siswa_id,
         original_pengumpulan_id,
+        nilai_murni,
         status,
         submitted_at,
         nilai_pg,
@@ -963,13 +968,14 @@ export async function getTeacherRemedialSubmissions(
     }
 
     const resultMap: Record<string, TeacherRemedialSubmissionItem> = {};
-    for (const row of data || []) {
+    for (const row of (data as any[]) || []) {
       const jawabanList = Array.isArray(row.jawaban) ? row.jawaban : [];
       resultMap[row.siswa_id] = {
         id: row.id,
         penugasanId: row.penugasan_id,
         siswaId: row.siswa_id,
         originalPengumpulanId: row.original_pengumpulan_id,
+        nilaiMurni: row.nilai_murni !== null && row.nilai_murni !== undefined ? Number(row.nilai_murni) : null,
         status: row.status as "draft" | "submitted",
         submittedAt: row.submitted_at,
         nilaiPg: row.nilai_pg !== null ? Number(row.nilai_pg) : null,

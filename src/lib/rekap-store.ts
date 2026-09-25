@@ -225,7 +225,7 @@ export async function getKelasRekapData(kelasId: string): Promise<KelasRekapData
       supabase
         .from("penugasan_remedial_pengumpulan")
         .select(
-          "id, penugasan_id, siswa_id, status, submitted_at, nilai_pg, nilai_essay, nilai_akhir, status_penilaian, catatan_guru, graded_at",
+          "id, penugasan_id, siswa_id, original_pengumpulan_id, nilai_murni, status, submitted_at, nilai_pg, nilai_essay, nilai_akhir, status_penilaian, catatan_guru, graded_at",
         )
         .in("penugasan_id", assignmentIds),
     ]);
@@ -266,13 +266,18 @@ export async function getKelasRekapData(kelasId: string): Promise<KelasRekapData
 
       if (sub) {
         const isGraded = sub.status_penilaian === "dinilai" && sub.nilai_akhir !== null;
-        const nilaiMurni = isGraded ? Number(sub.nilai_akhir) : null;
+        // Prioritaskan historical snapshot nilai_murni dari remedial jika ada
+        const nilaiMurni = (rem && rem.nilai_murni !== null && rem.nilai_murni !== undefined)
+          ? Number(rem.nilai_murni)
+          : (isGraded ? Number(sub.nilai_akhir) : null);
 
         const isRemGraded = rem && rem.status_penilaian === "dinilai" && rem.nilai_akhir !== null;
         const nilaiRemedial = isRemGraded ? Number(rem.nilai_akhir) : null;
 
-        // Nilai Aktif: jika ada nilai remedial dinilai, pakai remedial; selain itu nilai murni
-        const nilaiAktif = nilaiRemedial !== null ? nilaiRemedial : nilaiMurni;
+        // Nilai Aktif (Nilai Akhir): mengikuti aturan Max principle: max(Nilai Murni, Nilai Remedial)
+        const nilaiAktif = (nilaiRemedial !== null && nilaiMurni !== null)
+          ? Math.max(nilaiMurni, nilaiRemedial)
+          : (nilaiRemedial !== null ? nilaiRemedial : nilaiMurni);
 
         let statusRemedial: SiswaPenugasanNilai["statusRemedial"] = "tidak_ada";
         if (tugas.remedialEnabled) {

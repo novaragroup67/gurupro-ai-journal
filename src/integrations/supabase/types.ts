@@ -513,6 +513,7 @@ export type Database = {
           id: string
           nilai_akhir: number | null
           nilai_essay: number | null
+          nilai_murni: number | null
           nilai_pg: number | null
           original_pengumpulan_id: string | null
           penugasan_id: string
@@ -530,6 +531,7 @@ export type Database = {
           id?: string
           nilai_akhir?: number | null
           nilai_essay?: number | null
+          nilai_murni?: number | null
           nilai_pg?: number | null
           original_pengumpulan_id?: string | null
           penugasan_id: string
@@ -547,6 +549,7 @@ export type Database = {
           id?: string
           nilai_akhir?: number | null
           nilai_essay?: number | null
+          nilai_murni?: number | null
           nilai_pg?: number | null
           original_pengumpulan_id?: string | null
           penugasan_id?: string

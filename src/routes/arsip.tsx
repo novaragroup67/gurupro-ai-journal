@@ -161,12 +161,19 @@ function ArsipPage() {
   // Extract available academic years from archived data
   const availableYears = useMemo(() => {
     const years = new Set<string>();
+    let hasUnbound = false;
     items.forEach((item) => {
       if (item.tahunAjaran && item.tahunAjaran !== "Tidak Terikat" && item.tahunAjaran !== "Semua") {
         years.add(item.tahunAjaran);
+      } else if (item.tahunAjaran === "Tidak Terikat") {
+        hasUnbound = true;
       }
     });
-    return Array.from(years).sort().reverse();
+    const sorted = Array.from(years).sort().reverse();
+    if (hasUnbound) {
+      sorted.push("Tidak Terikat");
+    }
+    return sorted;
   }, [items]);
 
   // Filter items
