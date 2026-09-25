@@ -2,7 +2,6 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Archive,
   BookOpen,
-  Bug,
   ClipboardList,
   FileQuestion,
   GraduationCap,
@@ -14,7 +13,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { BugReportDialog } from "@/components/bug-report-dialog";
 import { GuruProLogo } from "@/components/gurupro-logo";
 import {
   AlertDialog,
@@ -62,7 +60,6 @@ export function AppSidebar() {
   const { isMobile, setOpenMobile } = useSidebar();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [confirmLogout, setConfirmLogout] = useState(false);
-  const [bugReportOpen, setBugReportOpen] = useState(false);
 
   const isTeacher = profile.role === "guru";
   const isStudent = profile.role === "siswa";
@@ -138,19 +135,6 @@ export function AppSidebar() {
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    tooltip="Laporkan Masalah"
-                    className="gap-3 text-sidebar-foreground/80 hover:text-amber-700"
-                    onClick={() => {
-                      closeOnMobile();
-                      setBugReportOpen(true);
-                    }}
-                  >
-                    <Bug className="h-4 w-4 shrink-0 text-amber-600" />
-                    <span className="truncate">Laporkan Masalah</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
                     tooltip="Log Out"
                     className="gap-3 text-sidebar-foreground/80"
                     onClick={() => {
@@ -209,7 +193,6 @@ export function AppSidebar() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <BugReportDialog open={bugReportOpen} onOpenChange={setBugReportOpen} />
     </>
   );
 }
