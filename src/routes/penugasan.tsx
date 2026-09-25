@@ -59,6 +59,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth-store";
@@ -78,6 +79,19 @@ import {
   saveAnswer,
   submitAssignment,
   TeacherSubmissionItem,
+  // Remedial methods and types
+  checkRemedialEligibility,
+  getMyRemedialSubmission,
+  startOrGetRemedialSubmission,
+  getRemedialSoalForSiswa,
+  getMyRemedialAnswers,
+  saveRemedialAnswer,
+  submitRemedialAssignment,
+  getTeacherRemedialSubmissions,
+  gradeRemedialSubmission,
+  PenugasanRemedialPengumpulan,
+  RemedialEligibility,
+  TeacherRemedialSubmissionItem,
 } from "@/lib/pengumpulan-store";
 import {
   closePenugasan,
@@ -198,6 +212,9 @@ function GuruPenugasanView() {
   const [judulInput, setJudulInput] = useState("");
   const [instruksiInput, setInstruksiInput] = useState("");
   const [deadlineInput, setDeadlineInput] = useState("");
+  const [kkmInput, setKkmInput] = useState<number>(75);
+  const [remedialEnabledInput, setRemedialEnabledInput] = useState<boolean>(false);
+  const [remedialPaketSoalIdInput, setRemedialPaketSoalIdInput] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -207,6 +224,9 @@ function GuruPenugasanView() {
     setJudulInput("");
     setInstruksiInput("");
     setDeadlineInput("");
+    setKkmInput(75);
+    setRemedialEnabledInput(false);
+    setRemedialPaketSoalIdInput("");
     setFormError("");
     setEditingPenugasan(null);
   };
@@ -222,6 +242,9 @@ function GuruPenugasanView() {
     setSelectedPaketSoalId(item.paketSoalId);
     setJudulInput(item.judul);
     setInstruksiInput(item.instruksi || "");
+    setKkmInput(item.kkm ?? 75);
+    setRemedialEnabledInput(Boolean(item.remedialEnabled));
+    setRemedialPaketSoalIdInput(item.remedialPaketSoalId || "");
 
     if (item.deadline) {
       const d = new Date(item.deadline);
@@ -259,9 +282,21 @@ function GuruPenugasanView() {
       setFormError("Judul penugasan wajib diisi.");
       return;
     }
+    if (remedialEnabledInput) {
+      if (!remedialPaketSoalIdInput) {
+        setFormError("Silakan pilih paket soal remedial dari bank soal.");
+        return;
+      }
+      if (remedialPaketSoalIdInput === selectedPaketSoalId) {
+        setFormError("Paket soal remedial harus berbeda dari paket soal utama.");
+        return;
+      }
+    }
 
     setSubmitting(true);
     setFormError("");
+
+    const cleanKkm = Math.min(100, Math.max(0, Number(kkmInput) || 75));
 
     try {
       if (editingPenugasan) {
@@ -272,6 +307,9 @@ function GuruPenugasanView() {
           kelasId: selectedKelasId,
           paketSoalId: selectedPaketSoalId,
           status,
+          kkm: cleanKkm,
+          remedialEnabled: remedialEnabledInput,
+          remedialPaketSoalId: remedialEnabledInput ? remedialPaketSoalIdInput : null,
         });
         if (!res.ok) {
           setFormError(res.message);
@@ -291,6 +329,9 @@ function GuruPenugasanView() {
           instruksi: instruksiInput,
           deadline: deadlineInput || null,
           status,
+          kkm: cleanKkm,
+          remedialEnabled: remedialEnabledInput,
+          remedialPaketSoalId: remedialEnabledInput ? remedialPaketSoalIdInput : null,
         });
         if (!res.ok) {
           setFormError(res.message);
@@ -496,6 +537,14 @@ function GuruPenugasanView() {
                           </Badge>
                         )}
                         {isClosed && <Badge variant="secondary">Ditutup</Badge>}
+                        <Badge variant="outline" className="border-primary/30 text-primary font-medium text-xs">
+                          KKM: {item.kkm ?? 75}
+                        </Badge>
+                        {item.remedialEnabled && (
+                          <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300 border border-purple-300 dark:border-purple-800 text-xs">
+                            Remedial Aktif
+                          </Badge>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -510,6 +559,12 @@ function GuruPenugasanView() {
                           {item.paketSoalJudul || "Paket Soal"}
                           {item.totalSoal ? ` (${item.totalSoal} butir)` : ""}
                         </span>
+                        {item.remedialEnabled && item.remedialPaketSoalJudul && (
+                          <span className="inline-flex items-center gap-1 text-purple-700 dark:text-purple-400 font-medium">
+                            <Sparkles className="h-3.5 w-3.5" />
+                            Remedial: {item.remedialPaketSoalJudul}
+                          </span>
+                        )}
                         {item.deadline && (
                           <span className="inline-flex items-center gap-1 text-accent">
                             <Calendar className="h-3.5 w-3.5" />
@@ -720,6 +775,92 @@ function GuruPenugasanView() {
                 value={instruksiInput}
                 onChange={(e) => setInstruksiInput(e.target.value)}
               />
+            </div>
+
+            {/* Konfigurasi KKM (Kriteria Ketuntasan Minimal) */}
+            <div className="grid gap-2">
+              <Label htmlFor="kkm-penugasan" className="flex items-center justify-between">
+                <span>
+                  KKM (Kriteria Ketuntasan Minimal) <span className="text-destructive">*</span>
+                </span>
+                <span className="text-[11px] text-muted-foreground font-normal">
+                  Skala 0 – 100 (Standar: 75)
+                </span>
+              </Label>
+              <Input
+                id="kkm-penugasan"
+                type="number"
+                min={0}
+                max={100}
+                value={kkmInput}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setKkmInput(isNaN(val) ? 0 : val);
+                }}
+                className="font-semibold"
+                placeholder="75"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Siswa dengan nilai di bawah KKM ini akan berhak mengikuti sesi remedial (jika diaktifkan).
+              </p>
+            </div>
+
+            {/* Konfigurasi Remedial Siswa (Guru-Controlled) */}
+            <div className="rounded-xl border p-4 bg-muted/20 space-y-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <Label htmlFor="remedial-toggle" className="text-xs font-semibold text-foreground cursor-pointer">
+                    Aktifkan Sesi Remedial
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Izinkan siswa dengan nilai akhir di bawah KKM ({kkmInput}) untuk mengerjakan paket soal remedial.
+                  </p>
+                </div>
+                <Switch
+                  id="remedial-toggle"
+                  checked={remedialEnabledInput}
+                  onCheckedChange={(checked) => {
+                    setRemedialEnabledInput(checked);
+                    if (!checked) {
+                      setRemedialPaketSoalIdInput("");
+                    }
+                  }}
+                />
+              </div>
+
+              {remedialEnabledInput && (
+                <div className="grid gap-2 pt-2 border-t">
+                  <Label htmlFor="pilih-paket-remedial" className="text-xs">
+                    Pilih Paket Soal Remedial <span className="text-destructive">*</span>
+                  </Label>
+                  {paketSoalList.filter((p) => p.id !== selectedPaketSoalId).length === 0 ? (
+                    <div className="rounded-lg border border-amber-500/30 bg-amber-50/50 p-2.5 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+                      Anda belum memiliki paket soal lain di bank soal. Buat paket soal tambahan terlebih dahulu di menu <strong>Soal</strong> untuk digunakan sebagai bahan remedial.
+                    </div>
+                  ) : (
+                    <Select
+                      value={remedialPaketSoalIdInput}
+                      onValueChange={setRemedialPaketSoalIdInput}
+                    >
+                      <SelectTrigger id="pilih-paket-remedial">
+                        <SelectValue placeholder="-- Pilih Paket Soal Remedial --" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {paketSoalList
+                          .filter((p) => p.id !== selectedPaketSoalId)
+                          .map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.judul} ({p.soal.length} butir)
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <p className="text-[11px] text-muted-foreground">
+                    Sesuai prinsip asesmen, soal remedial harus menggunakan paket soal berbeda dari paket soal utama dan diambil dari bank soal guru.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1155,6 +1296,386 @@ function TeacherGradingView({
   );
 }
 
+function TeacherRemedialGradingView({
+  penugasan,
+  submission,
+  remedialSubmission,
+  onBack,
+  onGraded,
+}: {
+  penugasan: Penugasan;
+  submission: TeacherSubmissionItem;
+  remedialSubmission: TeacherRemedialSubmissionItem;
+  onBack: () => void;
+  onGraded: (updated: TeacherRemedialSubmissionItem) => void;
+}) {
+  const [paketSoal, setPaketSoal] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [essayScores, setEssayScores] = useState<Record<string, number>>({});
+  const [essayNotes, setEssayNotes] = useState<Record<string, string>>({});
+  const [catatanGuru, setCatatanGuru] = useState<string>(remedialSubmission.catatanGuru || "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+
+    if (!penugasan.remedialPaketSoalId) {
+      setLoading(false);
+      return;
+    }
+
+    getTeacherPaketSoal(penugasan.remedialPaketSoalId)
+      .then((data) => {
+        if (!active) return;
+        setPaketSoal(data);
+
+        const scoresMap: Record<string, number> = {};
+        const notesMap: Record<string, string> = {};
+
+        remedialSubmission.jawabanList.forEach((j) => {
+          if (j.skor !== null && j.skor !== undefined) {
+            scoresMap[j.soalId] = Number(j.skor);
+          }
+          if (j.catatan) {
+            notesMap[j.soalId] = j.catatan;
+          }
+        });
+
+        setEssayScores(scoresMap);
+        setEssayNotes(notesMap);
+      })
+      .catch((err) => console.error("Gagal memuat paket soal remedial:", err))
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [penugasan.remedialPaketSoalId, remedialSubmission]);
+
+  const rawQuestions: any[] = paketSoal?.soal || [];
+  const totalQuestions = rawQuestions.length;
+  const weightPerQuestion = totalQuestions > 0 ? 100 / totalQuestions : 0;
+
+  const pgQuestions = rawQuestions.filter((q) => q.jenis === "Pilihan Ganda");
+  const essayQuestions = rawQuestions.filter((q) => q.jenis === "Esai");
+
+  const correctPgCount = pgQuestions.filter((q) => {
+    const studentAns = remedialSubmission.jawabanList.find((j) => j.soalId === q.id);
+    if (studentAns?.isCorrect !== null && studentAns?.isCorrect !== undefined) {
+      return studentAns.isCorrect;
+    }
+    if (!studentAns?.jawaban) return false;
+    const ans = studentAns.jawaban.trim().toLowerCase();
+    const key = String(q.kunci || "").trim().toLowerCase();
+    if (ans === key) return true;
+    if (key.length === 1 && ans.startsWith(key)) return true;
+    return false;
+  }).length;
+
+  const calculatedPgScore =
+    remedialSubmission.nilaiPg !== null
+      ? remedialSubmission.nilaiPg
+      : Math.round(correctPgCount * weightPerQuestion * 100) / 100;
+
+  const totalEssayScore = essayQuestions.reduce((acc, q) => {
+    return acc + (Number(essayScores[q.id]) || 0);
+  }, 0);
+
+  const calculatedFinalScore = Math.min(
+    100,
+    Math.max(0, Math.round((calculatedPgScore + totalEssayScore) * 100) / 100),
+  );
+
+  const handleScoreChange = (soalId: string, val: string, maxScore: number) => {
+    const num = parseFloat(val);
+    if (isNaN(num)) {
+      setEssayScores((prev) => ({ ...prev, [soalId]: 0 }));
+      return;
+    }
+    const clamped = Math.min(maxScore, Math.max(0, num));
+    setEssayScores((prev) => ({ ...prev, [soalId]: clamped }));
+  };
+
+  const handleNoteChange = (soalId: string, val: string) => {
+    setEssayNotes((prev) => ({ ...prev, [soalId]: val }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const detailJawaban = essayQuestions.map((q) => ({
+        soalId: q.id,
+        skor: Number(essayScores[q.id]) || 0,
+        catatan: essayNotes[q.id] || "",
+      }));
+
+      const res = await gradeRemedialSubmission(remedialSubmission.id, {
+        nilaiEssay: totalEssayScore,
+        catatanGuru: catatanGuru.trim(),
+        detailJawaban,
+      });
+
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+
+      toast.success("Penilaian remedial berhasil disimpan!");
+
+      onGraded({
+        ...remedialSubmission,
+        nilaiPg: calculatedPgScore,
+        nilaiEssay: totalEssayScore,
+        nilaiAkhir: res.nilaiAkhir,
+        statusPenilaian: "dinilai",
+        catatanGuru: catatanGuru.trim(),
+        gradedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Gagal menyimpan penilaian remedial.";
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="py-16 text-center text-sm text-muted-foreground">
+        <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
+        <p className="mt-2">Memuat lembar penilaian remedial siswa…</p>
+      </div>
+    );
+  }
+
+  const kkm = penugasan.kkm ?? 75;
+  const nilaiMurni = submission.nilaiAkhir ?? 0;
+  const nilaiAktif = Math.max(nilaiMurni, calculatedFinalScore);
+  const isTuntasRemedial = nilaiAktif >= kkm;
+
+  return (
+    <div className="space-y-4">
+      {/* Header Info Siswa & Tombol Kembali */}
+      <div className="flex items-center justify-between border-b pb-3">
+        <div>
+          <h4 className="font-display font-semibold text-navy flex items-center gap-2">
+            Penilaian Remedial: {submission.siswaNama}
+            <Badge className="bg-purple-600 text-white text-xs">Sesi Remedial</Badge>
+            {remedialSubmission.statusPenilaian === "dinilai" && (
+              <Badge className="bg-emerald-600 text-white text-xs">Sudah Dinilai</Badge>
+            )}
+          </h4>
+          <p className="text-xs text-muted-foreground">
+            NISN: {submission.siswaNisn || "—"} · Paket Remedial:{" "}
+            <strong>{penugasan.remedialPaketSoalJudul || "Paket Remedial"}</strong>
+            {remedialSubmission.submittedAt
+              ? ` · Dikumpulkan: ${formatDeadline(remedialSubmission.submittedAt)}`
+              : ""}
+          </p>
+        </div>
+        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={onBack}>
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Kembali ke Daftar
+        </Button>
+      </div>
+
+      {/* Perbandingan Nilai Murni vs Nilai Remedial */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-xl border bg-purple-50/30 dark:bg-purple-950/20 p-3 text-center">
+        <div className="rounded-lg bg-card p-2 border">
+          <p className="text-xs text-muted-foreground">KKM Target</p>
+          <p className="text-lg font-bold text-navy">{kkm}</p>
+          <p className="text-[10px] text-muted-foreground">Batas Kelulusan</p>
+        </div>
+        <div className="rounded-lg bg-card p-2 border">
+          <p className="text-xs text-muted-foreground">Nilai Murni (Asli)</p>
+          <p className="text-lg font-bold text-muted-foreground">{nilaiMurni}</p>
+          <p className="text-[10px] text-destructive">Tersimpan Permanen</p>
+        </div>
+        <div className="rounded-lg bg-purple-50 dark:bg-purple-900/30 p-2 border border-purple-200 dark:border-purple-800">
+          <p className="text-xs font-medium text-purple-700 dark:text-purple-300">Nilai Remedial</p>
+          <p className="text-2xl font-black text-purple-700 dark:text-purple-300">{calculatedFinalScore}</p>
+          <p className="text-[10px] text-muted-foreground">
+            (PG: {calculatedPgScore} + Esai: {totalEssayScore})
+          </p>
+        </div>
+        <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-2 border border-emerald-300 dark:border-emerald-800">
+          <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">Nilai Efektif</p>
+          <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{nilaiAktif}</p>
+          <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+            {isTuntasRemedial ? "✓ TUNTAS" : "BELUM TUNTAS"}
+          </p>
+        </div>
+      </div>
+
+      {/* Rincian Jawaban Soal Remedial */}
+      <div className="space-y-4 pt-1">
+        {rawQuestions.map((q, idx) => {
+          const studentAns = remedialSubmission.jawabanList.find((j) => j.soalId === q.id);
+          const isEssay = q.jenis === "Esai";
+          const maxPoinSoal = q.poin ? Number(q.poin) : Math.round(weightPerQuestion * 100) / 100;
+
+          if (isEssay) {
+            return (
+              <div key={q.id} className="rounded-xl border p-4 bg-card space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-xs text-purple-700 dark:text-purple-400 font-display">
+                    Soal Remedial #{idx + 1} · Esai
+                  </span>
+                  <Badge variant="outline" className="text-[11px]">
+                    Maks: {maxPoinSoal} poin
+                  </Badge>
+                </div>
+
+                <p className="text-xs font-medium text-navy whitespace-pre-wrap">{q.pertanyaan}</p>
+
+                {q.kunci && (
+                  <div className="rounded bg-muted/40 p-2.5 text-[11px] text-muted-foreground border border-dashed">
+                    <p className="font-semibold text-foreground mb-0.5">Panduan Rubrik Guru:</p>
+                    <p className="whitespace-pre-wrap">{q.kunci}</p>
+                  </div>
+                )}
+
+                <div className="rounded bg-muted/20 border p-3 text-xs space-y-1">
+                  <p className="font-semibold text-foreground text-[11px]">Jawaban Remedial Siswa:</p>
+                  {studentAns?.jawaban ? (
+                    <p className="whitespace-pre-wrap leading-relaxed">{studentAns.jawaban}</p>
+                  ) : (
+                    <p className="text-muted-foreground italic">(Siswa tidak mengisi jawaban)</p>
+                  )}
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-3 pt-1 border-t">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-foreground">
+                      Beri Skor (0 – {maxPoinSoal}):
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        step="0.5"
+                        min={0}
+                        max={maxPoinSoal}
+                        value={essayScores[q.id] ?? ""}
+                        placeholder="0"
+                        onChange={(e) => handleScoreChange(q.id, e.target.value, maxPoinSoal)}
+                        className="h-8 text-xs font-semibold w-24"
+                      />
+                      <span className="text-xs text-muted-foreground">/ {maxPoinSoal} poin</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-foreground">
+                      Catatan untuk butir ini (opsional):
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="Contoh: Pemahaman konsep remedial meningkat"
+                      value={essayNotes[q.id] ?? ""}
+                      onChange={(e) => handleNoteChange(q.id, e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          const isCorrect = studentAns?.isCorrect;
+          return (
+            <div key={q.id} className="rounded-xl border p-4 bg-muted/10 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-xs text-purple-700 dark:text-purple-400 font-display">
+                  Soal Remedial #{idx + 1} · Pilihan Ganda
+                </span>
+                {isCorrect ? (
+                  <Badge className="bg-emerald-600 text-white text-[11px] gap-1">
+                    <Check className="h-3 w-3" /> Benar (+{maxPoinSoal})
+                  </Badge>
+                ) : (
+                  <Badge variant="destructive" className="text-[11px] gap-1">
+                    <X className="h-3 w-3" /> Salah (0)
+                  </Badge>
+                )}
+              </div>
+
+              <p className="text-xs font-medium text-navy whitespace-pre-wrap">{q.pertanyaan}</p>
+
+              <div className="grid gap-1.5 text-xs">
+                <div className="flex items-start gap-2 text-[11px]">
+                  <span className="font-semibold text-foreground shrink-0 w-24">
+                    Jawaban Siswa:
+                  </span>
+                  <span
+                    className={
+                      isCorrect
+                        ? "text-emerald-700 dark:text-emerald-400 font-medium"
+                        : "text-destructive font-medium"
+                    }
+                  >
+                    {studentAns?.jawaban || "(Kosong / tidak dijawab)"}
+                  </span>
+                </div>
+                <div className="flex items-start gap-2 text-[11px]">
+                  <span className="font-semibold text-foreground shrink-0 w-24">
+                    Kunci Jawaban:
+                  </span>
+                  <span className="text-muted-foreground font-mono bg-muted/60 px-1.5 py-0.5 rounded">
+                    {q.kunci || "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Catatan Keseluruhan Guru untuk Remedial */}
+      <div className="space-y-1.5 pt-2 border-t">
+        <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+          <MessageSquare className="h-3.5 w-3.5 text-purple-600" />
+          Umpan Balik / Catatan Remedial untuk Siswa:
+        </label>
+        <Textarea
+          rows={3}
+          placeholder="Tuliskan umpan balik evaluasi remedial siswa…"
+          value={catatanGuru}
+          onChange={(e) => setCatatanGuru(e.target.value)}
+          className="text-xs leading-relaxed"
+        />
+      </div>
+
+      {/* Tombol Simpan Penilaian Remedial */}
+      <div className="flex items-center justify-end gap-2 pt-2 border-t">
+        <Button size="sm" variant="outline" onClick={onBack} disabled={saving}>
+          Batal
+        </Button>
+        <Button
+          size="sm"
+          className="bg-purple-600 hover:bg-purple-700 text-white gap-1.5 text-xs"
+          onClick={handleSave}
+          disabled={saving}
+        >
+          {saving ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Menyimpan…
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Simpan Penilaian Remedial
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function GuruSubmissionsModal({
   penugasan,
   onClose,
@@ -1163,23 +1684,40 @@ function GuruSubmissionsModal({
   onClose: () => void;
 }) {
   const [submissions, setSubmissions] = useState<TeacherSubmissionItem[]>([]);
+  const [remedialSubs, setRemedialSubs] = useState<Record<string, TeacherRemedialSubmissionItem>>({});
   const [loading, setLoading] = useState(true);
   const [inspectingItem, setInspectingItem] = useState<TeacherSubmissionItem | null>(null);
+  const [inspectingRemedialItem, setInspectingRemedialItem] = useState<{
+    sub: TeacherSubmissionItem;
+    remSub: TeacherRemedialSubmissionItem;
+  } | null>(null);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    getTeacherSubmissions(penugasan.id)
-      .then((items) => {
-        if (active) setSubmissions(items);
+
+    const promises: [Promise<TeacherSubmissionItem[]>, Promise<Record<string, TeacherRemedialSubmissionItem>>] = [
+      getTeacherSubmissions(penugasan.id),
+      penugasan.remedialEnabled && penugasan.remedialPaketSoalId
+        ? getTeacherRemedialSubmissions(penugasan.id)
+        : Promise.resolve({}),
+    ];
+
+    Promise.all(promises)
+      .then(([items, remMap]) => {
+        if (active) {
+          setSubmissions(items);
+          setRemedialSubs(remMap);
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
       });
+
     return () => {
       active = false;
     };
-  }, [penugasan.id]);
+  }, [penugasan.id, penugasan.remedialEnabled, penugasan.remedialPaketSoalId]);
 
   const submittedCount = submissions.filter((s) => s.status === "submitted").length;
   const gradedCount = submissions.filter((s) => s.statusPenilaian === "dinilai").length;
@@ -1219,7 +1757,18 @@ function GuruSubmissionsModal({
 
         {/* Konten detail pengumpulan atau inspeksi/penilaian siswa */}
         <div className="flex-1 overflow-y-auto pr-1">
-          {inspectingItem ? (
+          {inspectingRemedialItem ? (
+            <TeacherRemedialGradingView
+              penugasan={penugasan}
+              submission={inspectingRemedialItem.sub}
+              remedialSubmission={inspectingRemedialItem.remSub}
+              onBack={() => setInspectingRemedialItem(null)}
+              onGraded={(updatedRem) => {
+                setRemedialSubs((prev) => ({ ...prev, [updatedRem.siswaId]: updatedRem }));
+                setInspectingRemedialItem({ ...inspectingRemedialItem, remSub: updatedRem });
+              }}
+            />
+          ) : inspectingItem ? (
             <TeacherGradingView
               penugasan={penugasan}
               submission={inspectingItem}
@@ -1250,71 +1799,130 @@ function GuruSubmissionsModal({
                 const isSubmitted = sub.status === "submitted";
                 const isGraded = sub.statusPenilaian === "dinilai";
                 const needsGrading = isSubmitted && sub.statusPenilaian !== "dinilai";
+                const kkm = penugasan.kkm ?? 75;
+
+                const remSub = remedialSubs[sub.siswaId];
+                const hasRemedial = Boolean(remSub);
+                const isRemedialSubmitted = remSub?.status === "submitted";
+                const isRemedialGraded = remSub?.statusPenilaian === "dinilai";
+
+                const nilaiMurni = sub.nilaiAkhir;
+                const nilaiRemedial = remSub?.nilaiAkhir ?? null;
+                const nilaiAktif =
+                  nilaiRemedial !== null && nilaiMurni !== null
+                    ? Math.max(nilaiMurni, nilaiRemedial)
+                    : nilaiMurni;
+
+                const isTuntasMurni = nilaiMurni !== null && nilaiMurni >= kkm;
+                const isTuntasAkhir = nilaiAktif !== null && nilaiAktif >= kkm;
 
                 return (
                   <div
                     key={sub.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border p-3 hover:bg-muted/30 transition-colors"
+                    className="flex flex-col gap-3 rounded-lg border p-3 hover:bg-muted/30 transition-colors"
                   >
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-display font-semibold text-sm text-navy truncate">
-                          {sub.siswaNama}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-display font-semibold text-sm text-navy truncate">
+                            {sub.siswaNama}
+                          </p>
+                          <Badge variant="outline" className="text-[11px] border-primary/30 text-primary">
+                            KKM: {kkm}
+                          </Badge>
+                          {nilaiMurni !== null ? (
+                            <Badge
+                              className={`text-[11px] gap-1 ${
+                                isTuntasMurni ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground"
+                              }`}
+                            >
+                              <Award className="h-3 w-3" /> Murni: {nilaiMurni}
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-[11px]">
+                              {needsGrading ? "Perlu Dinilai" : "Murni: —"}
+                            </Badge>
+                          )}
+
+                          {/* Info Remedial jika ada */}
+                          {penugasan.remedialEnabled && (
+                            <>
+                              {hasRemedial ? (
+                                <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300 border border-purple-300 text-[11px]">
+                                  Remedial: {nilaiRemedial !== null ? nilaiRemedial : isRemedialSubmitted ? "Perlu Dinilai" : "Draf"}
+                                </Badge>
+                              ) : isTuntasMurni ? (
+                                <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 text-[10px]">
+                                  Tuntas Tanpa Remedial
+                                </Badge>
+                              ) : nilaiMurni !== null ? (
+                                <Badge variant="outline" className="border-amber-400 text-amber-700 bg-amber-50 dark:bg-amber-950/30 text-[10px]">
+                                  Belum Remedial
+                                </Badge>
+                              ) : null}
+
+                              {/* Nilai Aktif / Efektif Final */}
+                              {nilaiAktif !== null && (
+                                <Badge
+                                  className={`text-[11px] font-bold ${
+                                    isTuntasAkhir
+                                      ? "bg-emerald-600 text-white"
+                                      : "bg-destructive text-white"
+                                  }`}
+                                >
+                                  Nilai Akhir: {nilaiAktif} ({isTuntasAkhir ? "Tuntas" : "Belum Tuntas"})
+                                </Badge>
+                              )}
+                            </>
+                          )}
+                        </div>
+
+                        <p className="text-xs text-muted-foreground mt-1">
+                          NISN: {sub.siswaNisn || "—"} · {sub.jawabanCount} jawaban tersimpan
+                          {sub.submittedAt ? ` · Pengumpulan: ${formatDeadline(sub.submittedAt)}` : ""}
+                          {remSub?.submittedAt ? ` · Pengumpulan Remedial: ${formatDeadline(remSub.submittedAt)}` : ""}
                         </p>
-                        {isGraded && (
-                          <Badge className="bg-emerald-600 text-white text-[11px] gap-1">
-                            <Award className="h-3 w-3" /> Nilai: {sub.nilaiAkhir ?? 0}
-                          </Badge>
-                        )}
-                        {needsGrading && (
-                          <Badge
-                            variant="outline"
-                            className="border-amber-500 text-amber-700 bg-amber-50 dark:bg-amber-950/30 text-[11px]"
+                      </div>
+
+                      {/* Tombol Aksi Penilaian Tugas Utama & Remedial */}
+                      <div className="flex flex-wrap items-center gap-2 shrink-0 pt-2 sm:pt-0">
+                        {/* Aksi Tugas Utama */}
+                        <Button
+                          size="sm"
+                          variant={isSubmitted ? "default" : "outline"}
+                          className="gap-1.5 text-xs h-8"
+                          onClick={() => setInspectingItem(sub)}
+                        >
+                          {isSubmitted ? (
+                            <>
+                              <Edit3 className="h-3.5 w-3.5" />
+                              {isGraded ? "Tinjau Nilai Asli" : "Beri Nilai"}
+                            </>
+                          ) : (
+                            <>
+                              <Eye className="h-3.5 w-3.5" />
+                              Lihat Draf
+                            </>
+                          )}
+                        </Button>
+
+                        {/* Aksi Tugas Remedial (jika ada dan telah diserahkan/draf) */}
+                        {penugasan.remedialEnabled && remSub && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="gap-1.5 text-xs h-8 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800"
+                            onClick={() => setInspectingRemedialItem({ sub, remSub })}
                           >
-                            Perlu Dinilai
-                          </Badge>
-                        )}
-                        {sub.statusPenilaian === "belum_dinilai" && isSubmitted && (
-                          <Badge variant="secondary" className="text-[11px]">
-                            Belum Dinilai
-                          </Badge>
+                            <Sparkles className="h-3.5 w-3.5" />
+                            {isRemedialGraded
+                              ? "Tinjau Remedial"
+                              : isRemedialSubmitted
+                              ? "Beri Nilai Remedial"
+                              : "Lihat Draf Remedial"}
+                          </Button>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        NISN: {sub.siswaNisn || "—"} · {sub.jawabanCount} jawaban tersimpan
-                        {sub.submittedAt ? ` · ${formatDeadline(sub.submittedAt)}` : ""}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0">
-                      {isSubmitted ? (
-                        <Badge className="bg-emerald-600 text-white text-xs">Terkumpul</Badge>
-                      ) : (
-                        <Badge
-                          variant="outline"
-                          className="border-amber-500 text-amber-600 text-xs"
-                        >
-                          Draf
-                        </Badge>
-                      )}
-                      <Button
-                        size="sm"
-                        variant={isSubmitted ? "default" : "outline"}
-                        className="gap-1.5 text-xs h-8"
-                        onClick={() => setInspectingItem(sub)}
-                      >
-                        {isSubmitted ? (
-                          <>
-                            <Edit3 className="h-3.5 w-3.5" />
-                            {isGraded ? "Tinjau Nilai" : "Beri Nilai"}
-                          </>
-                        ) : (
-                          <>
-                            <Eye className="h-3.5 w-3.5" />
-                            Lihat Draf
-                          </>
-                        )}
-                      </Button>
                     </div>
                   </div>
                 );
@@ -1438,6 +2046,14 @@ function SiswaPenugasanView() {
                             Tersedia
                           </Badge>
                         )}
+                        <Badge variant="outline" className="border-primary/30 text-primary font-medium text-xs">
+                          KKM: {item.kkm ?? 75}
+                        </Badge>
+                        {item.remedialEnabled && (
+                          <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300 border border-purple-300 text-xs">
+                            Sesi Remedial Tersedia
+                          </Badge>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground pt-0.5">
@@ -1503,12 +2119,460 @@ function SiswaPenugasanView() {
 }
 
 // ==========================================
-// 4. TAMPILAN PENGERJAAN TUGAS SISWA (SUBMISSION)
+// 4. TAMPILAN PENGERJAAN REMEDIAL SISWA
+// ==========================================
+
+function SiswaRemedialPengerjaanView({
+  penugasan,
+  originalSubmission,
+  onBack,
+}: {
+  penugasan: Penugasan;
+  originalSubmission: PenugasanPengumpulan;
+  onBack: () => void;
+}) {
+  const [soalList, setSoalList] = useState<SanitizedSoal[]>([]);
+  const [remedialSub, setRemedialSub] = useState<PenugasanRemedialPengumpulan | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [savingStatus, setSavingStatus] = useState<"saved" | "saving" | "error">("saved");
+  const [submittingFinal, setSubmittingFinal] = useState(false);
+  const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
+
+  const isSubmitted = remedialSub?.status === "submitted";
+  const isReadOnly = isSubmitted;
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+
+    Promise.all([
+      getRemedialSoalForSiswa(penugasan.id),
+      startOrGetRemedialSubmission(penugasan.id),
+    ])
+      .then(async ([soal, remRes]) => {
+        if (!active) return;
+        setSoalList(soal);
+
+        if (remRes.ok) {
+          setRemedialSub(remRes.submission);
+          const savedAnswers = await getMyRemedialAnswers(remRes.submission.id);
+          if (active) {
+            const map: Record<string, string> = {};
+            savedAnswers.forEach((a) => {
+              if (a.jawaban !== null) {
+                map[a.soalId] = a.jawaban;
+              }
+            });
+            setAnswers(map);
+          }
+        } else {
+          toast.error(remRes.message);
+        }
+      })
+      .catch((err) => {
+        console.error("[Remedial] Gagal memuat data:", err);
+        toast.error("Gagal memuat tugas remedial.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [penugasan.id]);
+
+  const handleAnswerChange = async (soalId: string, val: string) => {
+    if (isReadOnly || !remedialSub) return;
+
+    setAnswers((prev) => ({ ...prev, [soalId]: val }));
+    setSavingStatus("saving");
+
+    try {
+      const res = await saveRemedialAnswer(remedialSub.id, soalId, val);
+      if (res.ok) {
+        setSavingStatus("saved");
+      } else {
+        setSavingStatus("error");
+        toast.error(res.message);
+      }
+    } catch {
+      setSavingStatus("error");
+    }
+  };
+
+  const handleSaveDraftManual = async () => {
+    if (!remedialSub || isReadOnly) return;
+    setSavingStatus("saving");
+    try {
+      for (const [sId, ans] of Object.entries(answers)) {
+        await saveRemedialAnswer(remedialSub.id, sId, ans);
+      }
+      setSavingStatus("saved");
+      toast.success("Draf jawaban remedial berhasil disimpan.");
+    } catch {
+      setSavingStatus("error");
+      toast.error("Gagal menyimpan draf remedial.");
+    }
+  };
+
+  const handleConfirmSubmit = async () => {
+    if (!remedialSub || isReadOnly) return;
+
+    setSubmittingFinal(true);
+    try {
+      for (const [sId, ans] of Object.entries(answers)) {
+        await saveRemedialAnswer(remedialSub.id, sId, ans);
+      }
+
+      const res = await submitRemedialAssignment(remedialSub.id);
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+
+      const updated = await getMyRemedialSubmission(penugasan.id);
+      if (updated) {
+        setRemedialSub(updated);
+      } else {
+        setRemedialSub((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "submitted",
+                submittedAt: res.submittedAt,
+                nilaiAkhir: res.nilaiAkhir,
+                statusPenilaian: res.statusPenilaian as any,
+              }
+            : null,
+        );
+      }
+
+      setConfirmSubmitOpen(false);
+      toast.success("Tugas remedial berhasil dikumpulkan!");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Gagal mengumpulkan tugas remedial.";
+      toast.error(msg);
+    } finally {
+      setSubmittingFinal(false);
+    }
+  };
+
+  const answeredCount = Object.values(answers).filter((v) => v && v.trim().length > 0).length;
+  const unansweredCount = Math.max(0, soalList.length - answeredCount);
+
+  const kkm = penugasan.kkm ?? 75;
+  const nilaiMurni = originalSubmission.nilaiAkhir ?? 0;
+  const nilaiRemedial = remedialSub?.nilaiAkhir ?? null;
+  const nilaiAktif =
+    nilaiRemedial !== null ? Math.max(nilaiMurni, nilaiRemedial) : nilaiMurni;
+  const isTuntas = nilaiAktif >= kkm;
+
+  return (
+    <div className="grid gap-6 max-w-4xl mx-auto">
+      {/* Header Navigasi */}
+      <div className="flex items-center justify-between gap-4">
+        <Button variant="ghost" size="sm" onClick={onBack} className="gap-2">
+          <ArrowLeft className="h-4 w-4" />
+          Kembali ke Tugas Utama
+        </Button>
+
+        {!isReadOnly && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {savingStatus === "saving" && (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-600" />
+                <span>Menyimpan ke cloud…</span>
+              </>
+            )}
+            {savingStatus === "saved" && (
+              <>
+                <CheckCircle2 className="h-3.5 w-3.5 text-purple-600" />
+                <span className="text-purple-600 font-medium">Tersimpan di cloud</span>
+              </>
+            )}
+            {savingStatus === "error" && (
+              <>
+                <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                <span className="text-destructive font-medium">Gagal menyimpan</span>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Ringkasan Skor Komparatif Siswa (Permanen & Transparan) */}
+      <div className="rounded-xl border border-purple-300 bg-gradient-to-br from-purple-50/60 via-card to-purple-100/30 dark:from-purple-950/40 dark:via-card dark:to-purple-900/20 p-5 space-y-4 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-purple-600" />
+              <h4 className="font-display font-bold text-base text-purple-950 dark:text-purple-100">
+                Sesi Remedial: {penugasan.judul}
+              </h4>
+              <Badge className="bg-purple-600 text-white text-xs">Remedial</Badge>
+            </div>
+            <p className="text-xs text-purple-800 dark:text-purple-300">
+              Paket Soal Remedial: <strong>{penugasan.remedialPaketSoalJudul || "Paket Remedial"}</strong> · Nilai murni Anda tetap dipertahankan permanen.
+            </p>
+          </div>
+
+          <div className="flex items-baseline gap-2 rounded-xl bg-card px-4 py-2.5 border shadow-xs self-start sm:self-auto">
+            <span className="text-xs text-muted-foreground font-medium">Nilai Akhir Terhitung:</span>
+            <span
+              className={`font-display font-black text-2xl ${
+                isTuntas ? "text-emerald-600" : "text-amber-600"
+              }`}
+            >
+              {nilaiAktif}
+            </span>
+            <span className="text-xs text-muted-foreground font-semibold">/ 100</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 border-t border-purple-200 dark:border-purple-800 text-center">
+          <div className="rounded-lg bg-card p-2 border">
+            <span className="text-[11px] text-muted-foreground block">KKM Target</span>
+            <span className="font-bold text-navy text-sm">{kkm}</span>
+          </div>
+          <div className="rounded-lg bg-card p-2 border">
+            <span className="text-[11px] text-muted-foreground block">Nilai Murni (Asli)</span>
+            <span className="font-bold text-foreground text-sm">{nilaiMurni}</span>
+            <span className="text-[10px] text-muted-foreground block">(Tersimpan)</span>
+          </div>
+          <div className="rounded-lg bg-purple-50 dark:bg-purple-900/30 p-2 border border-purple-200 dark:border-purple-800">
+            <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 block">
+              Nilai Remedial
+            </span>
+            <span className="font-extrabold text-purple-700 dark:text-purple-300 text-sm">
+              {nilaiRemedial !== null
+                ? nilaiRemedial
+                : isSubmitted
+                ? "Menunggu Nilai"
+                : "Belum Selesai"}
+            </span>
+          </div>
+          <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-2 border border-emerald-300 dark:border-emerald-800">
+            <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 block">
+              Status Capaian
+            </span>
+            <span
+              className={`font-black text-xs block mt-0.5 ${
+                isTuntas ? "text-emerald-600" : "text-amber-600"
+              }`}
+            >
+              {isTuntas ? "✓ TUNTAS" : "BELUM TUNTAS"}
+            </span>
+          </div>
+        </div>
+
+        {remedialSub?.catatanGuru && (
+          <div className="rounded-lg bg-card p-3 border space-y-1 text-xs">
+            <p className="font-semibold text-navy flex items-center gap-1.5">
+              <MessageSquare className="h-3.5 w-3.5 text-purple-600" />
+              Catatan & Saran Remedial Guru:
+            </p>
+            <p className="text-muted-foreground whitespace-pre-wrap leading-relaxed">
+              {remedialSub.catatanGuru}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Daftar Butir Soal Remedial */}
+      {loading ? (
+        <div className="py-16 text-center text-sm text-muted-foreground">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-purple-600" />
+          <p className="mt-3">Memuat soal-soal sesi remedial…</p>
+        </div>
+      ) : soalList.length === 0 ? (
+        <Card className="py-12 text-center">
+          <CardContent>
+            <HelpCircle className="mx-auto h-8 w-8 text-muted-foreground/40" />
+            <p className="mt-2 font-display text-base font-semibold text-navy">
+              Butir soal remedial belum tersedia
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Silakan hubungi guru pengampu untuk memastikan paket soal remedial telah disiapkan.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {soalList.map((s, index) => {
+            const currentAnswer = answers[s.id] || "";
+            const isFilled = currentAnswer.trim().length > 0;
+
+            return (
+              <Card
+                key={s.id}
+                className={`transition-all ${
+                  isFilled ? "border-purple-300 shadow-xs" : "border-border"
+                }`}
+              >
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 font-display text-sm font-bold text-purple-700 dark:text-purple-400">
+                      Soal Remedial #{index + 1}
+                    </span>
+                    <Badge variant="secondary" className="text-[11px]">
+                      {s.jenis}
+                    </Badge>
+                  </div>
+                  <p className="font-medium text-sm text-navy pt-1 leading-relaxed whitespace-pre-wrap">
+                    {s.pertanyaan}
+                  </p>
+                </CardHeader>
+                <CardContent className="pt-2">
+                  {s.jenis === "Pilihan Ganda" ? (
+                    <div className="grid gap-2">
+                      {s.opsi.map((opsi, oIdx) => {
+                        const optionLabel =
+                          opsi.match(/^[A-E]\./i) !== null
+                            ? opsi
+                            : `${String.fromCharCode(65 + oIdx)}. ${opsi}`;
+                        const isSelected = currentAnswer === optionLabel || currentAnswer === opsi;
+
+                        return (
+                          <button
+                            key={oIdx}
+                            type="button"
+                            disabled={isReadOnly}
+                            onClick={() => handleAnswerChange(s.id, optionLabel)}
+                            className={`flex items-start gap-3 rounded-lg border p-3 text-left text-xs transition-all ${
+                              isSelected
+                                ? "border-purple-600 bg-purple-50 dark:bg-purple-950/40 font-medium text-purple-900 dark:text-purple-200 shadow-xs"
+                                : "hover:border-purple-300 hover:bg-muted/40 text-foreground"
+                            } ${isReadOnly ? "cursor-default opacity-80" : "cursor-pointer"}`}
+                          >
+                            <span
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] ${
+                                isSelected
+                                  ? "border-purple-600 bg-purple-600 text-white font-bold"
+                                  : "border-muted-foreground/40 text-muted-foreground"
+                              }`}
+                            >
+                              {String.fromCharCode(65 + oIdx)}
+                            </span>
+                            <span className="flex-1 leading-relaxed">{opsi}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Textarea
+                        rows={4}
+                        disabled={isReadOnly}
+                        placeholder={
+                          isReadOnly
+                            ? "(Jawaban telah terkunci)"
+                            : "Tuliskan uraian jawaban remedial Anda di sini…"
+                        }
+                        value={currentAnswer}
+                        onChange={(e) => handleAnswerChange(s.id, e.target.value)}
+                        className="text-xs leading-relaxed"
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Tombol Aksi Pengumpulan Remedial */}
+      {!isReadOnly && soalList.length > 0 && (
+        <Card className="sticky bottom-4 border-purple-300 shadow-lg bg-card/95 backdrop-blur">
+          <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4">
+            <div className="text-xs text-muted-foreground">
+              <span>Status Remedial: </span>
+              <strong>{answeredCount}</strong> dari {soalList.length} soal telah dijawab.
+              {unansweredCount > 0 && (
+                <span className="text-amber-600 block sm:inline sm:ml-1">
+                  ({unansweredCount} belum terisi)
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleSaveDraftManual}
+                className="gap-1.5 text-xs font-medium"
+              >
+                <Save className="h-3.5 w-3.5" />
+                Simpan Draf Remedial
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setConfirmSubmitOpen(true)}
+                disabled={submittingFinal}
+                className="gap-1.5 text-xs font-medium bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                {submittingFinal ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                )}
+                Kumpulkan Tugas Remedial
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Dialog Konfirmasi Submit Remedial */}
+      <AlertDialog open={confirmSubmitOpen} onOpenChange={setConfirmSubmitOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kumpulkan Lembar Remedial?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-xs text-muted-foreground">
+                <p>
+                  Setelah tugas remedial dikumpulkan, jawaban akan terkunci dan diproses untuk penilaian.
+                  Nilai murni awal Anda ({originalSubmission.nilaiAkhir ?? 0}) tetap dipertahankan.
+                </p>
+                {unansweredCount > 0 && (
+                  <p className="text-amber-600 font-medium">
+                    Perhatian: Masih terdapat {unansweredCount} butir soal remedial yang belum Anda jawab.
+                  </p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submittingFinal}>Periksa Lagi</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={submittingFinal}
+              className="bg-purple-600 text-white hover:bg-purple-700"
+              onClick={handleConfirmSubmit}
+            >
+              {submittingFinal ? "Mengumpulkan…" : "Ya, Kumpulkan Remedial"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+// ==========================================
+// 5. TAMPILAN PENGERJAAN TUGAS UTAMA SISWA (SUBMISSION)
 // ==========================================
 
 function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBack: () => void }) {
   const [soalList, setSoalList] = useState<SanitizedSoal[]>([]);
   const [submission, setSubmission] = useState<PenugasanPengumpulan | null>(null);
+  const [remedialEligibility, setRemedialEligibility] = useState<RemedialEligibility | null>(null);
+  const [remedialSub, setRemedialSub] = useState<PenugasanRemedialPengumpulan | null>(null);
+  const [viewingRemedialMode, setViewingRemedialMode] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [savingStatus, setSavingStatus] = useState<"saved" | "saving" | "error">("saved");
@@ -1520,6 +2584,16 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
   const isClosed = penugasan.status === "closed" || isDeadlinePassed;
   const isSubmitted = submission?.status === "submitted";
   const isReadOnly = isSubmitted || isClosed;
+
+  const refreshRemedialState = async () => {
+    if (!penugasan.remedialEnabled) return;
+    const [rSub, el] = await Promise.all([
+      getMyRemedialSubmission(penugasan.id),
+      checkRemedialEligibility(penugasan.id),
+    ]);
+    setRemedialSub(rSub);
+    setRemedialEligibility(el);
+  };
 
   // Inisialisasi data: Ambil soal & pengumpulan siswa
   useEffect(() => {
@@ -1542,6 +2616,16 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
         }
 
         setSubmission(currentSub);
+
+        // Jika penugasan remedial aktif, periksa submission & kelayakan remedial siswa
+        if (penugasan.remedialEnabled) {
+          void getMyRemedialSubmission(penugasan.id).then((rSub) => {
+            if (active) setRemedialSub(rSub);
+          });
+          void checkRemedialEligibility(penugasan.id).then((el) => {
+            if (active) setRemedialEligibility(el);
+          });
+        }
 
         // Jika ada pengumpulan, ambil jawaban tersimpan
         if (currentSub) {
@@ -1666,6 +2750,19 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
   const answeredCount = Object.values(answers).filter((v) => v && v.trim().length > 0).length;
   const unansweredCount = Math.max(0, soalList.length - answeredCount);
 
+  if (viewingRemedialMode && submission) {
+    return (
+      <SiswaRemedialPengerjaanView
+        penugasan={penugasan}
+        originalSubmission={submission}
+        onBack={() => {
+          setViewingRemedialMode(false);
+          void refreshRemedialState();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="grid gap-6 max-w-4xl mx-auto">
       {/* Header Navigasi */}
@@ -1723,7 +2820,7 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
                 </div>
 
                 <div className="flex items-baseline gap-1.5 rounded-xl bg-card px-4 py-2.5 border shadow-xs self-start sm:self-auto">
-                  <span className="text-xs text-muted-foreground font-medium">Nilai Akhir:</span>
+                  <span className="text-xs text-muted-foreground font-medium">Nilai Murni:</span>
                   <span className="font-display font-extrabold text-2xl text-emerald-600">
                     {submission.nilaiAkhir ?? 0}
                   </span>
@@ -1731,20 +2828,40 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
                 </div>
               </div>
 
-              {/* Rincian Skor */}
-              <div className="grid grid-cols-2 gap-3 pt-1 border-t border-emerald-500/20 text-xs">
-                <div className="rounded-lg bg-card/70 p-2.5 border">
+              {/* Rincian Skor & KKM */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 border-t border-emerald-500/20 text-xs">
+                <div className="rounded-lg bg-card/70 p-2.5 border text-center">
+                  <span className="text-muted-foreground block text-[11px]">KKM Target</span>
+                  <span className="font-bold text-foreground text-sm">
+                    {penugasan.kkm ?? 75}
+                  </span>
+                </div>
+                <div className="rounded-lg bg-card/70 p-2.5 border text-center">
                   <span className="text-muted-foreground block text-[11px]">
-                    Skor Pilihan Ganda (Auto)
+                    Skor Pilihan Ganda
                   </span>
                   <span className="font-bold text-foreground text-sm">
                     {submission.nilaiPg !== null ? `${submission.nilaiPg}` : "—"}
                   </span>
                 </div>
-                <div className="rounded-lg bg-card/70 p-2.5 border">
-                  <span className="text-muted-foreground block text-[11px]">Skor Esai (Guru)</span>
+                <div className="rounded-lg bg-card/70 p-2.5 border text-center">
+                  <span className="text-muted-foreground block text-[11px]">Skor Esai</span>
                   <span className="font-bold text-foreground text-sm">
                     {submission.nilaiEssay !== null ? `${submission.nilaiEssay}` : "—"}
+                  </span>
+                </div>
+                <div className="rounded-lg bg-card/70 p-2.5 border text-center">
+                  <span className="text-muted-foreground block text-[11px]">Status Murni</span>
+                  <span
+                    className={`font-bold text-xs block mt-0.5 ${
+                      (submission.nilaiAkhir ?? 0) >= (penugasan.kkm ?? 75)
+                        ? "text-emerald-600"
+                        : "text-amber-600"
+                    }`}
+                  >
+                    {(submission.nilaiAkhir ?? 0) >= (penugasan.kkm ?? 75)
+                      ? "✓ TUNTAS"
+                      : "BELUM TUNTAS"}
                   </span>
                 </div>
               </div>
@@ -1761,6 +2878,94 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
                   </p>
                 </div>
               )}
+
+              {/* Bagian Remedial Guru-Controlled */}
+              {penugasan.remedialEnabled ? (
+                <div className="rounded-xl border border-purple-200 bg-purple-50/50 dark:bg-purple-950/30 dark:border-purple-800 p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-purple-600" />
+                        <h5 className="font-semibold text-sm text-purple-950 dark:text-purple-100">
+                          Sesi Remedial (Guru-Controlled)
+                        </h5>
+                        {remedialSub && (
+                          <Badge className="bg-purple-600 text-white text-[10px]">
+                            {remedialSub.status === "submitted"
+                              ? remedialSub.statusPenilaian === "dinilai"
+                                ? "Telah Dinilai"
+                                : "Menunggu Nilai"
+                              : "Sedang Dikerjakan"}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-purple-800 dark:text-purple-300">
+                        {remedialSub
+                          ? `Nilai Murni Anda (${submission.nilaiAkhir ?? 0}) tetap dipertahankan. Nilai remedial akan digunakan sebagai pembanding capaian.`
+                          : (submission.nilaiAkhir ?? 0) < (penugasan.kkm ?? 75)
+                          ? `Nilai murni Anda belum mencapai KKM (${penugasan.kkm ?? 75}). Guru telah menyediakan sesi remedial untuk penugasan ini.`
+                          : `Nilai murni Anda telah memenuhi batas KKM (${penugasan.kkm ?? 75}).`}
+                      </p>
+                    </div>
+
+                    {/* Tombol ke Remedial */}
+                    {remedialSub ? (
+                      <Button
+                        size="sm"
+                        className="bg-purple-600 hover:bg-purple-700 text-white gap-2 font-medium shrink-0"
+                        onClick={() => setViewingRemedialMode(true)}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        {remedialSub.status === "submitted"
+                          ? "Lihat Hasil Remedial"
+                          : "Lanjutkan Pengerjaan Remedial"}
+                      </Button>
+                    ) : (submission.nilaiAkhir ?? 0) < (penugasan.kkm ?? 75) ? (
+                      <Button
+                        size="sm"
+                        className="bg-purple-600 hover:bg-purple-700 text-white gap-2 font-medium shrink-0"
+                        onClick={() => setViewingRemedialMode(true)}
+                      >
+                        <Edit3 className="h-4 w-4" />
+                        Mulai Kerjakan Remedial
+                      </Button>
+                    ) : (
+                      <Badge variant="outline" className="border-emerald-400 text-emerald-700 bg-emerald-50 text-xs">
+                        Tuntas Tanpa Remedial
+                      </Badge>
+                    )}
+                  </div>
+
+                  {remedialSub && remedialSub.nilaiAkhir !== null && (
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-purple-200 dark:border-purple-800 text-center text-xs">
+                      <div className="rounded-lg bg-card p-2 border">
+                        <span className="text-[11px] text-muted-foreground block">Nilai Murni</span>
+                        <span className="font-bold text-foreground">{submission.nilaiAkhir ?? 0}</span>
+                      </div>
+                      <div className="rounded-lg bg-purple-100/60 dark:bg-purple-900/40 p-2 border border-purple-300">
+                        <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 block">
+                          Nilai Remedial
+                        </span>
+                        <span className="font-extrabold text-purple-700 dark:text-purple-300">
+                          {remedialSub.nilaiAkhir}
+                        </span>
+                      </div>
+                      <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-2 border border-emerald-300">
+                        <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 block">
+                          Nilai Akhir
+                        </span>
+                        <span className="font-black text-emerald-700 dark:text-emerald-400">
+                          {Math.max(submission.nilaiAkhir ?? 0, remedialSub.nilaiAkhir)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (submission.nilaiAkhir ?? 0) < (penugasan.kkm ?? 75) ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300 dark:border-amber-800">
+                  Nilai Anda di bawah KKM ({penugasan.kkm ?? 75}). Sesi remedial tidak diaktifkan oleh guru untuk tugas ini sehingga nilai murni ({submission.nilaiAkhir ?? 0}) tetap digunakan sebagai nilai akhir.
+                </div>
+              ) : null}
             </div>
           ) : submission?.statusPenilaian === "perlu_penilaian_manual" ? (
             <div className="rounded-xl border border-amber-500/40 bg-gradient-to-br from-amber-50 to-amber-100/30 p-4 dark:from-amber-950/40 dark:to-amber-900/20 flex items-start gap-3">

@@ -5,6 +5,8 @@ export interface PenugasanColumnItem {
   judul: string;
   deadline: string | null;
   status: "draft" | "published" | "closed";
+  kkm: number;
+  remedialEnabled: boolean;
 }
 
 export interface SiswaPenugasanNilai {
@@ -17,6 +19,15 @@ export interface SiswaPenugasanNilai {
   catatanGuru: string | null;
   submittedAt: string | null;
   gradedAt: string | null;
+  // KKM & Remedial fields
+  kkm: number;
+  nilaiMurni: number | null;
+  nilaiRemedial: number | null;
+  nilaiAktif: number | null;
+  remedialPengumpulanId?: string | null;
+  statusRemedial?: "tidak_ada" | "belum_mengambil" | "draft" | "submitted" | "dinilai" | null;
+  catatanRemedial?: string | null;
+  isTuntas?: boolean;
 }
 
 export interface SiswaRekapRow {
@@ -58,6 +69,16 @@ export interface SiswaRiwayatNilaiItem {
   nilaiAkhir: number | null;
   catatanGuru: string | null;
   gradedAt: string | null;
+  // KKM & Remedial
+  kkm: number;
+  remedialEnabled: boolean;
+  nilaiMurni: number | null;
+  nilaiRemedial: number | null;
+  nilaiAktif: number | null;
+  remedialPengumpulanId?: string | null;
+  statusRemedial?: "tidak_ada" | "belum_mengambil" | "draft" | "submitted" | "dinilai" | null;
+  isTuntas: boolean;
+  catatanRemedial?: string | null;
 }
 
 /**
@@ -166,7 +187,7 @@ export async function getKelasRekapData(kelasId: string): Promise<KelasRekapData
   // 3. Ambil seluruh penugasan untuk kelas ini (published & closed)
   const { data: tugasList, error: tugasErr } = await supabase
     .from("penugasan")
-    .select("id, judul, deadline, status, created_at")
+    .select("id, judul, deadline, status, created_at, kkm, remedial_enabled")
     .eq("kelas_id", kelasId)
     .in("status", ["published", "closed"])
     .order("created_at", { ascending: true });
@@ -182,28 +203,49 @@ export async function getKelasRekapData(kelasId: string): Promise<KelasRekapData
     judul: t.judul,
     deadline: t.deadline,
     status: t.status as "draft" | "published" | "closed",
+    kkm: Number((t as any).kkm ?? 75),
+    remedialEnabled: Boolean((t as any).remedial_enabled),
   }));
 
   const assignmentIds = daftarPenugasan.map((p) => p.id);
 
-  // 4. Ambil seluruh pengumpulan untuk penugasan-penugasan kelas ini
+  // 4. Ambil seluruh pengumpulan (utama & remedial) untuk penugasan-penugasan kelas ini
   let pengumpulanMap: Record<string, any> = {};
-  if (assignmentIds.length > 0) {
-    const { data: submissions, error: subErr } = await supabase
-      .from("penugasan_pengumpulan")
-      .select(
-        "id, penugasan_id, siswa_id, status, submitted_at, nilai_pg, nilai_essay, nilai_akhir, status_penilaian, catatan_guru, graded_at",
-      )
-      .in("penugasan_id", assignmentIds);
+  let remedialMap: Record<string, any> = {};
 
-    if (subErr) {
-      console.warn("[RekapStore] Gagal memuat pengumpulan:", subErr.message);
-      throw new Error(`Gagal memuat pengumpulan siswa: ${subErr.message}`);
-    } else if (Array.isArray(submissions)) {
-      for (const sub of submissions) {
+  if (assignmentIds.length > 0) {
+    const [subRes, remRes] = await Promise.all([
+      supabase
+        .from("penugasan_pengumpulan")
+        .select(
+          "id, penugasan_id, siswa_id, status, submitted_at, nilai_pg, nilai_essay, nilai_akhir, status_penilaian, catatan_guru, graded_at",
+        )
+        .in("penugasan_id", assignmentIds),
+      supabase
+        .from("penugasan_remedial_pengumpulan")
+        .select(
+          "id, penugasan_id, siswa_id, status, submitted_at, nilai_pg, nilai_essay, nilai_akhir, status_penilaian, catatan_guru, graded_at",
+        )
+        .in("penugasan_id", assignmentIds),
+    ]);
+
+    if (subRes.error) {
+      console.warn("[RekapStore] Gagal memuat pengumpulan:", subRes.error.message);
+      throw new Error(`Gagal memuat pengumpulan siswa: ${subRes.error.message}`);
+    } else if (Array.isArray(subRes.data)) {
+      for (const sub of subRes.data) {
         if (sub && sub.penugasan_id && sub.siswa_id) {
           const key = `${sub.penugasan_id}:${sub.siswa_id}`;
           pengumpulanMap[key] = sub;
+        }
+      }
+    }
+
+    if (Array.isArray(remRes.data)) {
+      for (const rem of remRes.data) {
+        if (rem && rem.penugasan_id && rem.siswa_id) {
+          const key = `${rem.penugasan_id}:${rem.siswa_id}`;
+          remedialMap[key] = rem;
         }
       }
     }
@@ -219,12 +261,37 @@ export async function getKelasRekapData(kelasId: string): Promise<KelasRekapData
 
     for (const tugas of daftarPenugasan) {
       const sub = pengumpulanMap[`${tugas.id}:${siswa.siswaId}`];
+      const rem = remedialMap[`${tugas.id}:${siswa.siswaId}`];
+
       if (sub) {
         const isGraded = sub.status_penilaian === "dinilai" && sub.nilai_akhir !== null;
-        const nilaiAkhirNum = isGraded ? Number(sub.nilai_akhir) : null;
+        const nilaiMurni = isGraded ? Number(sub.nilai_akhir) : null;
 
-        if (isGraded) {
-          gradedScores.push(nilaiAkhirNum);
+        const isRemGraded = rem && rem.status_penilaian === "dinilai" && rem.nilai_akhir !== null;
+        const nilaiRemedial = isRemGraded ? Number(rem.nilai_akhir) : null;
+
+        // Nilai Aktif: jika ada nilai remedial dinilai, pakai remedial; selain itu nilai murni
+        const nilaiAktif = nilaiRemedial !== null ? nilaiRemedial : nilaiMurni;
+
+        let statusRemedial: SiswaPenugasanNilai["statusRemedial"] = "tidak_ada";
+        if (tugas.remedialEnabled) {
+          if (!rem) {
+            statusRemedial = (nilaiMurni !== null && nilaiMurni < tugas.kkm && sub.status_penilaian === "dinilai")
+              ? "belum_mengambil"
+              : "tidak_ada";
+          } else if (rem.status === "draft") {
+            statusRemedial = "draft";
+          } else if (rem.status_penilaian === "dinilai") {
+            statusRemedial = "dinilai";
+          } else {
+            statusRemedial = "submitted";
+          }
+        }
+
+        const isTuntas = nilaiAktif !== null ? nilaiAktif >= tugas.kkm : false;
+
+        if (nilaiAktif !== null) {
+          gradedScores.push(nilaiAktif);
           totalTugasDinilai++;
           totalSubmissionsDinilai++;
         }
@@ -237,12 +304,20 @@ export async function getKelasRekapData(kelasId: string): Promise<KelasRekapData
           pengumpulanId: sub.id,
           statusPengumpulan: sub.status as "draft" | "submitted",
           statusPenilaian: sub.status_penilaian || "belum_dinilai",
-          nilaiAkhir: nilaiAkhirNum,
+          nilaiAkhir: nilaiAktif,
           nilaiPg: sub.nilai_pg !== null ? Number(sub.nilai_pg) : null,
           nilaiEssay: sub.nilai_essay !== null ? Number(sub.nilai_essay) : null,
           catatanGuru: sub.catatan_guru || null,
           submittedAt: sub.submitted_at,
           gradedAt: sub.graded_at,
+          kkm: tugas.kkm,
+          nilaiMurni,
+          nilaiRemedial,
+          nilaiAktif,
+          remedialPengumpulanId: rem?.id || null,
+          statusRemedial,
+          catatanRemedial: rem?.catatan_guru || null,
+          isTuntas,
         };
       } else {
         // Siswa belum memulai/mengumpulkan tugas ini
@@ -255,6 +330,12 @@ export async function getKelasRekapData(kelasId: string): Promise<KelasRekapData
           catatanGuru: null,
           submittedAt: null,
           gradedAt: null,
+          kkm: tugas.kkm,
+          nilaiMurni: null,
+          nilaiRemedial: null,
+          nilaiAktif: null,
+          statusRemedial: tugas.remedialEnabled ? "tidak_ada" : null,
+          isTuntas: false,
         };
       }
     }
@@ -298,44 +379,87 @@ export async function getKelasRekapData(kelasId: string): Promise<KelasRekapData
 export async function getSiswaRiwayatNilai(siswaIdParam?: string): Promise<SiswaRiwayatNilaiItem[]> {
   const userId = siswaIdParam || (await currentUserId());
 
-  const { data, error } = await supabase
-    .from("penugasan_pengumpulan")
-    .select(
-      `
-      id,
-      penugasan_id,
-      status,
-      submitted_at,
-      nilai_pg,
-      nilai_essay,
-      nilai_akhir,
-      status_penilaian,
-      catatan_guru,
-      graded_at,
-      penugasan:penugasan_id (
+  const [subRes, remRes] = await Promise.all([
+    supabase
+      .from("penugasan_pengumpulan")
+      .select(
+        `
         id,
-        judul,
-        kelas_id,
-        kelas:kelas_id (
+        penugasan_id,
+        status,
+        submitted_at,
+        nilai_pg,
+        nilai_essay,
+        nilai_akhir,
+        status_penilaian,
+        catatan_guru,
+        graded_at,
+        penugasan:penugasan_id (
           id,
-          nama_kelas,
-          mapel
+          judul,
+          kkm,
+          remedial_enabled,
+          kelas_id,
+          kelas:kelas_id (
+            id,
+            nama_kelas,
+            mapel
+          )
         )
+      `,
       )
-    `,
-    )
-    .eq("siswa_id", userId)
-    .order("submitted_at", { ascending: false });
+      .eq("siswa_id", userId)
+      .order("submitted_at", { ascending: false }),
+    supabase
+      .from("penugasan_remedial_pengumpulan")
+      .select("*")
+      .eq("siswa_id", userId),
+  ]);
 
-  if (error) {
-    console.warn("[RekapStore] Gagal memuat riwayat nilai siswa:", error.message);
-    throw new Error(`Gagal memuat riwayat nilai siswa: ${error.message}`);
+  if (subRes.error) {
+    console.warn("[RekapStore] Gagal memuat riwayat nilai siswa:", subRes.error.message);
+    throw new Error(`Gagal memuat riwayat nilai siswa: ${subRes.error.message}`);
   }
 
-  const safeData = Array.isArray(data) ? data : [];
+  const remedialByPenugasan: Record<string, any> = {};
+  if (Array.isArray(remRes.data)) {
+    for (const rem of remRes.data) {
+      remedialByPenugasan[rem.penugasan_id] = rem;
+    }
+  }
+
+  const safeData = Array.isArray(subRes.data) ? subRes.data : [];
   return safeData.map((row: any) => {
     const penugasan = row?.penugasan;
     const kelas = penugasan?.kelas;
+    const kkm = Number(penugasan?.kkm ?? 75);
+    const remedialEnabled = Boolean(penugasan?.remedial_enabled);
+
+    const nilaiMurni = row.nilai_akhir !== null ? Number(row.nilai_akhir) : null;
+    const rem = remedialByPenugasan[row.penugasan_id];
+    const nilaiRemedial =
+      rem && rem.status_penilaian === "dinilai" && rem.nilai_akhir !== null
+        ? Number(rem.nilai_akhir)
+        : null;
+    const nilaiAktif = nilaiRemedial !== null ? nilaiRemedial : nilaiMurni;
+
+    let statusRemedial: SiswaRiwayatNilaiItem["statusRemedial"] = "tidak_ada";
+    if (remedialEnabled) {
+      if (!rem) {
+        statusRemedial =
+          nilaiMurni !== null && nilaiMurni < kkm && row.status_penilaian === "dinilai"
+            ? "belum_mengambil"
+            : "tidak_ada";
+      } else if (rem.status === "draft") {
+        statusRemedial = "draft";
+      } else if (rem.status_penilaian === "dinilai") {
+        statusRemedial = "dinilai";
+      } else {
+        statusRemedial = "submitted";
+      }
+    }
+
+    const isTuntas = nilaiAktif !== null ? nilaiAktif >= kkm : false;
 
     return {
       pengumpulanId: row.id,
@@ -349,9 +473,18 @@ export async function getSiswaRiwayatNilai(siswaIdParam?: string): Promise<Siswa
       statusPenilaian: (row.status_penilaian as any) || "belum_dinilai",
       nilaiPg: row.nilai_pg !== null ? Number(row.nilai_pg) : null,
       nilaiEssay: row.nilai_essay !== null ? Number(row.nilai_essay) : null,
-      nilaiAkhir: row.nilai_akhir !== null ? Number(row.nilai_akhir) : null,
+      nilaiAkhir: nilaiAktif,
       catatanGuru: row.catatan_guru || null,
       gradedAt: row.graded_at,
+      kkm,
+      remedialEnabled,
+      nilaiMurni,
+      nilaiRemedial,
+      nilaiAktif,
+      remedialPengumpulanId: rem?.id || null,
+      statusRemedial,
+      isTuntas,
+      catatanRemedial: rem?.catatan_guru || null,
     };
   });
 }

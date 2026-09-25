@@ -55,6 +55,59 @@ export interface TeacherSubmissionItem {
   jawabanList: PenugasanJawaban[];
 }
 
+export interface PenugasanRemedialPengumpulan {
+  id: string;
+  penugasanId: string;
+  siswaId: string;
+  originalPengumpulanId: string | null;
+  status: "draft" | "submitted";
+  submittedAt: string | null;
+  nilaiPg: number | null;
+  nilaiEssay: number | null;
+  nilaiAkhir: number | null;
+  statusPenilaian: "belum_dinilai" | "perlu_penilaian_manual" | "dinilai";
+  catatanGuru: string | null;
+  gradedAt: string | null;
+  gradedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RemedialEligibility {
+  eligible: boolean;
+  reason: string;
+  remedialEnabled?: boolean;
+  hasRemedialSoal?: boolean;
+  kkm?: number;
+  nilaiMurni?: number;
+  originalSubmitted?: boolean;
+  originalGraded?: boolean;
+  isTuntas?: boolean;
+  remedialSubmitted?: boolean;
+  remedialPengumpulanId?: string | null;
+  remedialStatus?: string | null;
+  remedialStatusPenilaian?: string | null;
+  remedialNilaiAkhir?: number | null;
+}
+
+export interface TeacherRemedialSubmissionItem {
+  id: string;
+  penugasanId: string;
+  siswaId: string;
+  originalPengumpulanId: string | null;
+  status: "draft" | "submitted";
+  submittedAt: string | null;
+  nilaiPg: number | null;
+  nilaiEssay: number | null;
+  nilaiAkhir: number | null;
+  statusPenilaian: "belum_dinilai" | "perlu_penilaian_manual" | "dinilai";
+  catatanGuru: string | null;
+  gradedAt: string | null;
+  createdAt: string;
+  jawabanCount: number;
+  jawabanList: PenugasanJawaban[];
+}
+
 export async function currentUserId(): Promise<string> {
   const { data } = await supabase.auth.getUser();
   const id = data.user?.id;
@@ -591,5 +644,404 @@ export async function getMyGradedSubmissions(): Promise<Array<{
   } catch (err) {
     console.error("[Pengumpulan] Error getMyGradedSubmissions:", err);
     return [];
+  }
+}
+
+/**
+ * Memeriksa kelayakan siswa untuk mengambil remedial pada suatu penugasan.
+ */
+export async function checkRemedialEligibility(
+  penugasanId: string,
+  siswaId?: string,
+): Promise<RemedialEligibility> {
+  try {
+    const { data, error } = await supabase.rpc("check_remedial_eligibility", {
+      _penugasan_id: penugasanId,
+      _siswa_id: siswaId || (await currentUserId()),
+    });
+
+    if (error) {
+      console.warn("[Pengumpulan] check_remedial_eligibility error:", error.message);
+      return { eligible: false, reason: error.message };
+    }
+
+    if (data && typeof data === "object") {
+      const res = data as any;
+      return {
+        eligible: Boolean(res.eligible),
+        reason: String(res.reason || ""),
+        remedialEnabled: res.remedial_enabled !== undefined ? Boolean(res.remedial_enabled) : undefined,
+        hasRemedialSoal: res.has_remedial_soal !== undefined ? Boolean(res.has_remedial_soal) : undefined,
+        kkm: res.kkm !== undefined ? Number(res.kkm) : undefined,
+        nilaiMurni: res.nilai_murni !== undefined && res.nilai_murni !== null ? Number(res.nilai_murni) : undefined,
+        originalSubmitted: res.original_submitted !== undefined ? Boolean(res.original_submitted) : undefined,
+        originalGraded: res.original_graded !== undefined ? Boolean(res.original_graded) : undefined,
+        isTuntas: res.is_tuntas !== undefined ? Boolean(res.is_tuntas) : undefined,
+        remedialSubmitted: res.remedial_submitted !== undefined ? Boolean(res.remedial_submitted) : undefined,
+        remedialPengumpulanId: res.remedial_pengumpulan_id || null,
+        remedialStatus: res.remedial_status || null,
+        remedialStatusPenilaian: res.remedial_status_penilaian || null,
+        remedialNilaiAkhir: res.remedial_nilai_akhir !== undefined && res.remedial_nilai_akhir !== null ? Number(res.remedial_nilai_akhir) : null,
+      };
+    }
+
+    return { eligible: false, reason: "Gagal memeriksa status remedial." };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error memeriksa kelayakan remedial.";
+    return { eligible: false, reason: msg };
+  }
+}
+
+/**
+ * Mengambil pengumpulan remedial siswa yang sedang login.
+ */
+export async function getMyRemedialSubmission(
+  penugasanId: string,
+): Promise<PenugasanRemedialPengumpulan | null> {
+  try {
+    const userId = await currentUserId();
+
+    const { data, error } = await supabase
+      .from("penugasan_remedial_pengumpulan")
+      .select("*")
+      .eq("penugasan_id", penugasanId)
+      .eq("siswa_id", userId)
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === "PGRST116") return null;
+      console.warn("[Pengumpulan] Gagal memuat pengumpulan remedial:", error.message);
+      return null;
+    }
+
+    if (!data) return null;
+
+    return {
+      id: data.id,
+      penugasanId: data.penugasan_id,
+      siswaId: data.siswa_id,
+      originalPengumpulanId: data.original_pengumpulan_id,
+      status: data.status as "draft" | "submitted",
+      submittedAt: data.submitted_at,
+      nilaiPg: data.nilai_pg !== null ? Number(data.nilai_pg) : null,
+      nilaiEssay: data.nilai_essay !== null ? Number(data.nilai_essay) : null,
+      nilaiAkhir: data.nilai_akhir !== null ? Number(data.nilai_akhir) : null,
+      statusPenilaian: (data.status_penilaian as any) || "belum_dinilai",
+      catatanGuru: data.catatan_guru,
+      gradedAt: data.graded_at,
+      gradedBy: data.graded_by,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+  } catch (err) {
+    console.error("[Pengumpulan] Error getMyRemedialSubmission:", err);
+    return null;
+  }
+}
+
+/**
+ * Memulai draf pengerjaan remedial siswa secara aman di server.
+ */
+export async function startOrGetRemedialSubmission(
+  penugasanId: string,
+): Promise<{ ok: true; submission: PenugasanRemedialPengumpulan } | { ok: false; message: string }> {
+  try {
+    const { data, error } = await supabase.rpc("start_or_get_remedial_submission", {
+      _penugasan_id: penugasanId,
+    });
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+
+    if (data && typeof data === "object") {
+      const res = data as any;
+      if (res.ok && res.submission) {
+        const row = res.submission;
+        return {
+          ok: true,
+          submission: {
+            id: row.id,
+            penugasanId: row.penugasan_id,
+            siswaId: row.siswa_id,
+            originalPengumpulanId: row.original_pengumpulan_id,
+            status: row.status as "draft" | "submitted",
+            submittedAt: row.submitted_at,
+            nilaiPg: row.nilai_pg !== null ? Number(row.nilai_pg) : null,
+            nilaiEssay: row.nilai_essay !== null ? Number(row.nilai_essay) : null,
+            nilaiAkhir: row.nilai_akhir !== null ? Number(row.nilai_akhir) : null,
+            statusPenilaian: row.status_penilaian || "belum_dinilai",
+            catatanGuru: row.catatan_guru,
+            gradedAt: row.graded_at,
+            gradedBy: row.graded_by,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+          },
+        };
+      }
+      return { ok: false, message: res.message || "Gagal memulai tugas remedial." };
+    }
+
+    return { ok: false, message: "Respon server tidak valid saat memulai tugas remedial." };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal memulai tugas remedial.";
+    return { ok: false, message: msg };
+  }
+}
+
+/**
+ * Mengambil butir soal remedial tersanitasi untuk siswa (kunci jawaban dibuang).
+ */
+export async function getRemedialSoalForSiswa(penugasanId: string): Promise<SanitizedSoal[]> {
+  try {
+    const { data: rpcData, error: rpcError } = await supabase.rpc("get_remedial_soal_for_siswa", {
+      _penugasan_id: penugasanId,
+    });
+
+    if (!rpcError && rpcData && Array.isArray(rpcData)) {
+      return rpcData.map((s: any) => ({
+        id: String(s.id),
+        pertanyaan: String(s.pertanyaan || ""),
+        jenis: s.jenis === "Esai" ? "Esai" : "Pilihan Ganda",
+        opsi: Array.isArray(s.opsi) ? s.opsi.map(String) : [],
+      }));
+    }
+
+    if (rpcError) {
+      console.warn("[Pengumpulan] get_remedial_soal_for_siswa error:", rpcError.message);
+    }
+    return [];
+  } catch (err) {
+    console.error("[Pengumpulan] Error getRemedialSoalForSiswa:", err);
+    return [];
+  }
+}
+
+/**
+ * Mengambil daftar jawaban remedial tersimpan untuk siswa.
+ */
+export async function getMyRemedialAnswers(pengumpulanRemedialId: string): Promise<PenugasanJawaban[]> {
+  try {
+    const { data, error } = await supabase
+      .from("penugasan_remedial_jawaban")
+      .select("*")
+      .eq("pengumpulan_remedial_id", pengumpulanRemedialId);
+
+    if (error) {
+      console.warn("[Pengumpulan] Gagal memuat jawaban remedial:", error.message);
+      return [];
+    }
+
+    return (data || []).map((row) => ({
+      id: row.id,
+      pengumpulanId: row.pengumpulan_remedial_id,
+      soalId: row.soal_id,
+      jawaban: row.jawaban,
+      isCorrect: row.is_correct ?? null,
+      skor: row.skor !== null ? Number(row.skor) : null,
+      catatan: row.catatan ?? null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  } catch (err) {
+    console.error("[Pengumpulan] Error getMyRemedialAnswers:", err);
+    return [];
+  }
+}
+
+/**
+ * Menyimpan satu jawaban remedial siswa (upsert) ke database Supabase.
+ */
+export async function saveRemedialAnswer(
+  pengumpulanRemedialId: string,
+  soalId: string,
+  jawaban: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const cleanJawaban = jawaban ? jawaban.trim() : null;
+
+    const { error } = await supabase.from("penugasan_remedial_jawaban").upsert(
+      {
+        pengumpulan_remedial_id: pengumpulanRemedialId,
+        soal_id: soalId,
+        jawaban: cleanJawaban,
+      },
+      { onConflict: "pengumpulan_remedial_id, soal_id" },
+    );
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal menyimpan jawaban remedial.";
+    return { ok: false, message: msg };
+  }
+}
+
+/**
+ * Mengirimkan (submit) tugas remedial siswa secara final dengan auto-grading PG.
+ */
+export async function submitRemedialAssignment(
+  pengumpulanRemedialId: string,
+): Promise<{ ok: true; submittedAt: string; nilaiAkhir: number | null; statusPenilaian: string } | { ok: false; message: string }> {
+  try {
+    const { data: rpcData, error: rpcError } = await supabase.rpc("submit_remedial_penugasan", {
+      _pengumpulan_remedial_id: pengumpulanRemedialId,
+    });
+
+    if (rpcError) {
+      return { ok: false, message: rpcError.message };
+    }
+
+    if (rpcData && typeof rpcData === "object") {
+      const res = rpcData as any;
+      if (res.ok) {
+        return {
+          ok: true,
+          submittedAt: res.submitted_at || new Date().toISOString(),
+          nilaiAkhir: res.nilai_akhir !== null && res.nilai_akhir !== undefined ? Number(res.nilai_akhir) : null,
+          statusPenilaian: String(res.status_penilaian || "belum_dinilai"),
+        };
+      }
+      return { ok: false, message: res.message || "Gagal mengumpulkan tugas remedial." };
+    }
+
+    return { ok: false, message: "Respon server tidak valid saat pengumpulan remedial." };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal mengumpulkan tugas remedial.";
+    return { ok: false, message: msg };
+  }
+}
+
+/**
+ * Mengambil seluruh pengumpulan remedial siswa untuk penugasan tertentu (Hanya Guru).
+ * Dikembalikan dalam bentuk Map siswaId -> TeacherRemedialSubmissionItem untuk lookup O(1).
+ */
+export async function getTeacherRemedialSubmissions(
+  penugasanId: string,
+): Promise<Record<string, TeacherRemedialSubmissionItem>> {
+  try {
+    await currentUserId();
+
+    const { data, error } = await supabase
+      .from("penugasan_remedial_pengumpulan")
+      .select(
+        `
+        id,
+        penugasan_id,
+        siswa_id,
+        original_pengumpulan_id,
+        status,
+        submitted_at,
+        nilai_pg,
+        nilai_essay,
+        nilai_akhir,
+        status_penilaian,
+        catatan_guru,
+        graded_at,
+        created_at,
+        jawaban:penugasan_remedial_jawaban (
+          id,
+          pengumpulan_remedial_id,
+          soal_id,
+          jawaban,
+          is_correct,
+          skor,
+          catatan,
+          created_at,
+          updated_at
+        )
+      `,
+      )
+      .eq("penugasan_id", penugasanId);
+
+    if (error) {
+      console.warn("[Pengumpulan] Gagal memuat pengumpulan remedial guru:", error.message);
+      return {};
+    }
+
+    const resultMap: Record<string, TeacherRemedialSubmissionItem> = {};
+    for (const row of data || []) {
+      const jawabanList = Array.isArray(row.jawaban) ? row.jawaban : [];
+      resultMap[row.siswa_id] = {
+        id: row.id,
+        penugasanId: row.penugasan_id,
+        siswaId: row.siswa_id,
+        originalPengumpulanId: row.original_pengumpulan_id,
+        status: row.status as "draft" | "submitted",
+        submittedAt: row.submitted_at,
+        nilaiPg: row.nilai_pg !== null ? Number(row.nilai_pg) : null,
+        nilaiEssay: row.nilai_essay !== null ? Number(row.nilai_essay) : null,
+        nilaiAkhir: row.nilai_akhir !== null ? Number(row.nilai_akhir) : null,
+        statusPenilaian: (row.status_penilaian as any) || "belum_dinilai",
+        catatanGuru: row.catatan_guru,
+        gradedAt: row.graded_at,
+        createdAt: row.created_at,
+        jawabanCount: jawabanList.length,
+        jawabanList: jawabanList.map((j: any) => ({
+          id: j.id,
+          pengumpulanId: j.pengumpulan_remedial_id,
+          soalId: j.soal_id,
+          jawaban: j.jawaban,
+          isCorrect: j.is_correct ?? null,
+          skor: j.skor !== null ? Number(j.skor) : null,
+          catatan: j.catatan ?? null,
+          createdAt: j.created_at,
+          updatedAt: j.updated_at,
+        })),
+      };
+    }
+
+    return resultMap;
+  } catch (err) {
+    console.error("[Pengumpulan] Error getTeacherRemedialSubmissions:", err);
+    return {};
+  }
+}
+
+/**
+ * Menyimpan penilaian guru untuk tugas remedial siswa (nilai esai & catatan).
+ */
+export async function gradeRemedialSubmission(
+  pengumpulanRemedialId: string,
+  input: {
+    nilaiEssay: number;
+    catatanGuru?: string;
+    detailJawaban?: Array<{ soalId: string; skor: number; catatan?: string }>;
+  },
+): Promise<{ ok: true; nilaiAkhir: number; statusPenilaian: string } | { ok: false; message: string }> {
+  try {
+    const { data: rpcData, error: rpcError } = await supabase.rpc("simpan_penilaian_remedial_guru", {
+      _pengumpulan_remedial_id: pengumpulanRemedialId,
+      _nilai_essay: input.nilaiEssay,
+      _catatan_guru: input.catatanGuru || "",
+      _detail_jawaban: (input.detailJawaban || []).map((d) => ({
+        soal_id: d.soalId,
+        skor: d.skor,
+        catatan: d.catatan || null,
+      })),
+    });
+
+    if (!rpcError && rpcData && typeof rpcData === "object") {
+      const res = rpcData as any;
+      if (res.ok) {
+        return {
+          ok: true,
+          nilaiAkhir: Number(res.nilai_akhir),
+          statusPenilaian: String(res.status_penilaian || "dinilai"),
+        };
+      }
+    }
+
+    if (rpcError) {
+      return { ok: false, message: rpcError.message };
+    }
+
+    return { ok: true, nilaiAkhir: input.nilaiEssay, statusPenilaian: "dinilai" };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal menyimpan penilaian remedial.";
+    return { ok: false, message: msg };
   }
 }

@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      bug_reports: {
+        Row: {
+          admin_notes: string | null
+          created_at: string
+          description: string
+          id: string
+          priority: string
+          reporter_email: string
+          reporter_id: string
+          reporter_name: string
+          reporter_role: string
+          resolved_at: string | null
+          route: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          priority?: string
+          reporter_email?: string
+          reporter_id: string
+          reporter_name?: string
+          reporter_role?: string
+          resolved_at?: string | null
+          route?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          priority?: string
+          reporter_email?: string
+          reporter_id?: string
+          reporter_name?: string
+          reporter_role?: string
+          resolved_at?: string | null
+          route?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       kelas: {
         Row: {
           created_at: string
@@ -30,7 +81,7 @@ export type Database = {
           created_at?: string
           guru_id: string
           id?: string
-          kode_kelas?: string
+          kode_kelas: string
           mapel?: string
           nama_kelas?: string
           tahun_ajaran?: string
@@ -221,7 +272,10 @@ export type Database = {
           instruksi: string | null
           judul: string
           kelas_id: string
+          kkm: number
           paket_soal_id: string
+          remedial_enabled: boolean
+          remedial_paket_soal_id: string | null
           status: string
           updated_at: string
         }
@@ -233,7 +287,10 @@ export type Database = {
           instruksi?: string | null
           judul: string
           kelas_id: string
+          kkm?: number
           paket_soal_id: string
+          remedial_enabled?: boolean
+          remedial_paket_soal_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -245,7 +302,10 @@ export type Database = {
           instruksi?: string | null
           judul?: string
           kelas_id?: string
+          kkm?: number
           paket_soal_id?: string
+          remedial_enabled?: boolean
+          remedial_paket_soal_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -260,6 +320,13 @@ export type Database = {
           {
             foreignKeyName: "penugasan_paket_soal_id_fkey"
             columns: ["paket_soal_id"]
+            isOneToOne: false
+            referencedRelation: "paket_soal"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "penugasan_remedial_paket_soal_id_fkey"
+            columns: ["remedial_paket_soal_id"]
             isOneToOne: false
             referencedRelation: "paket_soal"
             referencedColumns: ["id"]
@@ -359,6 +426,119 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "penugasan_pengumpulan_penugasan_id_fkey"
+            columns: ["penugasan_id"]
+            isOneToOne: false
+            referencedRelation: "penugasan"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      penugasan_remedial_jawaban: {
+        Row: {
+          catatan: string | null
+          created_at: string
+          id: string
+          is_correct: boolean | null
+          jawaban: string | null
+          pengumpulan_remedial_id: string
+          skor: number | null
+          soal_id: string
+          updated_at: string
+        }
+        Insert: {
+          catatan?: string | null
+          created_at?: string
+          id?: string
+          is_correct?: boolean | null
+          jawaban?: string | null
+          pengumpulan_remedial_id: string
+          skor?: number | null
+          soal_id: string
+          updated_at?: string
+        }
+        Update: {
+          catatan?: string | null
+          created_at?: string
+          id?: string
+          is_correct?: boolean | null
+          jawaban?: string | null
+          pengumpulan_remedial_id?: string
+          skor?: number | null
+          soal_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "penugasan_remedial_jawaban_pengumpulan_remedial_id_fkey"
+            columns: ["pengumpulan_remedial_id"]
+            isOneToOne: false
+            referencedRelation: "penugasan_remedial_pengumpulan"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      penugasan_remedial_pengumpulan: {
+        Row: {
+          catatan_guru: string | null
+          created_at: string
+          graded_at: string | null
+          graded_by: string | null
+          id: string
+          nilai_akhir: number | null
+          nilai_essay: number | null
+          nilai_pg: number | null
+          original_pengumpulan_id: string | null
+          penugasan_id: string
+          siswa_id: string
+          status: string
+          status_penilaian: string
+          submitted_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          catatan_guru?: string | null
+          created_at?: string
+          graded_at?: string | null
+          graded_by?: string | null
+          id?: string
+          nilai_akhir?: number | null
+          nilai_essay?: number | null
+          nilai_pg?: number | null
+          original_pengumpulan_id?: string | null
+          penugasan_id: string
+          siswa_id: string
+          status?: string
+          status_penilaian?: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          catatan_guru?: string | null
+          created_at?: string
+          graded_at?: string | null
+          graded_by?: string | null
+          id?: string
+          nilai_akhir?: number | null
+          nilai_essay?: number | null
+          nilai_pg?: number | null
+          original_pengumpulan_id?: string | null
+          penugasan_id?: string
+          siswa_id?: string
+          status?: string
+          status_penilaian?: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "penugasan_remedial_pengumpulan_original_pengumpulan_id_fkey"
+            columns: ["original_pengumpulan_id"]
+            isOneToOne: false
+            referencedRelation: "penugasan_pengumpulan"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "penugasan_remedial_pengumpulan_penugasan_id_fkey"
             columns: ["penugasan_id"]
             isOneToOne: false
             referencedRelation: "penugasan"
@@ -473,6 +653,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_delete_teacher: { Args: { _teacher_id: string }; Returns: Json }
+      admin_update_teacher_profile: {
+        Args: {
+          _mapel: string
+          _nama: string
+          _nip: string
+          _sekolah: string
+          _teacher_id: string
+          _telepon: string
+        }
+        Returns: boolean
+      }
       admin_update_teacher_verification: {
         Args: { _status: string; _teacher_id: string }
         Returns: boolean
@@ -488,9 +680,17 @@ export type Database = {
           tingkat: string
         }[]
       }
+      check_remedial_eligibility: {
+        Args: { _penugasan_id: string; _siswa_id?: string }
+        Returns: Json
+      }
       get_admin_dashboard_stats: { Args: never; Returns: Json }
       get_current_user_role: { Args: never; Returns: string }
       get_penugasan_soal_for_siswa: {
+        Args: { _penugasan_id: string }
+        Returns: Json
+      }
+      get_remedial_soal_for_siswa: {
         Args: { _penugasan_id: string }
         Returns: Json
       }
@@ -539,7 +739,33 @@ export type Database = {
         }
         Returns: Json
       }
+      simpan_penilaian_remedial_guru: {
+        Args: {
+          _catatan_guru: string
+          _detail_jawaban?: Json
+          _nilai_essay: number
+          _pengumpulan_remedial_id: string
+        }
+        Returns: Json
+      }
+      start_or_get_remedial_submission: {
+        Args: { _penugasan_id: string }
+        Returns: Json
+      }
+      submit_bug_report: {
+        Args: {
+          _description: string
+          _priority?: string
+          _route?: string
+          _title: string
+        }
+        Returns: string
+      }
       submit_penugasan: { Args: { _pengumpulan_id: string }; Returns: Json }
+      submit_remedial_penugasan: {
+        Args: { _pengumpulan_remedial_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

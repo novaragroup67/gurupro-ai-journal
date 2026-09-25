@@ -109,7 +109,7 @@ function GuruRekapNilaiView() {
   useEffect(() => {
     if (teacherClasses.length > 0) {
       if (!teacherClasses.some((k) => k.id === selectedKelasId)) {
-        setSelectedKelasId(teacherClasses[0].id);
+        setSelectedKelasId(teacherClasses[0]?.id || "");
       }
     } else {
       setSelectedKelasId("");
@@ -412,13 +412,18 @@ function GuruRekapNilaiView() {
                         <TableHead className="w-28">NISN</TableHead>
 
                         {/* Assignment Columns */}
+                        {/* Assignment Columns */}
                         {daftarPenugasanSafe.map((tugas) => (
                           <TableHead
                             key={tugas.id}
-                            className="text-center min-w-[120px] max-w-[160px] truncate"
+                            className="text-center min-w-[130px] max-w-[170px]"
                             title={tugas.judul}
                           >
-                            <span className="block truncate">{tugas.judul}</span>
+                            <span className="block truncate font-semibold">{tugas.judul}</span>
+                            <span className="block text-[10px] text-muted-foreground font-normal">
+                              KKM: {tugas.kkm ?? 75}
+                              {tugas.remedialEnabled ? " · Remedial" : ""}
+                            </span>
                           </TableHead>
                         ))}
 
@@ -464,14 +469,36 @@ function GuruRekapNilaiView() {
                               }
 
                               if (nilaiItem.statusPenilaian === "dinilai" && nilaiItem.nilaiAkhir !== null) {
+                                const kkm = tugas.kkm ?? 75;
+                                const hasRem = nilaiItem.nilaiRemedial !== null;
+                                const effectiveScore = nilaiItem.nilaiAktif ?? nilaiItem.nilaiAkhir;
+                                const isTuntas = effectiveScore >= kkm;
+
                                 return (
                                   <TableCell
                                     key={tugas.id}
-                                    className="text-center font-mono text-sm font-bold text-navy"
+                                    className="text-center font-mono text-xs"
                                   >
-                                    <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-emerald-800 border border-emerald-200">
-                                      {formatNilai(nilaiItem.nilaiAkhir)}
-                                    </span>
+                                    <div className="inline-flex flex-col items-center gap-0.5">
+                                      <span
+                                        className={`rounded-md px-2 py-0.5 font-bold border ${
+                                          isTuntas
+                                            ? "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                                            : "bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800"
+                                        }`}
+                                        title={isTuntas ? "Tuntas" : "Belum Tuntas"}
+                                      >
+                                        {formatNilai(effectiveScore)}
+                                      </span>
+                                      {hasRem && (
+                                        <span
+                                          className="text-[10px] text-purple-700 dark:text-purple-400 font-sans"
+                                          title={`Nilai Murni: ${formatNilai(nilaiItem.nilaiMurni)} | Remedial: ${formatNilai(nilaiItem.nilaiRemedial)}`}
+                                        >
+                                          M:{formatNilai(nilaiItem.nilaiMurni)} R:{formatNilai(nilaiItem.nilaiRemedial)}
+                                        </span>
+                                      )}
+                                    </div>
                                   </TableCell>
                                 );
                               }
@@ -746,6 +773,7 @@ function SiswaRiwayatNilaiView() {
                         <TableHead className="w-12 text-center">No</TableHead>
                         <TableHead>Judul Tugas</TableHead>
                         <TableHead>Kelas & Mapel</TableHead>
+                        <TableHead className="text-center w-20">KKM</TableHead>
                         <TableHead className="text-center">Status</TableHead>
                         <TableHead className="text-center">Nilai Akhir</TableHead>
                         <TableHead>Catatan / Umpan Balik Guru</TableHead>
@@ -756,6 +784,10 @@ function SiswaRiwayatNilaiView() {
                         const isGraded =
                           item.statusPenilaian === "dinilai" && item.nilaiAkhir !== null;
                         const isReview = item.statusPenilaian === "perlu_penilaian_manual";
+                        const kkm = item.kkm ?? 75;
+                        const effectiveScore = item.nilaiAktif ?? item.nilaiAkhir;
+                        const hasRemedial = item.nilaiRemedial !== null;
+                        const isTuntas = effectiveScore !== null && effectiveScore >= kkm;
 
                         return (
                           <TableRow key={item.pengumpulanId}>
@@ -763,7 +795,14 @@ function SiswaRiwayatNilaiView() {
                               {idx + 1}
                             </TableCell>
                             <TableCell>
-                              <p className="font-semibold text-navy">{item.penugasanJudul}</p>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <p className="font-semibold text-navy">{item.penugasanJudul}</p>
+                                {item.remedialEnabled && (
+                                  <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 text-[10px]">
+                                    Remedial
+                                  </Badge>
+                                )}
+                              </div>
                               {item.submittedAt && (
                                 <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
                                   <Calendar className="h-3 w-3" />
@@ -774,10 +813,19 @@ function SiswaRiwayatNilaiView() {
                             <TableCell className="text-xs text-muted-foreground">
                               {item.kelasNama} · {item.kelasMapel}
                             </TableCell>
+                            <TableCell className="text-center font-mono text-xs font-semibold text-muted-foreground">
+                              {kkm}
+                            </TableCell>
                             <TableCell className="text-center">
                               {isGraded ? (
-                                <Badge className="bg-emerald-600 hover:bg-emerald-700 text-[11px]">
-                                  Dinilai
+                                <Badge
+                                  className={`text-[11px] ${
+                                    isTuntas
+                                      ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                      : "bg-rose-600 hover:bg-rose-700 text-white"
+                                  }`}
+                                >
+                                  {isTuntas ? "Tuntas" : "Belum Tuntas"}
                                 </Badge>
                               ) : isReview ? (
                                 <Badge
@@ -796,12 +844,15 @@ function SiswaRiwayatNilaiView() {
                               {isGraded ? (
                                 <div className="inline-flex flex-col items-center">
                                   <span className="font-mono text-base font-bold text-navy">
-                                    {formatNilai(item.nilaiAkhir)}
+                                    {formatNilai(effectiveScore)}
                                   </span>
-                                  {(item.nilaiPg !== null || item.nilaiEssay !== null) && (
+                                  {hasRemedial ? (
+                                    <span className="text-[10px] text-purple-700 dark:text-purple-400 font-mono">
+                                      Murni: {formatNilai(item.nilaiMurni)} | Remedial: {formatNilai(item.nilaiRemedial)}
+                                    </span>
+                                  ) : (
                                     <span className="text-[10px] text-muted-foreground font-mono">
-                                      PG: {formatNilai(item.nilaiPg)} | Esai:{" "}
-                                      {formatNilai(item.nilaiEssay)}
+                                      Nilai Murni: {formatNilai(item.nilaiMurni ?? item.nilaiAkhir)}
                                     </span>
                                   )}
                                 </div>

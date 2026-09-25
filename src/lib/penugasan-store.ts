@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 
 export type PenugasanStatus = "draft" | "published" | "closed";
 
@@ -12,6 +13,9 @@ export interface Penugasan {
   instruksi?: string | null;
   deadline?: string | null;
   status: PenugasanStatus;
+  kkm: number;
+  remedialEnabled: boolean;
+  remedialPaketSoalId?: string | null;
   createdAt: string;
   updatedAt: string;
   // Metadata join / hydration
@@ -20,6 +24,7 @@ export interface Penugasan {
   kelasMapel?: string;
   kelasTahunAjaran?: string;
   paketSoalJudul?: string;
+  remedialPaketSoalJudul?: string;
   totalSoal?: number;
   guruNama?: string;
 }
@@ -31,6 +36,9 @@ export interface CreatePenugasanInput {
   instruksi?: string;
   deadline?: string | null;
   status?: "draft" | "published";
+  kkm?: number;
+  remedialEnabled?: boolean;
+  remedialPaketSoalId?: string | null;
 }
 
 export interface UpdatePenugasanInput {
@@ -40,6 +48,9 @@ export interface UpdatePenugasanInput {
   kelasId?: string;
   paketSoalId?: string;
   status?: PenugasanStatus;
+  kkm?: number;
+  remedialEnabled?: boolean;
+  remedialPaketSoalId?: string | null;
 }
 
 // In-memory cache for fast, synchronous rendering
@@ -79,6 +90,9 @@ export async function refreshPenugasanGuru(): Promise<Penugasan[]> {
         instruksi,
         deadline,
         status,
+        kkm,
+        remedial_enabled,
+        remedial_paket_soal_id,
         created_at,
         updated_at,
         kelas:kelas_id (
@@ -92,6 +106,10 @@ export async function refreshPenugasanGuru(): Promise<Penugasan[]> {
           id,
           judul,
           soal
+        ),
+        remedial_paket_soal:remedial_paket_soal_id (
+          id,
+          judul
         )
       `,
       )
@@ -117,6 +135,10 @@ export async function refreshPenugasanGuru(): Promise<Penugasan[]> {
         instruksi: row.instruksi,
         deadline: row.deadline,
         status: row.status as PenugasanStatus,
+        kkm: Number(row.kkm ?? 75),
+        remedialEnabled: Boolean(row.remedial_enabled),
+        remedialPaketSoalId: row.remedial_paket_soal_id || null,
+        remedialPaketSoalJudul: row.remedial_paket_soal?.judul || "",
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         kelasNama: kelas?.nama_kelas || "",
@@ -156,6 +178,9 @@ export async function refreshPenugasanSiswa(): Promise<Penugasan[]> {
         instruksi,
         deadline,
         status,
+        kkm,
+        remedial_enabled,
+        remedial_paket_soal_id,
         created_at,
         updated_at,
         kelas:kelas_id (
@@ -201,6 +226,9 @@ export async function refreshPenugasanSiswa(): Promise<Penugasan[]> {
         instruksi: row.instruksi,
         deadline: row.deadline,
         status: row.status as PenugasanStatus,
+        kkm: Number(row.kkm ?? 75),
+        remedialEnabled: Boolean(row.remedial_enabled),
+        remedialPaketSoalId: row.remedial_paket_soal_id || null,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         kelasNama: kelas?.nama_kelas || "",
@@ -237,8 +265,12 @@ export async function createPenugasan(
     if (!input.judul.trim()) {
       return { ok: false, message: "Judul penugasan wajib diisi." };
     }
+    if (input.remedialEnabled && input.remedialPaketSoalId && input.remedialPaketSoalId === input.paketSoalId) {
+      return { ok: false, message: "Paket soal remedial harus berbeda dari paket soal utama." };
+    }
 
     const initialStatus = input.status || "draft";
+    const cleanKkm = input.kkm !== undefined ? Math.min(100, Math.max(0, Number(input.kkm))) : 75;
 
     const { data: row, error } = await supabase
       .from("penugasan")
@@ -250,6 +282,9 @@ export async function createPenugasan(
         instruksi: input.instruksi ? input.instruksi.trim() : null,
         deadline: input.deadline ? new Date(input.deadline).toISOString() : null,
         status: initialStatus,
+        kkm: cleanKkm,
+        remedial_enabled: Boolean(input.remedialEnabled),
+        remedial_paket_soal_id: input.remedialEnabled ? (input.remedialPaketSoalId || null) : null,
       })
       .select(
         `
@@ -261,6 +296,9 @@ export async function createPenugasan(
         instruksi,
         deadline,
         status,
+        kkm,
+        remedial_enabled,
+        remedial_paket_soal_id,
         created_at,
         updated_at,
         kelas:kelas_id (
@@ -273,6 +311,10 @@ export async function createPenugasan(
           id,
           judul,
           soal
+        ),
+        remedial_paket_soal:remedial_paket_soal_id (
+          id,
+          judul
         )
       `,
       )
@@ -295,6 +337,10 @@ export async function createPenugasan(
       instruksi: row.instruksi,
       deadline: row.deadline,
       status: row.status as PenugasanStatus,
+      kkm: Number(row.kkm ?? 75),
+      remedialEnabled: Boolean(row.remedial_enabled),
+      remedialPaketSoalId: row.remedial_paket_soal_id || null,
+      remedialPaketSoalJudul: (row as any)?.remedial_paket_soal?.judul || "",
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       kelasNama: kelas?.nama_kelas || "",
@@ -323,7 +369,7 @@ export async function updatePenugasan(
   try {
     await currentUserId();
 
-    const updatePayload: Record<string, unknown> = {};
+    const updatePayload: Database["public"]["Tables"]["penugasan"]["Update"] = {};
     if (patch.judul !== undefined) updatePayload.judul = patch.judul.trim();
     if (patch.instruksi !== undefined)
       updatePayload.instruksi = patch.instruksi ? patch.instruksi.trim() : null;
@@ -332,6 +378,15 @@ export async function updatePenugasan(
     if (patch.kelasId !== undefined) updatePayload.kelas_id = patch.kelasId;
     if (patch.paketSoalId !== undefined) updatePayload.paket_soal_id = patch.paketSoalId;
     if (patch.status !== undefined) updatePayload.status = patch.status;
+    if (patch.kkm !== undefined) {
+      updatePayload.kkm = Math.min(100, Math.max(0, Number(patch.kkm)));
+    }
+    if (patch.remedialEnabled !== undefined) {
+      updatePayload.remedial_enabled = Boolean(patch.remedialEnabled);
+    }
+    if (patch.remedialPaketSoalId !== undefined) {
+      updatePayload.remedial_paket_soal_id = patch.remedialPaketSoalId || null;
+    }
 
     const { error } = await supabase.from("penugasan").update(updatePayload).eq("id", id);
 
