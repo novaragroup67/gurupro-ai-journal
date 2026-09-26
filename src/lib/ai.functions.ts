@@ -1,6 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { requireSupabaseAuth, requireGuruAuth, requireTeacherAiAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  buildModulGroundingContext,
+  type ModulGroundingContext,
+  type TeacherAcademicContext,
+} from "./ai/modul-contract";
 
 const MODEL = "google/gemini-2.5-flash";
 const ENDPOINT = "https://ai.gateway.lovable.dev/v1/chat/completions";
@@ -1021,3 +1026,50 @@ export const reviseSoalAi = createServerFn({ method: "POST" })
       return reviseFallbackSoal(data);
     }
   });
+
+/**
+ * GuruPro AI Foundation (AI-2B) — Server-Side Grounded Context Builder Server Function
+ *
+ * Takes untrusted client generation input, authenticates the teacher, verifies class and snapshot ownership,
+ * executes multi-query retrieval, assembles deduplicated evidence, and produces ModulGroundingContext.
+ *
+ * Strictly NEVER calls Gemini, OpenAI, or any LLM.
+ */
+export const buildModulGroundingContextServerFn = createServerFn({ method: "POST" })
+  .middleware([requireTeacherAiAuth])
+  .validator((input: unknown) => input)
+  .handler(async ({ context, data }): Promise<ModulGroundingContext> => {
+    const supabase = (context as any).supabase;
+    const userId = (context as any).userId;
+    const profile = (context as any).profile;
+
+    // Load teacher's classes from DB
+    const { data: classesData, error: classErr } = await supabase
+      .from("kelas")
+      .select("id, nama, tingkat, mapel, tahun_ajaran, guru_id")
+      .eq("guru_id", userId);
+
+    if (classErr) {
+      throw new Error(`Gagal memuat daftar kelas guru: ${classErr.message}`);
+    }
+
+    const teacherClasses = (classesData || []).map((k: any) => ({
+      id: k.id,
+      namaKelas: k.nama,
+      tingkat: k.tingkat,
+      mapel: k.mapel,
+      tahunAjaran: k.tahun_ajaran,
+      guruId: k.guru_id,
+    }));
+
+    const teacherContext: TeacherAcademicContext = {
+      teacherId: userId,
+      teacherRole: "guru",
+      verificationStatus: profile?.status_verifikasi || "terverifikasi",
+      teacherClasses,
+      availableSourceSnapshots: [], // Automatically enriched from server cache
+    };
+
+    return buildModulGroundingContext(data, teacherContext);
+  });
+

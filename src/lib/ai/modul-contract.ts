@@ -180,6 +180,107 @@ export function validateModulGenerationInput(
 }
 
 // ==============================================================================
+// 1.5. GROUNDED CONTEXT CONTRACT (AI-2B)
+// ==============================================================================
+
+export const GroundingEvidenceItemSchema = z.object({
+  evidenceId: z.string().min(1),
+  sourceId: z.string().min(1),
+  chunkId: z.string().min(1),
+  sourceTitle: z.string().min(1),
+  sectionTitle: z.string().optional(),
+  chunkIndex: z.number().int().min(0),
+  content: z.string().min(1),
+  snippet: z.string().min(1),
+  relevanceScore: z.number().min(0).max(1),
+  status: z.enum(["SUPPORTED", "INFERRED", "NOT_FOUND"]),
+});
+
+export type GroundingEvidenceItem = z.infer<typeof GroundingEvidenceItemSchema>;
+
+export const SectionCoverageItemSchema = z.object({
+  hasEvidence: z.boolean(),
+  score: z.number().min(0).max(1),
+  status: z.enum(["SUFFICIENT", "INSUFFICIENT_EVIDENCE"]),
+  supportingEvidenceIds: z.array(z.string()),
+});
+
+export const SectionCoverageReportSchema = z.object({
+  topicMaterial: SectionCoverageItemSchema,
+  learningObjectives: SectionCoverageItemSchema,
+  activitiesProcedures: SectionCoverageItemSchema,
+  assessmentRubric: SectionCoverageItemSchema,
+});
+
+export type SectionCoverageReport = z.infer<typeof SectionCoverageReportSchema>;
+
+export const SourceConflictItemSchema = z.object({
+  term: z.string().min(1),
+  conflictType: z.enum(["NUMERIC_MISMATCH", "CONTRADICTION"]),
+  sourceA: z.object({
+    sourceId: z.string(),
+    sourceTitle: z.string(),
+    snippet: z.string(),
+  }),
+  sourceB: z.object({
+    sourceId: z.string(),
+    sourceTitle: z.string(),
+    snippet: z.string(),
+  }),
+  description: z.string(),
+});
+
+export type SourceConflictItem = z.infer<typeof SourceConflictItemSchema>;
+
+export const ModulGroundingContextSchema = z.object({
+  contextVersion: z.literal("1.0.0").default("1.0.0"),
+  generationInput: ModulGenerationInputSchema,
+  academicContext: z.object({
+    teacherId: z.string().min(1),
+    teacherName: z.string().optional(),
+    kelasId: z.string().min(1),
+    namaKelas: z.string().min(1),
+    tingkat: z.string().min(1),
+    kelasLabel: z.string().min(1),
+    mapel: z.string().min(1),
+    tahunAjaran: z.string().optional(),
+    targetFase: z.enum(["A", "B", "C", "D", "E", "F"]),
+    alokasiWaktu: z.string().min(1),
+  }),
+  pedagogicalConstraints: z.object({
+    pendekatan: z.string().optional(),
+    profilPelajarPancasila: z.array(z.string()).optional(),
+    customInstructions: z.string().optional(),
+    targetPertemuanCount: z.number().int().positive().optional(),
+    includeActivities: z.boolean().default(true),
+    includeAssessmentRubric: z.boolean().default(true),
+  }),
+  sourceMetadata: z.array(
+    z.object({
+      sourceId: z.string(),
+      sourceTitle: z.string(),
+      sourceType: z.string(),
+      contentHash: z.string(),
+      totalChunks: z.number().int().min(0),
+      order: z.number().int().min(0),
+    }),
+  ),
+  evidenceItems: z.array(GroundingEvidenceItemSchema),
+  sectionCoverage: SectionCoverageReportSchema,
+  sourceConflicts: z.array(SourceConflictItemSchema).default([]),
+  contextBudgetSummary: z.object({
+    totalSourcesCount: z.number().int().min(0),
+    retrievedChunksCount: z.number().int().min(0),
+    deduplicatedChunksCount: z.number().int().min(0),
+    totalWordCount: z.number().int().min(0),
+    isTruncated: z.boolean().default(false),
+  }),
+  hasUsableEvidence: z.boolean(),
+});
+
+export type ModulGroundingContext = z.infer<typeof ModulGroundingContextSchema>;
+
+// ==============================================================================
 // 2. CANONICAL STRUCTURED OUTPUT CONTRACT & SCHEMA
 // ==============================================================================
 
@@ -477,3 +578,14 @@ export function mapGroundedOutputToModulDraft(
     aiMetadata,
   };
 }
+
+// Re-export context builder functions & types from AI-2B
+export {
+  buildModulGroundingContext,
+  serializeModulGroundingContext,
+  buildDeterministicQueries,
+  detectSourceConflicts,
+  type BuildContextOptions,
+  type RetrievalQueryBundle,
+} from "./modul-context-builder";
+
