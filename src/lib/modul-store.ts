@@ -23,6 +23,7 @@ type Row = {
   is_archived?: boolean;
   archived_at?: string | null;
   archived_by?: string | null;
+  ai_metadata?: unknown;
 };
 
 function toModul(row: Row): Modul {
@@ -46,6 +47,7 @@ function toModul(row: Row): Modul {
     isArchived: Boolean(row.is_archived),
     archivedAt: row.archived_at || null,
     archivedBy: row.archived_by || null,
+    aiMetadata: row.ai_metadata ? (row.ai_metadata as any) : undefined,
   };
 }
 
@@ -67,6 +69,7 @@ function toRow(modul: Partial<Modul>) {
     is_archived: modul.isArchived ?? false,
     archived_at: modul.archivedAt ?? null,
     archived_by: modul.archivedBy ?? null,
+    ai_metadata: modul.aiMetadata || null,
   };
 }
 

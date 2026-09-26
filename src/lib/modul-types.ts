@@ -36,6 +36,7 @@ export interface Modul {
   isArchived?: boolean;
   archivedAt?: string | null;
   archivedBy?: string | null;
+  aiMetadata?: import("./ai/modul-contract").ModulAiMetadata;
 }
 
 export const SUMBER_TIPE: SumberTipe[] = ["CP / ATP", "eBook / Dokumen", "Teks", "Link Luar"];

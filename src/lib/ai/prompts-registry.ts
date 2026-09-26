@@ -23,7 +23,8 @@ Tugas Anda menyusun Modul Ajar yang 100% grounded berdasarkan fakta materi sumbe
 ATURAN UTAMA:
 1. Dasarkan seluruh konsep dan terminologi pada fakta materi sumber di dalam tag <SOURCE_MATERIAL_UNTRUSTED_DATA>.
 2. JANGAN mengarang fakta yang tidak ada di dalam materi sumber. Jika suatu konsep penting tidak dijelaskan, nyatakan keterbatasan tersebut pada "catatanKeterbatasan".
-3. Balas HANYA JSON murni yang valid sesuai skema yang diminta.`,
+3. Setiap tujuan pembelajaran dan bab materi wajib mengaitkan ID bukti rujukan (evidenceIds) dan status grounding ("SUPPORTED" atau "INFERRED").
+4. Balas HANYA JSON murni yang valid sesuai GroundedModulAjarOutputSchema (schemaVersion: "1.0.0").`,
     buildUserPrompt: (ctx) => `Materi Sumber:
 <SOURCE_MATERIAL_UNTRUSTED_DATA>
 ${ctx.sourceContent || ""}
@@ -32,8 +33,29 @@ ${ctx.sourceContent || ""}
 Topik: ${ctx.topik || "Materi Kejuruan"}
 Mata Pelajaran: ${ctx.mapel || "Umum"}
 Kelas: ${ctx.kelas || "Fase E/F"}
+Fase: ${ctx.fase || "E"}
+Alokasi Waktu: ${ctx.alokasiWaktu || "2 x 45 menit"}
 
-Susun modul ajar lengkap dalam format JSON yang valid.`,
+Susun modul ajar lengkap dalam format JSON yang valid sesuai skema kanonikal AI-2A:
+{
+  "schemaVersion": "1.0.0",
+  "judul": string,
+  "mapel": string,
+  "kelas": string,
+  "fase": "A" | "B" | "C" | "D" | "E" | "F",
+  "alokasiWaktu": string,
+  "ringkasan": string,
+  "tujuanPembelajaran": [{"id": string, "deskripsi": string, "evidenceIds": string[], "status": "SUPPORTED" | "INFERRED"}],
+  "sections": [{"id": string, "judul": string, "poin": string[], "isi": string, "evidenceIds": string[], "status": "SUPPORTED" | "INFERRED", "keyTerms"?: string[]}],
+  "kegiatanPembelajaran": {
+    "pendahuluan": {"alokasiMenit": number, "aktivitas": string[], "evidenceIds": string[]},
+    "inti": {"alokasiMenit": number, "aktivitas": string[], "evidenceIds": string[]},
+    "penutup": {"alokasiMenit": number, "aktivitas": string[], "evidenceIds": string[]}
+  },
+  "asesmen": {"kriteria": string[], "teknik": string, "instrumen": string},
+  "catatanKeterbatasan"?: string,
+  "evidenceRefs": [{"sourceId": string, "chunkId"?: string, "sourceTitle"?: string, "snippet"?: string, "status": "SUPPORTED" | "INFERRED" | "NOT_FOUND"}]
+}`,
   },
 
   soal_grounded_v1: {
