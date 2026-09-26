@@ -1,0 +1,177 @@
+{
+  "name": "GuruPro AI-1 Golden Retrieval Dataset",
+  "version": "1.0.0",
+  "description": "Deterministic baseline dataset for educational source extraction, chunking, retrieval, and grounding validation.",
+  "cases": [
+    {
+      "id": "TC_A_EXACT_FACTUAL",
+      "category": "A",
+      "categoryName": "Exact factual query",
+      "fixtureFile": "educational-network-routing.txt",
+      "sourceType": "text",
+      "query": "Berapa nilai default administrative distance untuk routing statis?",
+      "expectedChunkTitleContains": "Konsep Dasar",
+      "expectedSnippetMustContain": "administrative distance default bernilai 1",
+      "expectedGroundingStatus": "SUPPORTED",
+      "isNegative": false
+    },
+    {
+      "id": "TC_B_NATURAL_LANGUAGE",
+      "category": "B",
+      "categoryName": "Natural-language query",
+      "fixtureFile": "educational-accounting-journal.docx",
+      "sourceType": "dokumen",
+      "query": "Bagaimana cara mencatat jurnal penyesuaian saat perusahaan membayar premi asuransi kebakaran di muka?",
+      "expectedChunkTitleContains": "Beban Dibayar di Muka",
+      "expectedSnippetMustContain": "Rp 3.000.000",
+      "expectedGroundingStatus": "SUPPORTED",
+      "isNegative": false
+    },
+    {
+      "id": "TC_C_TERMINOLOGY",
+      "category": "C",
+      "categoryName": "Query using terminology appearing in the source",
+      "fixtureFile": "educational-automotive-injection.pdf",
+      "sourceType": "dokumen",
+      "query": "Apa fungsi sensor Mass Air Flow MAF dan Throttle Position Sensor TPS pada mesin EFI?",
+      "expectedChunkTitleContains": "Sensor",
+      "expectedSnippetMustContain": "Mass Air Flow (MAF)",
+      "expectedGroundingStatus": "SUPPORTED",
+      "isNegative": false
+    },
+    {
+      "id": "TC_D_EQUIVALENT_WORDING",
+      "category": "D",
+      "categoryName": "Query using equivalent wording / synonyms",
+      "fixtureFile": "educational-network-routing.txt",
+      "sourceType": "text",
+      "query": "Kelebihan dan keunggulan memakai perutean manual dibanding protokol dinamis",
+      "expectedChunkTitleContains": "Konsep Dasar",
+      "expectedSnippetMustContain": "beban kerja prosesor router relatif lebih rendah",
+      "expectedGroundingStatus": "SUPPORTED",
+      "isNegative": false
+    },
+    {
+      "id": "TC_E_SPECIFIC_SECTION",
+      "category": "E",
+      "categoryName": "Query targeting a specific section",
+      "fixtureFile": "educational-web-vlan.html",
+      "sourceType": "url",
+      "query": "Standar Protokol IEEE 802.1Q",
+      "expectedChunkTitleContains": "802.1Q",
+      "expectedSnippetMustContain": "Tag Protocol Identifier (TPID 0x8100)",
+      "expectedGroundingStatus": "SUPPORTED",
+      "isNegative": false
+    },
+    {
+      "id": "TC_F_DEEP_IN_SOURCE",
+      "category": "F",
+      "categoryName": "Query whose answer exists in the source but is far from the beginning",
+      "fixtureFile": "educational-network-routing.txt",
+      "sourceType": "text",
+      "query": "Apa arti indikator status flag AS dan U pada tabel routing RouterOS?",
+      "expectedChunkTitleContains": "Troubleshooting",
+      "expectedSnippetMustContain": "Active Static (AS)",
+      "expectedGroundingStatus": "SUPPORTED",
+      "isNegative": false
+    },
+    {
+      "id": "TC_G_MULTIPLE_CHUNKS",
+      "category": "G",
+      "categoryName": "Query where multiple chunks are relevant",
+      "fixtureFile": "educational-web-vlan.html",
+      "sourceType": "url",
+      "query": "Perbedaan konfigurasi port access dan trunk serta pemetaan nomor VLAN ID",
+      "expectedChunkTitleContains": "Port",
+      "expectedSnippetMustContain": "Mode Access",
+      "expectedGroundingStatus": "SUPPORTED",
+      "isNegative": false
+    },
+    {
+      "id": "TC_H_NEARBY_IRRELEVANT",
+      "category": "H",
+      "categoryName": "Query where nearby chunks are irrelevant",
+      "fixtureFile": "educational-automotive-injection.pdf",
+      "sourceType": "dokumen",
+      "query": "Berapa interval jarak tempuh penggantian saringan bahan bakar fuel filter?",
+      "expectedChunkTitleContains": "Pemeliharaan",
+      "expectedSnippetMustContain": "40.000 km",
+      "expectedGroundingStatus": "SUPPORTED",
+      "isNegative": false
+    },
+    {
+      "id": "TC_I_NEGATIVE_NOT_FOUND",
+      "category": "I",
+      "categoryName": "Query asking for information that does NOT exist (negative grounding)",
+      "fixtureFile": "educational-network-routing.txt",
+      "sourceType": "text",
+      "query": "Bagaimana aturan pembagian VLAN encapsulation dan subinterface 802.1Q pada topologi ini?",
+      "expectedGroundingStatus": "NOT_FOUND",
+      "isNegative": true
+    },
+    {
+      "id": "TC_I2_NEGATIVE_ABSENT_IN_DOCX",
+      "category": "I",
+      "categoryName": "Query asking for crypto asset accounting in service company journal",
+      "fixtureFile": "educational-accounting-journal.docx",
+      "sourceType": "dokumen",
+      "query": "Bagaimana jurnal penyesuaian untuk penurunan nilai aset kripto Bitcoin dan Ethereum?",
+      "expectedGroundingStatus": "NOT_FOUND",
+      "isNegative": true
+    },
+    {
+      "id": "TC_I3_NEGATIVE_ABSENT_IN_PDF",
+      "category": "I",
+      "categoryName": "Query asking for electric vehicle cooling in gasoline EFI engine",
+      "fixtureFile": "educational-automotive-injection.pdf",
+      "sourceType": "dokumen",
+      "query": "Berapa tekanan sirkulasi cairan pendingin pada paket baterai traksi lithium-ion?",
+      "expectedGroundingStatus": "NOT_FOUND",
+      "isNegative": true
+    },
+    {
+      "id": "TC_J_CROSS_USER_ATTEMPT",
+      "category": "J",
+      "categoryName": "Cross-user retrieval attempt (tenant isolation)",
+      "fixtureFile": "educational-network-routing.txt",
+      "sourceType": "text",
+      "query": "Konfigurasi gateway next-hop",
+      "expectedErrorCode": "ROLE_FORBIDDEN",
+      "isNegative": true
+    },
+    {
+      "id": "TC_K_EMPTY_QUERY",
+      "category": "K",
+      "categoryName": "Empty / whitespace query",
+      "fixtureFile": "educational-network-routing.txt",
+      "sourceType": "text",
+      "query": "    ",
+      "expectedFallbackToSequential": true,
+      "isNegative": false
+    },
+    {
+      "id": "TC_L_VERY_LONG_QUERY",
+      "category": "L",
+      "categoryName": "Very long natural language query",
+      "fixtureFile": "educational-accounting-journal.docx",
+      "sourceType": "dokumen",
+      "query": "Saya sebagai guru ingin mengajarkan kepada siswa mengenai bagaimana perhitungan beban penyusutan peralatan kantor sebesar Rp 50.000.000 dengan umur ekonomis 5 tahun menggunakan metode garis lurus serta pencatatan akun kontra aset pada akhir periode akuntansi",
+      "expectedChunkTitleContains": "Penyusutan",
+      "expectedSnippetMustContain": "Rp 10.000.000",
+      "expectedGroundingStatus": "SUPPORTED",
+      "isNegative": false
+    },
+    {
+      "id": "TC_M_REPRODUCIBILITY",
+      "category": "M",
+      "categoryName": "Repeated query reproducibility",
+      "fixtureFile": "educational-automotive-injection.pdf",
+      "sourceType": "dokumen",
+      "query": "Berapa tekanan kerja standar bahan bakar pada fuel rail?",
+      "expectedChunkTitleContains": "Injektor",
+      "expectedSnippetMustContain": "2.5 hingga 3.0 bar",
+      "expectedGroundingStatus": "SUPPORTED",
+      "isNegative": false
+    }
+  ]
+}

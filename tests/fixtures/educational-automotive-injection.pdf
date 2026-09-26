@@ -1,0 +1,326 @@
+%PDF-1.3
+%ºß¬à
+3 0 obj
+<</Type /Page
+/Parent 1 0 R
+/Resources 2 0 R
+/MediaBox [0 0 595.2799999999999727 841.8899999999999864]
+/Contents 4 0 R
+>>
+endobj
+4 0 obj
+<<
+/Length 1443
+>>
+stream
+0.5670000000000001 w
+0 G
+BT
+/F1 16 Tf
+18.3999999999999986 TL
+0 g
+39.6850393700787407 785.1970866141732586 Td
+(# Pemeliharaan Sistem Bahan Bakar Electronic Fuel Injection \(EFI\)) Tj
+ET
+BT
+/F1 13 Tf
+14.9499999999999993 TL
+0 g
+39.6850393700787407 751.1813385826771992 Td
+(## 1. Komponen Utama Aliran Udara dan Sensor) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0 g
+39.6850393700787407 722.8348818897637784 Td
+(Sistem Electronic Fuel Injection \(EFI\) mengandalkan sensor aliran udara untuk menentukan beban kerja mesin.) Tj
+T* (Sensor Mass Air Flow \(MAF\) mendeteksi massa udara yang masuk, sedangkan Throttle Position Sensor \(TPS\)) Tj
+T* (membaca sudut pembukaan katup throttle secara presisi. Sensor Suhu Udara Masuk \(Intake Air Temperature / IAT\)) Tj
+T* (memberikan koreksi kerapatan udara berdasarkan temperatur udara luar.) Tj
+ET
+BT
+/F1 13 Tf
+14.9499999999999993 TL
+0 g
+39.6850393700787407 629.291574803149615 Td
+(## 2. Aktuator Injektor dan Pengaturan Tekanan Bensin) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0 g
+39.6850393700787407 600.9451181102361943 Td
+(Pompa bahan bakar elektrik mengalirkan bensin bertekanan tinggi dari tangki menuju fuel rail dengan tekanan) Tj
+T* (standar antara 2.5 hingga 3.0 bar. Pressure regulator menjaga kestabilan tekanan kerja. Injektor elektromagnetik) Tj
+T* (bertugas menyemprotkan kabut bensin ke lubang intake manifold. Durasi pembukaan injektor diatur langsung oleh) Tj
+T* (ECU mobil berdasarkan kalkulasi beban mesin.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<</Type /Page
+/Parent 1 0 R
+/Resources 2 0 R
+/MediaBox [0 0 595.2799999999999727 841.8899999999999864]
+/Contents 6 0 R
+>>
+endobj
+6 0 obj
+<<
+/Length 1158
+>>
+stream
+0.5670000000000001 w
+0 G
+BT
+/F1 13 Tf
+14.9499999999999993 TL
+0 g
+39.6850393700787407 785.1970866141732586 Td
+(## 3. Diagnosis Kerusakan Sistem Menggunakan Scanner OBD-II) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0 g
+39.6850393700787407 756.8506299212598378 Td
+(Diagnosis malafungsi sistem kontrol mesin dilakukan dengan menghubungkan diagnostic scanner tool ke konektor) Tj
+T* (OBD-II 16-pin di bawah dashboard kemudi. Kode kerusakan standar seperti DTC P0171 menandakan rasio bahan) Tj
+T* (bakar terlalu miskin \(system too lean\), sedangkan kode DTC P0113 menandakan sinyal rangkaian sensor IAT) Tj
+T* (mengalami voltase tinggi akibat kabel terputus.) Tj
+ET
+BT
+/F1 13 Tf
+14.9499999999999993 TL
+0 g
+39.6850393700787407 671.8112598425196893 Td
+(## 4. Jadwal Pemeliharaan Berkala) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0 g
+39.6850393700787407 643.4648031496062686 Td
+(Saringan bensin \(fuel filter\) wajib diganti secara berkala setiap interval 40.000 km guna mencegah kotoran) Tj
+T* (menyumbat saringan mikro nosel injektor. Pembersihan throttle body dan ruang bakar menggunakan cairan injector) Tj
+T* (cleaner dianjurkan setiap 20.000 km guna menjaga kestabilan putaran idle.) Tj
+ET
+endstream
+endobj
+1 0 obj
+<</Type /Pages
+/Kids [3 0 R 5 0 R ]
+/Count 2
+>>
+endobj
+7 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+8 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica-Bold
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+9 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica-Oblique
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+10 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica-BoldOblique
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+11 0 obj
+<<
+/Type /Font
+/BaseFont /Courier
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+12 0 obj
+<<
+/Type /Font
+/BaseFont /Courier-Bold
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+13 0 obj
+<<
+/Type /Font
+/BaseFont /Courier-Oblique
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+14 0 obj
+<<
+/Type /Font
+/BaseFont /Courier-BoldOblique
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+15 0 obj
+<<
+/Type /Font
+/BaseFont /Times-Roman
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+16 0 obj
+<<
+/Type /Font
+/BaseFont /Times-Bold
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+17 0 obj
+<<
+/Type /Font
+/BaseFont /Times-Italic
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+18 0 obj
+<<
+/Type /Font
+/BaseFont /Times-BoldItalic
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+19 0 obj
+<<
+/Type /Font
+/BaseFont /ZapfDingbats
+/Subtype /Type1
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+20 0 obj
+<<
+/Type /Font
+/BaseFont /Symbol
+/Subtype /Type1
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+2 0 obj
+<<
+/ProcSet [/PDF /Text /ImageB /ImageC /ImageI]
+/Font <<
+/F1 7 0 R
+/F2 8 0 R
+/F3 9 0 R
+/F4 10 0 R
+/F5 11 0 R
+/F6 12 0 R
+/F7 13 0 R
+/F8 14 0 R
+/F9 15 0 R
+/F10 16 0 R
+/F11 17 0 R
+/F12 18 0 R
+/F13 19 0 R
+/F14 20 0 R
+>>
+/XObject <<
+>>
+>>
+endobj
+21 0 obj
+<<
+/Producer (jsPDF 4.2.1)
+/CreationDate (D:20260926155634+07'00')
+>>
+endobj
+22 0 obj
+<<
+/Type /Catalog
+/Pages 1 0 R
+/OpenAction [3 0 R /FitH null]
+/PageLayout /OneColumn
+>>
+endobj
+xref
+0 23
+0000000000 65535 f 
+0000002994 00000 n 
+0000004819 00000 n 
+0000000015 00000 n 
+0000000152 00000 n 
+0000001647 00000 n 
+0000001784 00000 n 
+0000003057 00000 n 
+0000003182 00000 n 
+0000003312 00000 n 
+0000003445 00000 n 
+0000003583 00000 n 
+0000003707 00000 n 
+0000003836 00000 n 
+0000003968 00000 n 
+0000004104 00000 n 
+0000004232 00000 n 
+0000004359 00000 n 
+0000004488 00000 n 
+0000004621 00000 n 
+0000004723 00000 n 
+0000005069 00000 n 
+0000005155 00000 n 
+trailer
+<<
+/Size 23
+/Root 22 0 R
+/Info 21 0 R
+/ID [ <8B67D0144A19604973ABB3A6917B47ED> <8B67D0144A19604973ABB3A6917B47ED> ]
+>>
+startxref
+5259
+%%EOF

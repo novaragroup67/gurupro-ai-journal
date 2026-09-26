@@ -41,7 +41,7 @@ import { uid } from "@/lib/cloud-store";
 import { useKelas } from "@/lib/kelas-store";
 import { useTahunAjaran } from "@/lib/tahun-ajaran-store";
 import { SUMBER_TIPE, type Modul, type SumberTipe } from "@/lib/modul-types";
-import { analisisSumberUrl, type SumberPreview } from "@/lib/sumber.functions";
+import { analisisSumberUrl, analisisSumberDokumen, type SumberPreview } from "@/lib/sumber.functions";
 
 const ICONS: Record<SumberTipe, typeof Target> = {
   "CP / ATP": Target,
@@ -70,6 +70,7 @@ export function ModulGeneratorDialog({
   const { kelasList, refresh: refreshKelas } = useKelas();
   const { selectedYear } = useTahunAjaran(user?.id || profile?.id);
   const analisis = useServerFn(analisisSumberUrl);
+  const analisisDokumen = useServerFn(analisisSumberDokumen);
   const generate = useServerFn(generateModulAi);
 
   const myKelasList = useMemo(() => {
@@ -413,19 +414,45 @@ export function ModulGeneratorDialog({
                   <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed p-3 text-sm text-muted-foreground hover:bg-muted/50 min-w-0">
                     <FileUp className="h-4 w-4 shrink-0" />
                     <span className="truncate">
-                      {fileName || "Tandai nama file eBook (isi materi tetap ditempel di bawah)"}
+                      {analyzing ? "Mengekstrak dokumen…" : fileName || "Pilih file dokumen (PDF, DOCX, TXT)"}
                     </span>
                     <input
                       type="file"
                       className="hidden"
-                      accept=".pdf,.doc,.docx,.txt"
+                      accept=".pdf,.docx,.txt,.html"
                       onChange={(e) => {
                         const f = e.target.files?.[0];
                         if (f) {
                           setFileName(f.name);
-                          toast.info(
-                            "Tempel bagian isi dokumen di bawah agar AI berdasar isi aslinya.",
-                          );
+                          setAnalyzing(true);
+                          setSumberError("");
+                          const reader = new FileReader();
+                          reader.onload = async () => {
+                            try {
+                              const base64Data = String(reader.result || "");
+                              const res = await analisisDokumen({
+                                data: {
+                                  fileName: f.name,
+                                  fileType: f.type,
+                                  base64Data,
+                                },
+                              });
+                              setPreview(res);
+                              setSumberInput(res.konten);
+                              toast.success(`Dokumen "${f.name}" berhasil diekstrak (${res.jumlahKata} kata).`);
+                            } catch (err: any) {
+                              const msg = err?.message || "Gagal mengekstrak teks dari dokumen.";
+                              setSumberError(msg);
+                              toast.error(msg);
+                            } finally {
+                              setAnalyzing(false);
+                            }
+                          };
+                          reader.onerror = () => {
+                            setAnalyzing(false);
+                            setSumberError("Gagal membaca file dari perangkat.");
+                          };
+                          reader.readAsDataURL(f);
                         }
                       }}
                     />

@@ -91,7 +91,11 @@ export interface AiUsageMetadata {
 
 export interface IngestionOptions {
   sourceType: AiSourceType;
-  input: string;
+  input?: string;
+  documentBuffer?: Uint8Array | Buffer;
+  base64Data?: string;
+  fileName?: string;
+  mimeType?: string;
   title?: string;
   userId: string;
   metadata?: Record<string, unknown>;

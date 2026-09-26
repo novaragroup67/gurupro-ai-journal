@@ -67,7 +67,8 @@ export function evaluateGroundingAgainstSource(
   let maxMatchedTerms = 0;
 
   for (const chunk of sourceChunks) {
-    const chunkLower = chunk.content.toLowerCase();
+    const chunkText = `${chunk.title ? chunk.title + " " : ""}${chunk.content}`;
+    const chunkLower = chunkText.toLowerCase();
     let matchedCount = 0;
 
     for (const term of claimTerms) {
@@ -80,13 +81,20 @@ export function evaluateGroundingAgainstSource(
       maxMatchedTerms = matchedCount;
       bestChunk = chunk;
 
-      // Extract matching sentence or snippet
+      // Extract sentence with highest density of matching terms
       const sentences = chunk.content.split(/(?<=[.!?\n])\s+/);
-      const matchingSentence = sentences.find((s) => {
+      let bestSentMatch = 0;
+      for (const s of sentences) {
         const sLower = s.toLowerCase();
-        return claimTerms.some((t) => sLower.includes(t));
-      });
-      bestSnippet = matchingSentence ? matchingSentence.trim().slice(0, 200) : undefined;
+        let sCount = 0;
+        for (const t of claimTerms) {
+          if (sLower.includes(t)) sCount++;
+        }
+        if (sCount > bestSentMatch) {
+          bestSentMatch = sCount;
+          bestSnippet = s.trim().slice(0, 200);
+        }
+      }
     }
   }
 

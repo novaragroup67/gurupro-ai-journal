@@ -228,3 +228,45 @@ export const analisisSumberUrl = createServerFn({ method: "POST" })
       contentHash: snapshot.contentHash,
     };
   });
+
+export interface DocumentInputPayload {
+  fileName: string;
+  fileType?: string;
+  base64Data: string;
+}
+
+/** Mengekstrak teks dari file dokumen (PDF, DOCX, TXT, HTML) di sisi server untuk referensi AI */
+export const analisisSumberDokumen = createServerFn({ method: "POST" })
+  .middleware([requireTeacherAiAuth])
+  .inputValidator((input: DocumentInputPayload) => {
+    if (!input || !input.base64Data) {
+      throw new Error("File dokumen kosong atau gagal diunggah.");
+    }
+    return {
+      fileName: String(input.fileName || "dokumen").trim(),
+      fileType: String(input.fileType || "").trim(),
+      base64Data: input.base64Data,
+    };
+  })
+  .handler(async ({ data, context }): Promise<SumberPreview> => {
+    const userId = (context as any)?.userId || (context as any)?.profile?.id || "teacher_user";
+    const snapshot = await ingestSource({
+      sourceType: "dokumen",
+      base64Data: data.base64Data,
+      fileName: data.fileName,
+      mimeType: data.fileType,
+      userId,
+    });
+
+    return {
+      url: "",
+      judul: snapshot.sourceTitle || data.fileName,
+      situs: data.fileName,
+      konten: snapshot.normalizedContent,
+      jumlahKata: snapshot.wordCount,
+      cukup: snapshot.wordCount >= 30,
+      snapshotId: snapshot.id,
+      contentHash: snapshot.contentHash,
+    };
+  });
+

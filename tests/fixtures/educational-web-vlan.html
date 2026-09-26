@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Panduan Konfigurasi Virtual LAN (VLAN) dan 802.1Q Trunking</title>
+  <script>console.log("analytics script tracker");</script>
+  <style>.sidebar-ad { display: block; color: red; }</style>
+</head>
+<body>
+  <header>
+    <div class="logo">Portal Belajar Jaringan Edukasi</div>
+    <nav>
+      <ul>
+        <li><a href="/beranda">Beranda</a></li>
+        <li><a href="/modul">Daftar Modul</a></li>
+        <li><a href="/login">Masuk Akun</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <aside class="sidebar-ad">
+    <p>Iklan Sponsor: Diskon Kursus Jaringan Komputer 50%!</p>
+  </aside>
+
+  <main>
+    <article>
+      <h1>Implementasi Virtual LAN (VLAN) dan Trunking pada Switch Managed</h1>
+
+      <section>
+        <h2>1. Konsep Dasar Virtual LAN</h2>
+        <p>Virtual LAN (VLAN) adalah teknologi jaringan komputer yang membagi satu switch fisik secara logis menjadi beberapa broadcast domain yang terpisah. Tanpa VLAN, seluruh port pada switch unmanaged berada dalam broadcast domain yang sama (default VLAN 1), yang dapat menyebabkan broadcast storm pada jaringan berukuran besar.</p>
+        <p>Rentang nilai VLAN ID standar berkisar antara 1 hingga 1005 (Normal Range), sedangkan Extended Range berkisar antara 1006 hingga 4094.</p>
+      </section>
+
+      <section>
+        <h2>2. Perbedaan Port Access dan Port Trunk</h2>
+        <p>Dalam switch layer 2 terdapat dua mode port utama:</p>
+        <ul>
+          <li><strong>Mode Access:</strong> Digunakan untuk menghubungkan switch dengan perangkat akhir (end device) seperti komputer PC klien, laptop, atau printer. Port access hanya membawa lalu lintas data untuk satu VLAN tertentu tanpa tag 802.1Q.</li>
+          <li><strong>Mode Trunk:</strong> Digunakan untuk menghubungkan switch ke switch lain atau switch ke router (Router-on-a-Stick). Port trunk mampu melewatkan banyak VLAN sekaligus dengan menyisipkan tag VLAN ID pada header frame Ethernet.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>3. Standar Protokol IEEE 802.1Q</h2>
+        <p>Protokol IEEE 802.1Q merupakan standar industri terbuka untuk enkapsulasi frame trunking. Protokol ini menyisipkan tag 4-byte (32 bit) ke dalam header frame Ethernet standar. Tag tersebut memuat Tag Protocol Identifier (TPID 0x8100) dan Tag Control Information (TCI) yang berisi VLAN Identifier (VID) sebesar 12 bit.</p>
+        <p>Dengan 12 bit VID, protokol 802.1Q mampu mendukung identifikasi hingga 4096 VLAN unik secara teoritis.</p>
+      </section>
+
+      <section>
+        <h2>4. Pengujian dan Verifikasi VLAN</h2>
+        <p>Perintah verifikasi pada CLI switch Cisco Catalyst adalah <code>show vlan brief</code> untuk melihat daftar VLAN aktif dan pemetaan port. Untuk memverifikasi port trunk, perintah yang digunakan adalah <code>show interfaces trunk</code>.</p>
+      </section>
+    </article>
+  </main>
+
+  <div class="cookie-banner">
+    <p>Situs ini menggunakan cookie untuk memastikan pengalaman belajar terbaik bagi Anda. Tutup pesan ini jika setuju.</p>
+  </div>
+
+  <footer>
+    <p>&copy; 2026 Portal Belajar Jaringan Nusantara. Hak cipta dilindungi undang-undang. Bagikan artikel ini ke media sosial.</p>
+  </footer>
+</body>
+</html>

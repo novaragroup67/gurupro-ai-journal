@@ -11,6 +11,7 @@ import net from "node:net";
 import { AI_ERROR_CODES, AiServiceError } from "./error-taxonomy";
 import { normalizeHtmlContent, normalizeTextContent } from "./source-normalizer";
 import { chunkNormalizedSource } from "./source-chunker";
+import { extractDocumentText } from "./document-parser";
 import type { AiSourceSnapshot, IngestionOptions } from "./types";
 
 const MAX_BYTES = 2 * 1024 * 1024; // 2MB
@@ -243,18 +244,19 @@ export async function ingestSource(options: IngestionOptions): Promise<AiSourceS
   if (!userId) {
     throw new AiServiceError(AI_ERROR_CODES.AUTH_ERROR, "Pengguna harus terautentikasi untuk memasukkan sumber.");
   }
-  if (!input || !input.trim()) {
+  const hasData = (input && input.trim().length > 0) || options.documentBuffer || options.base64Data;
+  if (!hasData) {
     throw new AiServiceError(AI_ERROR_CODES.SOURCE_EMPTY, "Materi sumber tidak boleh kosong.");
   }
 
-  let rawContent = input;
+  let rawContent = input || "";
   let sourceUrl: string | undefined;
-  let extractedTitle = options.title;
+  let extractedTitle = options.title || options.fileName;
   let contentType = "text/plain";
   let normalizedContent = "";
 
   if (sourceType === "url") {
-    const trimmed = input.trim();
+    const trimmed = (input || "").trim();
     if (trimmed.includes("://") && !/^https?:\/\//i.test(trimmed)) {
       throw new AiServiceError(
         AI_ERROR_CODES.SOURCE_VALIDATION_ERROR,
@@ -282,8 +284,39 @@ export async function ingestSource(options: IngestionOptions): Promise<AiSourceS
     if (!extractedTitle && normalizedResult.title) {
       extractedTitle = normalizedResult.title;
     }
+  } else if (sourceType === "dokumen") {
+    let docBuffer: Uint8Array | Buffer | undefined = options.documentBuffer;
+    if (!docBuffer && options.base64Data) {
+      const cleanB64 = options.base64Data.replace(/^data:[^;]+;base64,/, "");
+      docBuffer = Buffer.from(cleanB64, "base64");
+    } else if (!docBuffer && input && input.startsWith("data:")) {
+      const cleanB64 = input.replace(/^data:[^;]+;base64,/, "");
+      docBuffer = Buffer.from(cleanB64, "base64");
+    }
+
+    if (docBuffer) {
+      const docRes = await extractDocumentText({
+        buffer: docBuffer,
+        fileName: options.fileName,
+        mimeType: options.mimeType,
+      });
+      rawContent = docRes.text;
+      if (!extractedTitle && docRes.title) {
+        extractedTitle = docRes.title;
+      }
+      contentType =
+        docRes.format === "docx"
+          ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          : docRes.format === "pdf"
+          ? "application/pdf"
+          : "text/plain";
+      normalizedContent = normalizeTextContent(rawContent);
+    } else {
+      contentType = "text/plain";
+      normalizedContent = normalizeTextContent(rawContent);
+    }
   } else {
-    // text, kurikulum, dokumen
+    // text, kurikulum
     contentType = sourceType === "kurikulum" ? "text/markdown" : "text/plain";
     normalizedContent = normalizeTextContent(rawContent);
   }

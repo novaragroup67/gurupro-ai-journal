@@ -1,0 +1,29 @@
+# Capaian Pembelajaran: Konfigurasi Routing Statis SMK
+
+## 1. Konsep Dasar Routing
+Routing adalah proses pengiriman paket data dari satu jaringan ke jaringan lain melalui perantara router. Pada routing statis, tabel perutean (routing table) ditentukan dan dimasukkan secara manual oleh administrator jaringan. Keuntungan metode ini adalah tidak membutuhkan bandwidth tambahan untuk pertukaran protokol routing dan beban kerja prosesor router relatif lebih rendah dibandingkan routing dinamis seperti OSPF atau BGP.
+
+Karakteristik penting routing statis:
+- Parameter administrative distance default bernilai 1.
+- Administrator harus memahami topologi jaringan secara menyeluruh.
+- Sangat aman karena rute tidak disiarkan secara publik ke perangkat lain.
+- Jika link utama terputus, rute cadangan harus dialihkan secara manual melalui floating static route.
+
+## 2. Parameter Rute Statis pada RouterOS
+Dalam mengonfigurasi routing statis pada router MikroTik RouterOS, ada tiga parameter utama yang wajib ditentukan:
+- Dst-Address: Alamat jaringan IP tujuan beserta netmask (contoh: 192.168.20.0/24). Untuk rute default (default route), digunakan nilai 0.0.0.0/0.
+- Gateway: Alamat IP interface tetangga (next-hop) yang terhubung langsung dan bertugas meneruskan paket data ke tujuan (contoh: 10.10.10.2).
+- Distance: Nilai metrik integritas rute. Nilai default adalah 1. Jika bernilai lebih tinggi (misal 5), rute tersebut menjadi rute cadangan (backup).
+
+Perintah CLI standar untuk menambahkan rute statis:
+/ip route add dst-address=192.168.20.0/24 gateway=10.10.10.2 distance=1
+
+## 3. Langkah Kerja Pengujian dan Troubleshooting
+Setelah tabel routing statis ditambahkan, teknisi wajib melakukan verifikasi konektivitas menggunakan langkah kerja berikut:
+1. Uji loopback lokal pada interface router untuk memastikan stack TCP/IP aktif.
+2. Lakukan perintah ping ke alamat gateway next-hop untuk memastikan link fisik dan layer 2 aktif.
+3. Lakukan traceroute (tracert) menuju IP tujuan akhir guna memverifikasi apakah paket melewati jalur next-hop yang telah dikonfigurasi.
+4. Periksa flag routing table. Rute aktif ditandai dengan flag Active Static (AS). Jika flag bertuliskan Unreachable (U), periksa kembali status interface gateway fisik.
+
+## 4. Evaluasi Pembelajaran dan Refleksi
+Siswa dinyatakan kompeten apabila mampu menyelesaikan studi kasus perutean antar 3 kantor cabang dengan pembagian subnetting VLSM dan mengonfigurasi floating static route untuk redundansi link antar gedung tanpa terjadi loop jaringan.

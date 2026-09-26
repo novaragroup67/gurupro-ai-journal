@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "node tests/security/security.test.mjs && node tests/security/remediation.test.mjs && node tests/ai/ai-core.test.mjs && node tests/auth/auth-role.test.mjs && node tests/kelas/kelas-membership.test.mjs && node tests/kelas/mapel-kelas-sync.test.mjs && node tests/kelas/tahun-ajaran-context.test.mjs && node tests/penugasan/penugasan.test.mjs && node tests/penugasan/kkm-remedial.test.mjs && node tests/submission/submission.test.mjs && node tests/penilaian/penilaian.test.mjs && node tests/dashboard/dashboard-roles.test.mjs && node tests/dashboard/admin-operations.test.mjs && node tests/rekap/rekap-nilai.test.mjs && node tests/persistence/persistence-integrity.test.mjs && node tests/export/export-archive.test.mjs && node tests/core-gate/core-system-gate.test.mjs && npx tsx tests/ai/ai-foundation.test.mjs",
+    "test": "node tests/security/security.test.mjs && node tests/security/remediation.test.mjs && node tests/ai/ai-core.test.mjs && node tests/auth/auth-role.test.mjs && node tests/kelas/kelas-membership.test.mjs && node tests/kelas/mapel-kelas-sync.test.mjs && node tests/kelas/tahun-ajaran-context.test.mjs && node tests/penugasan/penugasan.test.mjs && node tests/penugasan/kkm-remedial.test.mjs && node tests/submission/submission.test.mjs && node tests/penilaian/penilaian.test.mjs && node tests/dashboard/dashboard-roles.test.mjs && node tests/dashboard/admin-operations.test.mjs && node tests/rekap/rekap-nilai.test.mjs && node tests/persistence/persistence-integrity.test.mjs && node tests/export/export-archive.test.mjs && node tests/core-gate/core-system-gate.test.mjs && npx tsx tests/ai/ai-foundation.test.mjs && npx tsx tests/ai/ai-retrieval-validation.test.mjs",
     "verify:db": "node scripts/verify-supabase.mjs",
     "verify:auth": "node scripts/verify-live-auth.mjs",
     "verify:mapel-kelas": "node scripts/verify-live-mapel-kelas.mjs",
@@ -72,6 +72,7 @@
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.1",
     "tw-animate-css": "^1.3.4",
+    "unpdf": "^1.8.1",
     "vaul": "^1.1.2",
     "vite-tsconfig-paths": "^6.0.2",
     "zod": "^3.24.2"
