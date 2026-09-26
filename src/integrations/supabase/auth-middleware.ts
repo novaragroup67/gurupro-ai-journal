@@ -265,3 +265,58 @@ export const requireGuruAuth = createMiddleware({ type: "function" })
       },
     });
   });
+
+export const requireTeacherAiAuth = createMiddleware({ type: "function" })
+  .middleware([requireSupabaseAuth])
+  .server(async ({ next, context }) => {
+    const supabase = (context as any).supabase;
+    const userId = (context as any).userId;
+
+    let profile: any = null;
+    let dbError: any = null;
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role, status_verifikasi")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (error) {
+        dbError = error;
+      } else if (data) {
+        profile = data;
+      }
+    } catch (err: any) {
+      dbError = err;
+    }
+
+    if (!profile) {
+      if (dbError) {
+        throw new Error(`Forbidden: Gagal memuat profil basis data (${dbError.message})`);
+      }
+      throw new Error("Forbidden: Profil pengguna tidak ditemukan.");
+    }
+
+    const userRole = String(profile.role || "").toLowerCase().trim();
+    // Strict Teacher AI Boundary: Only verified guru accounts are permitted
+    if (userRole !== "guru") {
+      throw new Error("Forbidden: Operasi AI hanya diizinkan untuk peran Guru.");
+    }
+
+    const status = String(profile.status_verifikasi || "").toLowerCase().trim();
+    if (status === "menunggu") {
+      throw new Error("Forbidden: Akun guru Anda sedang menunggu verifikasi.");
+    }
+    if (status === "ditolak" || status === "nonaktif") {
+      throw new Error("Forbidden: Akun guru Anda ditolak atau belum aktif.");
+    }
+
+    return next({
+      context: {
+        ...context,
+        profile,
+      },
+    });
+  });
+

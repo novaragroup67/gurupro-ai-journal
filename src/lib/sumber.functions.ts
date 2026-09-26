@@ -2,7 +2,8 @@ import dns from "node:dns/promises";
 import net from "node:net";
 import { createServerFn } from "@tanstack/react-start";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireTeacherAiAuth } from "@/integrations/supabase/auth-middleware";
+import { ingestSource } from "./ai/source-ingestion";
 
 export interface SumberPreview {
   url: string;
@@ -11,6 +12,8 @@ export interface SumberPreview {
   konten: string;
   jumlahKata: number;
   cukup: boolean;
+  snapshotId?: string;
+  contentHash?: string;
 }
 
 const BLOCK_TAGS = [
@@ -193,7 +196,7 @@ async function fetchSafeBody(
 
 /** Mengambil dan membersihkan isi halaman web agar bisa dipakai AI sebagai sumber dengan proteksi SSRF. */
 export const analisisSumberUrl = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireTeacherAiAuth])
   .inputValidator((input: { url: string }) => {
     const raw = String(input?.url ?? "").trim();
     const withProto = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
@@ -206,99 +209,22 @@ export const analisisSumberUrl = createServerFn({ method: "POST" })
     if (!/^https?:$/.test(parsed.protocol)) throw new Error("Hanya link http/https yang didukung.");
     return { url: parsed.toString() };
   })
-  .handler(async ({ data }): Promise<SumberPreview> => {
-    let currentUrl = data.url;
-    let response: Response | null = null;
-    const maxRedirects = 3;
-
-    for (let hop = 0; hop <= maxRedirects; hop++) {
-      const parsed = new URL(currentUrl);
-      await validateHostSafety(parsed.hostname, hop > 0);
-
-      try {
-        const outboundHeaders = new Headers({
-          "user-agent": "Mozilla/5.0 (compatible; GuruProBot/1.0; +https://gurupro.id)",
-          accept: "text/html,application/xhtml+xml,text/plain",
-          "accept-language": "id,en;q=0.8",
-        });
-        outboundHeaders.delete("authorization");
-        response = await fetch(currentUrl, {
-          headers: outboundHeaders,
-          redirect: "manual",
-          signal: AbortSignal.timeout(10000),
-        });
-      } catch (err: any) {
-        if (err?.name === "TimeoutError" || err?.name === "AbortError") {
-          throw new Error(
-            "Permintaan ke link melebihi batas waktu (timeout 10 detik). Coba link lain.",
-          );
-        }
-        throw new Error("Sumber tidak dapat diakses. Periksa link atau coba sumber lain.");
-      }
-
-      // Check for redirect status codes: 301, 302, 303, 307, 308
-      if ([301, 302, 303, 307, 308].includes(response.status)) {
-        const location = response.headers.get("location");
-        if (!location) {
-          throw new Error("Tautan mengarahkan ke lokasi yang tidak diketahui (redirect kosong).");
-        }
-        if (hop === maxRedirects) {
-          throw new Error("Terlalu banyak pengalihan (redirect loop). Coba link langsung.");
-        }
-
-        let nextParsed: URL;
-        try {
-          nextParsed = new URL(location, currentUrl);
-        } catch {
-          throw new Error("Format tujuan redirect tidak valid.");
-        }
-
-        if (!/^https?:$/.test(nextParsed.protocol)) {
-          throw new Error("Protokol redirect tidak didukung (hanya http/https).");
-        }
-
-        currentUrl = nextParsed.toString();
-        continue;
-      }
-
-      break;
-    }
-
-    if (!response || !response.ok) {
-      const status = response ? ` (status ${response.status})` : "";
-      throw new Error(`Sumber tidak dapat diakses${status}. Coba link lain.`);
-    }
-
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!/text\/html|text\/plain|application\/xhtml/.test(contentType)) {
-      throw new Error(
-        "Isi halaman bukan teks yang bisa dibaca (misal PDF atau media). Gunakan link halaman artikel.",
-      );
-    }
-
-    const html = await fetchSafeBody(response, 2 * 1024 * 1024);
-    const judul =
-      decode(
-        /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i.exec(html)?.[1] ?? "",
-      ).trim() ||
-      decode(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? "").trim() ||
-      new URL(currentUrl).hostname;
-
-    const konten = extractReadable(html);
-    const jumlahKata = konten.split(/\s+/).filter(Boolean).length;
-
-    if (jumlahKata < 60) {
-      throw new Error(
-        "Isi halaman terlalu sedikit untuk dijadikan modul. Gunakan halaman materi/artikel yang lebih lengkap.",
-      );
-    }
+  .handler(async ({ data, context }): Promise<SumberPreview> => {
+    const userId = (context as any)?.userId || (context as any)?.profile?.id || "teacher_user";
+    const snapshot = await ingestSource({
+      sourceType: "url",
+      input: data.url,
+      userId,
+    });
 
     return {
-      url: currentUrl,
-      judul,
-      situs: new URL(currentUrl).hostname.replace(/^www\./, ""),
-      konten,
-      jumlahKata,
-      cukup: jumlahKata >= 150,
+      url: snapshot.sourceUrl || data.url,
+      judul: snapshot.sourceTitle || "",
+      situs: new URL(snapshot.sourceUrl || data.url).hostname.replace(/^www\./, ""),
+      konten: snapshot.normalizedContent,
+      jumlahKata: snapshot.wordCount,
+      cukup: snapshot.wordCount >= 150,
+      snapshotId: snapshot.id,
+      contentHash: snapshot.contentHash,
     };
   });

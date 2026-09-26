@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import { requireSupabaseAuth, requireGuruAuth } from "@/integrations/supabase/auth-middleware";
+import { requireSupabaseAuth, requireGuruAuth, requireTeacherAiAuth } from "@/integrations/supabase/auth-middleware";
 
 const MODEL = "google/gemini-2.5-flash";
 const ENDPOINT = "https://ai.gateway.lovable.dev/v1/chat/completions";
@@ -40,6 +40,10 @@ interface AiProviderConfig {
 }
 
 function getEnvValue(name: string): string | undefined {
+  if (name.startsWith("VITE_")) {
+    // Security Boundary: Never read server-side AI private credentials from client VITE_* variables
+    return undefined;
+  }
   const cfEnv = (globalThis as any).__CLOUDFLARE_ENV__;
   if (cfEnv && typeof cfEnv === "object" && typeof cfEnv[name] === "string" && cfEnv[name].trim()) {
     return cfEnv[name].trim();
@@ -57,7 +61,7 @@ function getEnvValue(name: string): string | undefined {
 
 function resolveAiConfig(): AiProviderConfig {
   const lovableKey = getEnvValue("LOVABLE_API_KEY");
-  const geminiKey = getEnvValue("GEMINI_API_KEY") || getEnvValue("VITE_GEMINI_API_KEY");
+  const geminiKey = getEnvValue("GEMINI_API_KEY");
   const openAiKey = getEnvValue("OPENAI_API_KEY");
   const customModel = getEnvValue("AI_MODEL");
   const customEndpoint = getEnvValue("AI_ENDPOINT");
@@ -645,7 +649,7 @@ export function reviseFallbackSoal(data: {
 // ==========================================
 
 export const generateModulAi = createServerFn({ method: "POST" })
-  .middleware([requireGuruAuth])
+  .middleware([requireTeacherAiAuth])
   .inputValidator(
     (input: {
       sumberTipe: string;
@@ -725,7 +729,7 @@ ATURAN REVISI:
 }`;
 
 export const editModulAi = createServerFn({ method: "POST" })
-  .middleware([requireGuruAuth])
+  .middleware([requireTeacherAiAuth])
   .inputValidator(
     (input: {
       modul: {
@@ -928,7 +932,7 @@ export function validateAndNormalizeSoal(rawList: any[]): SoalAi[] {
 }
 
 export const generateSoalAi = createServerFn({ method: "POST" })
-  .middleware([requireGuruAuth])
+  .middleware([requireTeacherAiAuth])
   .inputValidator(
     (input: { topik: string; jumlah: number; tingkat: string; jenis: string; materi?: string }) => {
       const topik = String(input?.topik ?? "").trim();
@@ -977,7 +981,7 @@ export const generateSoalAi = createServerFn({ method: "POST" })
   });
 
 export const reviseSoalAi = createServerFn({ method: "POST" })
-  .middleware([requireGuruAuth])
+  .middleware([requireTeacherAiAuth])
   .inputValidator((input: { soal: SoalAi; instruksi: string; materi?: string }) => {
     if (!input?.soal?.pertanyaan) throw new Error("Soal tidak valid.");
     if (!String(input?.instruksi ?? "").trim())
