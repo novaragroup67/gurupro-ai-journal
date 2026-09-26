@@ -28,6 +28,30 @@
       "isNegative": false
     },
     {
+      "id": "TC_B2_PARAPHRASE_ACCOUNTING",
+      "category": "B",
+      "categoryName": "Paraphrase query with educational synonyms (biaya asuransi dibayar di muka)",
+      "fixtureFile": "educational-accounting-journal.docx",
+      "sourceType": "dokumen",
+      "query": "Bagaimana cara penyesuaian biaya asuransi dibayar di muka sebesar Rp 3.000.000?",
+      "expectedChunkTitleContains": "Beban Dibayar di Muka",
+      "expectedSnippetMustContain": "3.000.000",
+      "expectedGroundingStatus": "SUPPORTED",
+      "isNegative": false
+    },
+    {
+      "id": "TC_B3_PARAPHRASE_ROUTING",
+      "category": "B",
+      "categoryName": "Paraphrase query with educational synonyms (jarak administratif perutean)",
+      "fixtureFile": "educational-network-routing.txt",
+      "sourceType": "text",
+      "query": "Berapa jarak administratif standar perutean statis pada mikrotik?",
+      "expectedChunkTitleContains": "Konsep Dasar",
+      "expectedSnippetMustContain": "administrative distance default bernilai 1",
+      "expectedGroundingStatus": "SUPPORTED",
+      "isNegative": false
+    },
+    {
       "id": "TC_C_TERMINOLOGY",
       "category": "C",
       "categoryName": "Query using terminology appearing in the source",
@@ -126,6 +150,36 @@
       "fixtureFile": "educational-automotive-injection.pdf",
       "sourceType": "dokumen",
       "query": "Berapa tekanan sirkulasi cairan pendingin pada paket baterai traksi lithium-ion?",
+      "expectedGroundingStatus": "NOT_FOUND",
+      "isNegative": true
+    },
+    {
+      "id": "TC_I4_NEGATIVE_COMMON_RAIL",
+      "category": "I",
+      "categoryName": "Negative query asserting diesel common rail in gasoline EFI engine",
+      "fixtureFile": "educational-automotive-injection.pdf",
+      "sourceType": "dokumen",
+      "query": "Sistem injeksi bahan bakar EFI bensin menggunakan pompa common rail diesel bertekanan 2000 bar",
+      "expectedGroundingStatus": "NOT_FOUND",
+      "isNegative": true
+    },
+    {
+      "id": "TC_I5_NEGATIVE_CISCO",
+      "category": "I",
+      "categoryName": "Negative query asserting Cisco Catalyst switch in MikroTik static routing source",
+      "fixtureFile": "educational-network-routing.txt",
+      "sourceType": "text",
+      "query": "Konfigurasi routing statis pada switch Cisco Catalyst 2960 menggunakan perintah ip route",
+      "expectedGroundingStatus": "NOT_FOUND",
+      "isNegative": true
+    },
+    {
+      "id": "TC_I6_NEGATIVE_5_VLAN",
+      "category": "I",
+      "categoryName": "Negative query asserting 5 VLAN trunking in static routing source",
+      "fixtureFile": "educational-network-routing.txt",
+      "sourceType": "text",
+      "query": "Pembagian 5 VLAN trunking pada subinterface routing statis router MikroTik",
       "expectedGroundingStatus": "NOT_FOUND",
       "isNegative": true
     },

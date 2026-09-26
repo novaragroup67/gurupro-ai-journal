@@ -1,20 +1,29 @@
 /**
- * GuruPro AI Foundation (AI-1) — Enhanced Provenance-Preserving Source Retriever
+ * GuruPro AI Foundation (AI-1) — Deterministic Lexical & Heuristic Source Retriever (with Semantic Extension Point)
  *
  * Implements:
+ * - Deterministic lexical & heuristic retrieval engine (BM25-style frequency, title boost, exact phrase bonus)
  * - Safe regex escaping (prevents RegExp injection / syntax errors on ?, +, (, ), etc.)
  * - Indonesian educational stopword pruning for query intent
  * - Title boosting (3x weight for section headings #, ##, ###)
- * - Exact multi-word phrase matching bonus
+ * - Exact multi-word phrase matching bonus & educational synonym expansion
  * - Saturation-weighted term frequency (prevents long chunks from drowning short exact chunks)
  * - Negative retrieval detection (hasRelevantMatch: false when score is 0 / absent)
  * - Deterministic tie-breaking (order by chunk index)
  * - Strict tenant isolation (rejects cross-user access with ROLE_FORBIDDEN)
+ * - Semantic extension point (SemanticRetrieverPlugin interface for future pgvector / embedding reranking)
  */
 
 import { AI_ERROR_CODES, AiServiceError } from "./error-taxonomy";
+import { EDUCATIONAL_SYNONYMS } from "./grounding";
 import { getCachedSourceSnapshot } from "./source-ingestion";
 import type { AiSourceChunk, AiSourceSnapshot } from "./types";
+
+export interface SemanticRetrieverPlugin {
+  name: string;
+  embedQuery?(query: string): Promise<number[]>;
+  rerankChunks?(query: string, chunks: ScoredChunk[]): Promise<ScoredChunk[]>;
+}
 
 export interface RetrievalQuery {
   sourceId: string;
@@ -22,6 +31,7 @@ export interface RetrievalQuery {
   query?: string;
   maxChunks?: number;
   maxWords?: number;
+  semanticPlugin?: SemanticRetrieverPlugin;
 }
 
 export interface ScoredChunk extends AiSourceChunk {
@@ -136,6 +146,17 @@ export async function retrieveSourceContext(query: RetrievalQuery): Promise<Retr
         } else if (lower.includes(phrase)) {
           score += 10;
         }
+
+        // Phrase synonym bonus
+        if (EDUCATIONAL_SYNONYMS[phrase]) {
+          for (const synPhrase of EDUCATIONAL_SYNONYMS[phrase]) {
+            if (titleLower.includes(synPhrase)) {
+              score += 12;
+            } else if (lower.includes(synPhrase)) {
+              score += 8;
+            }
+          }
+        }
       }
 
       // 2. Individual keyword matching
@@ -156,6 +177,22 @@ export async function retrieveSourceContext(query: RetrievalQuery): Promise<Retr
         if (matches === 0 && lower.includes(kw)) {
           score += 1;
         }
+
+        // Educational synonym match bonus
+        if (EDUCATIONAL_SYNONYMS[kw]) {
+          for (const syn of EDUCATIONAL_SYNONYMS[kw]) {
+            const safeSyn = escapeRegex(syn);
+            if (titleLower.includes(syn)) {
+              score += 4;
+            }
+            const synRegex = new RegExp(`\\b${safeSyn}\\b`, "gi");
+            const synMatches = (lower.match(synRegex) || []).length;
+            score += Math.min(synMatches, 3) * 1.5;
+            if (synMatches === 0 && lower.includes(syn)) {
+              score += 0.5;
+            }
+          }
+        }
       }
 
       return {
@@ -174,6 +211,16 @@ export async function retrieveSourceContext(query: RetrievalQuery): Promise<Retr
       const topScored = scored.filter((s) => (s.score || 0) > 0);
       // Re-sort selected chunks by original index to maintain logical pedagogical sequence
       selectedChunks = topScored.slice(0, maxChunks).sort((a, b) => a.index - b.index);
+
+      // Optional Semantic Retriever Plugin Hook (Extension Point for pgvector / embeddings)
+      if (query.semanticPlugin?.rerankChunks) {
+        try {
+          selectedChunks = await query.semanticPlugin.rerankChunks(rawQuery, selectedChunks);
+        } catch (pluginErr) {
+          console.warn("[Retriever] Semantic plugin rerank failed, falling back to lexical order:", pluginErr);
+        }
+      }
+
       hasRelevantMatch = true;
     } else {
       // Negative retrieval: no chunk matched query terms

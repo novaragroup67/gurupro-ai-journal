@@ -1,6 +1,6 @@
-# GuruPro AI Source Grounding & Retrieval Pipeline (AI-1)
+# GuruPro AI Source Grounding & Retrieval Pipeline (AI-1 Final Gate)
 
-Dokumen ini mendokumentasikan arsitektur, implementasi, dan hasil validasi pipeline **AI-1: Real Source Ingestion & Grounded Retrieval Validation** pada GuruPro. 
+Dokumen ini mendokumentasikan arsitektur, implementasi, dan hasil validasi pipeline **AI-1: Real Source Ingestion & Grounded Retrieval Validation (Final Hardening Gate)** pada GuruPro. 
 
 Tahap ini memvalidasi seluruh alur pemrosesan materi sumber dari dokumen nyata hingga evaluasi bukti retrieval di sisi server, sebelum memasuki implementasi pembuatan Modul Ajar dan Generator Soal pada tahap selanjutnya.
 
@@ -25,11 +25,17 @@ flowchart TD
     J --> K["Penyimpanan Snapshot & Provenance Metadata"]
     K --> L["Query Guru (Pencarian Topik / Pertanyaan)"]
     L --> M["Retriever Terisolasi Tenant (Multi-Tenant Isolation)"]
-    M --> N["Scoring Hibrida (Stopwords, Frase Kunci, Bobot Heading 3x)"]
-    N --> O{"Tingkat Kecocokan Fakta?"}
-    O -- ">= 75%" --> P["Status: SUPPORTED (Kutipan Bukti Terlampir)"]
-    O -- "40% - 74%" --> Q["Status: INFERRED (Simpulan Konseptual)"]
-    O -- "< 40% (Absen)" --> R["Status: NOT_FOUND (Anti-Halusinasi, Tidak Dikarang)"]
+    M --> N["Scoring Leksikal & Heuristik (Stopwords, Frase, Sinonim Edukatif, Bobot Heading 3x)"]
+    N --> P1{"Plugin Semantik Eksternal?"}
+    P1 -- "Ada" --> P2["SemanticRetrieverPlugin.rerankChunks (pgvector / Embeddings)"]
+    P1 -- "Tidak Ada" --> P3["Urutan Leksikal Deterministik"]
+    P2 --> O
+    P3 --> O
+    O{"Validasi Entitas & Numerik?"}
+    O -- "Ada Entitas/Angka Tak Berdasar" --> R["Status: NOT_FOUND (Klaim Ditolak)"]
+    O -- "Entitas Valid & Kecocokan >= 70%" --> S["Status: SUPPORTED (Kutipan Bukti Terlampir)"]
+    O -- "Entitas Valid & Kecocokan 40% - 69%" --> T["Status: INFERRED (Simpulan Konseptual)"]
+    O -- "Entitas Valid & Kecocokan < 40%" --> R
 ```
 
 ---
@@ -39,7 +45,7 @@ flowchart TD
 | Format | Library Parser | Karakteristik Ekstraksi & Struktur |
 | :--- | :--- | :--- |
 | **DOCX** | `fflate` (unzip bawaan) | Membaca `word/document.xml`. Mengonversi gaya `<w:pStyle>` (`Heading1`, `Heading2`, `Title`) menjadi heading Markdown (`#`, `##`), poin nomor `<w:numPr>` menjadi daftar `-`, dan elemen tabel `<w:tbl>` menjadi tabel Markdown `\| kol \| kol \|`. |
-| **PDF** | `unpdf` (dari unjs) | Mengekstrak teks tiap halaman secara berurutan. Mengenali heading berdasarkan baris bab/modul/penomoran (`BAB`, `1. Pendahuluan`), mempertahankan format daftar (`-`, `*`), serta memelihara angka, formula, dan istilah teknis secara presisi. |
+| **PDF** | `unpdf` (dari unjs) | Mengekstrak teks tiap halaman secara berurutan. Mengenali heading berdasarkan baris bab/modul/penomoran (`BAB`, `1. Pendahuluan`), mempertahankan format daftar (`-`, `*`), serta memelihara angka, formula, dan istilah teknis secara presisi. Buffer ditransformasikan ke instance `Uint8Array` murni untuk keandalan runtime Node. |
 | **Plain Text / MD** | Native Node.js UTF-8 | Mendekode teks secara langsung dan mendeteksi judul utama `#` atau `Title:`. |
 | **HTML / Web URL** | HTML Normalizer | Memeriksa Anti-SSRF (DNS lookup, blok range privat, loopback, cloud metadata `169.254.169.254`), mengunduh dengan batas 2MB dan timeout 10 detik, lalu membersihkan navigasi, footer, script, dan banner persetujuan. |
 
@@ -56,31 +62,40 @@ Sesuai aturan ketat AI-1, proses normalisasi:
 
 ---
 
-## 4. Mesin Retrieval & Pembobotan Relevansi (`retriever.ts`)
+## 4. Mesin Retrieval Deterministik & Ekstensi Semantik (`retriever.ts`)
 
-Retriever menggunakan algoritma skoring hibrida leksikal-semantik yang dioptimalkan untuk materi edukatif:
+Mesin retrieval diimplementasikan sebagai **Deterministic Lexical & Heuristic Source Retriever (with Semantic Extension Point)**:
 
 1. **Regex Safety**: Semua karakter khusus regex (`?`, `+`, `*`, `(`, `)`, `[`, `]`) di-escape secara aman sehingga kueri dengan formula matematika atau tanda baca tidak menimbulkan *SyntaxError*.
 2. **Indonesian Educational Stopword Pruning**: Kata tugas dan partikel tanya umum bahasa Indonesia (*apa, apakah, bagaimana, jelaskan, sebutkan, yang, pada, dalam, untuk, dengan*) dipangkas dari pembobotan utama agar istilah inti kurikulum mendominasi skoring.
-3. **Section Title Boost (Bobot 3x)**: Istilah yang cocok pada judul bagian (`#`, `##`, `###`) mendapat skor tambahan signifikan (+6 per istilah).
-4. **Exact Phrase Match Bonus**: Frase multi-kata yang cocok persis secara berurutan (contoh: *"routing statis"*, *"jurnal penyesuaian"*, *"topologi star"*) mendapatkan bonus besar (+10 hingga +15).
-5. **Saturation-Weighted Body Matching**: Pencocokan kata pada badan teks dibatasi (*cap*) maksimal 5 kemunculan per kata untuk mencegah potongan teks panjang mendominasi potongan teks ringkas yang lebih presisi.
-6. **Tie-Breaking Deterministik**: Jika skor potongan teks sama, diurutkan berdasarkan `chunk.index` sehingga urutan retrieval 100% konsisten pada pengujian berulang.
-7. **Isolasi Kepemilikan (Multi-Tenant)**: Memeriksa `snapshot.userId === query.userId`. Akses silang guru langsung memicu error `ROLE_FORBIDDEN`.
+3. **Kamus Sinonim Edukatif (`EDUCATIONAL_SYNONYMS`)**: Mendukung pemetaan istilah kurikulum Indonesia (contoh: *perutean* $\leftrightarrow$ *routing*, *jarak administratif* $\leftrightarrow$ *administrative distance*, *biaya* $\leftrightarrow$ *beban*, *penyusutan* $\leftrightarrow$ *depresiasi*, *bensin* $\leftrightarrow$ *fuel/gasoline*).
+4. **Section Title Boost (Bobot 3x)**: Istilah yang cocok pada judul bagian (`#`, `##`, `###`) mendapat skor tambahan signifikan (+6 per istilah).
+5. **Exact Phrase Match Bonus**: Frase multi-kata yang cocok persis secara berurutan (contoh: *"routing statis"*, *"jurnal penyesuaian"*, *"topologi star"*) mendapatkan bonus besar (+10 hingga +15).
+6. **Saturation-Weighted Body Matching**: Pencocokan kata pada badan teks dibatasi (*cap*) maksimal 5 kemunculan per kata untuk mencegah potongan teks panjang mendominasi potongan teks ringkas yang lebih presisi.
+7. **Tie-Breaking Deterministik**: Jika skor potongan teks sama, diurutkan berdasarkan `chunk.index` sehingga urutan retrieval 100% konsisten pada pengujian berulang.
+8. **Isolasi Kepemilikan (Multi-Tenant)**: Memeriksa `snapshot.userId === query.userId`. Akses silang guru langsung memicu error `ROLE_FORBIDDEN`.
+9. **Semantic Extension Point (`SemanticRetrieverPlugin`)**: Menyediakan antarmuka plugin opsional (`embedQuery`, `rerankChunks`) sehingga reranking berbasis pgvector atau embeddings dapat diintegrasikan di masa depan tanpa mengubah alur pemanggilan retrieval.
 
 ---
 
-## 5. Perilaku Grounding Negatif (Anti-Halusinasi)
+## 5. Grounding Hardening: Penolakan Klaim Tak Berdasar (Anti-Halusinasi)
 
-Apabila informasi yang ditanyakan guru tidak terdapat pada materi sumber acuan:
-1. Retriever menandai `hasRelevantMatch: false` jika kueri tidak memiliki kecocokan leksikal sama sekali.
-2. Evaluator grounding (`evaluateGroundingAgainstSource`) menghitung rasio kecocokan istilah kunci:
-   - Jika rasio kecocokan `< 40%`, status kueri **WAJIB** diklasifikasikan sebagai **`NOT_FOUND`**.
-   - Sistem **TIDAK MENGARANG JAWABAN** atau berspekulasi di luar dokumen rujukan guru.
-3. Kasus uji nyata membuktikan:
-   - Kueri kebijakan enkapsulasi VLAN pada materi routing statis $\to$ `NOT_FOUND`.
-   - Kueri akuntansi aset kripto pada jurnal perusahaan jasa $\to$ `NOT_FOUND`.
-   - Kueri pendingin baterai mobil listrik pada sistem injeksi bensin EFI $\to$ `NOT_FOUND`.
+Sistem grounding menerapkan aturan verifikasi entitas dan numerik ketat: **Unsupported claims are rejected and classified as NOT_FOUND by the tested grounding rules.**
+
+1. **Deteksi Entitas Spesifik & Nilai Numerik**:
+   - Sistem mendeteksi entitas kapitalisasi, akronim teknis (seperti *Cisco*, *Catalyst*, *VLAN*, *Bitcoin*, *Ethereum*, *Common Rail*), dan nilai numerik spesifik (seperti *2000 bar*, *2960*).
+   - Jika klaim memuat entitas atau nilai numerik yang sama sekali tidak ditemukan pada materi sumber rujukan, klaim tersebut **seketika ditolak sebagai `NOT_FOUND`**.
+   - Ini mencegah celah kelolosan (*false-positive bypass*) di mana klaim yang menyisipkan entitas asing dianggap `SUPPORTED` hanya karena 70% kata penghubung di sekitarnya cocok.
+2. **Evaluasi Rasio Kecocokan**:
+   - Jika rasio kecocokan leksikal $< 40\%$, status diklasifikasikan sebagai **`NOT_FOUND`**.
+   - Jika rasio kecocokan $\ge 70\%$ dan seluruh entitas spesifik terverifikasi, status adalah **`SUPPORTED`**.
+   - Jika rasio kecocokan $40\% - 69\%$ dan entitas valid, status adalah **`INFERRED`**.
+3. **Hasil Validasi Kasus Negatif Riil**:
+   - Kueri pompa diesel common rail bertekanan 2000 bar pada mesin bensin EFI $\to$ **`NOT_FOUND`** (entitas tak berdasar: `2000`, `common`, `diesel`).
+   - Kueri switch Cisco Catalyst 2960 pada routing statis MikroTik $\to$ **`NOT_FOUND`** (entitas tak berdasar: `2960`, `cisco`, `catalyst`).
+   - Kueri 5 VLAN trunking pada routing statis MikroTik $\to$ **`NOT_FOUND`** (entitas tak berdasar: `vlan`).
+   - Kueri aset kripto Bitcoin pada jurnal penyesuaian $\to$ **`NOT_FOUND`**.
+   - Kueri pendingin baterai lithium EV pada mesin bensin EFI $\to$ **`NOT_FOUND`**.
 
 ---
 
@@ -110,22 +125,27 @@ Fixture nyata tersimpan di [`tests/fixtures/`](file:///c:/novara%20project/gurup
 3. **`educational-accounting-journal.docx`**: Dokumen biner DOCX nyata berisi Jurnal Penyesuaian Akuntansi, asuransi dibayar di muka, metode garis lurus, dan tabel akun.
 4. **`educational-automotive-injection.pdf`**: Dokumen biner PDF nyata multi-halaman berisi Pemeliharaan Sistem Bahan Bakar EFI, sensor MAF/TPS/IAT, dan scanner OBD-II DTC.
 
-### Matriks Kategori Pengujian Golden Dataset (A - M)
+### Matriks Kategori Pengujian Golden Dataset (20 Kasus)
 Definisi pengujian berada di [`tests/fixtures/golden-retrieval-dataset.json`](file:///c:/novara%20project/gurupro-ai-journal-main/tests/fixtures/golden-retrieval-dataset.json):
 
 | Kategori | Nama Pengujian | Target Fixture | Ekspektasi Retrieval | Status Grounding |
 | :--- | :--- | :--- | :--- | :--- |
 | **A** | Exact factual query | `network-routing.txt` | Nilai default administrative distance = 1 | `SUPPORTED` |
 | **B** | Natural-language query | `accounting-journal.docx` | Perhitungan beban asuransi Rp 3.000.000 | `SUPPORTED` |
+| **B2** | Paraphrase (biaya asuransi) | `accounting-journal.docx` | Penyesuaian biaya asuransi Rp 3.000.000 | `SUPPORTED` |
+| **B3** | Paraphrase (jarak administratif) | `network-routing.txt` | Jarak administratif perutean statis default = 1 | `SUPPORTED` |
 | **C** | Terminology query | `automotive-injection.pdf` | Fungsi sensor MAF & TPS pada mesin EFI | `SUPPORTED` |
-| **D** | Equivalent wording | `network-routing.txt` | Keunggulan perutean manual vs dinamis | `SUPPORTED` |
+| **D** | Equivalent wording | `network-routing.txt` | Keunggulan perutean manual vs dinamis | `SUPPORTED` / `INFERRED` |
 | **E** | Specific section query | `web-vlan.html` | Standar protokol IEEE 802.1Q & tag TPID | `SUPPORTED` |
 | **F** | Distant chunk query | `network-routing.txt` | Flag status rute Active Static (AS) & Unreachable | `SUPPORTED` |
 | **G** | Multiple chunks query | `web-vlan.html` | Mode Access & Trunk serta nomor VLAN ID | `SUPPORTED` |
 | **H** | Nearby irrelevant query | `automotive-injection.pdf` | Interval ganti saringan bensin 40.000 km | `SUPPORTED` |
-| **I** | Negative query (absent) | `network-routing.txt` | Pertanyaan aturan VLAN encapsulation | `NOT_FOUND` |
-| **I2** | Negative query (absent) | `accounting-journal.docx` | Pertanyaan aset kripto Bitcoin | `NOT_FOUND` |
-| **I3** | Negative query (absent) | `automotive-injection.pdf` | Pertanyaan pendingin baterai lithium EV | `NOT_FOUND` |
+| **I** | Negative query (VLAN) | `network-routing.txt` | Aturan pembagian VLAN encapsulation 802.1Q | `NOT_FOUND` |
+| **I2** | Negative query (Kripto) | `accounting-journal.docx` | Pertanyaan aset kripto Bitcoin | `NOT_FOUND` |
+| **I3** | Negative query (Baterai EV) | `automotive-injection.pdf` | Pertanyaan pendingin baterai lithium EV | `NOT_FOUND` |
+| **I4** | Negative query (Common Rail) | `automotive-injection.pdf` | Pompa common rail diesel 2000 bar | `NOT_FOUND` |
+| **I5** | Negative query (Cisco 2960) | `network-routing.txt` | Perintah ip route pada switch Cisco Catalyst 2960 | `NOT_FOUND` |
+| **I6** | Negative query (5 VLAN) | `network-routing.txt` | Pembagian 5 VLAN trunking subinterface | `NOT_FOUND` |
 | **J** | Cross-user attempt | `network-routing.txt` | Akses Guru B ke sumber Guru A | Ditolak `ROLE_FORBIDDEN` |
 | **K** | Empty query fallback | `network-routing.txt` | Kueri spasi kosong | Sekuensial aman (index 0) |
 | **L** | Very long query | `accounting-journal.docx` | Kueri paragraf panjang (> 200 karakter) | Penyusutan Rp 10.000.000 |
@@ -133,7 +153,7 @@ Definisi pengujian berada di [`tests/fixtures/golden-retrieval-dataset.json`](fi
 
 ---
 
-## 8. Ringkasan Eksekusi Pengujian (19 Test Suites)
+## 8. Ringkasan Eksekusi Pengujian (20 Test Suites)
 
 Seluruh suite pengujian dijalankan melalui `npm test`:
 
@@ -156,21 +176,41 @@ Seluruh suite pengujian dijalankan melalui `npm test`:
 16. tests/export/export-archive.test.mjs              PASSED
 17. tests/core-gate/core-system-gate.test.mjs (21/21) PASSED
 18. tests/ai/ai-foundation.test.mjs (42/42)           PASSED
-19. tests/ai/ai-retrieval-validation.test.mjs (30/30) PASSED
+19. tests/ai/ai-retrieval-validation.test.mjs (35/35) PASSED
+20. tests/ai/ai-final-gate.test.mjs (14/14)           PASSED
 ================================================================================
-  HASIL KESELURUHAN: 19/19 SUITE LULUS (0 FAILURES)
+  HASIL KESELURUHAN: 20/20 SUITE LULUS (0 FAILURES)
 ================================================================================
 ```
 
 ---
 
-## 9. Perintah Validasi Cepat
+## 9. Hasil Validasi Live E2E (`scripts/verify-live-ai-hardening.mjs`)
+
+Pengujian live end-to-end terhadap basis data canonical Supabase (`dxzzpsrgbiummjplggyo`):
+
+- **Flow 1 (PDF)**: Penyerapan PDF sistem bahan bakar EFI $\to$ Query tekanan fuel rail $\to$ Mengembalikan potongan bukti `"2.5 hingga 3.0 bar"` dengan status `SUPPORTED` (LULUS).
+- **Flow 2 (DOCX)**: Penyerapan DOCX jurnal penyesuaian $\to$ Query asuransi dibayar di muka $\to$ Mengembalikan potongan bukti `"3.000.000"` dengan status `SUPPORTED` (LULUS).
+- **Flow 3 (HTML)**: Penyerapan HTML VLAN $\to$ Query IEEE 802.1Q $\to$ Mengembalikan potongan bukti `"Tag Protocol Identifier"` dengan status `SUPPORTED` (LULUS).
+- **Flow 4 (Negative Grounding)**: Penegasan pompa common rail diesel 2000 bar pada mesin bensin $\to$ Ditolak seketika sebagai `NOT_FOUND` (LULUS).
+- **Flow 5 (Isolasi Multi-Tenant)**: Percobaan Guru B mengakses snapshot Guru A $\to$ Diblokir seketika dengan `ROLE_FORBIDDEN` (LULUS).
+- **Flow 6 (Server-Side Auth Boundary)**: Gateway Auth Supabase aktif, peran siswa diblokir dari operasi AI guru, guru status pending diblokir, guru terverifikasi diizinkan (LULUS).
+
+---
+
+## 10. Perintah Validasi Cepat
 
 ```bash
 # Menjalankan pengujian spesifik AI-1 Ingestion & Retrieval
 npx tsx tests/ai/ai-retrieval-validation.test.mjs
 
-# Menjalankan seluruh pengujian regresi & AI
+# Menjalankan pengujian AI-1 Final Hardening Gate
+npx tsx tests/ai/ai-final-gate.test.mjs
+
+# Menjalankan verifikasi live end-to-end terhadap Supabase
+npm run verify:ai-hardening
+
+# Menjalankan seluruh 20 test suite sistem
 npm test
 
 # Melakukan kompilasi build produksi

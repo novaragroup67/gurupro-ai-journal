@@ -300,6 +300,11 @@ export async function extractDocumentText(
   options: DocumentExtractOptions,
 ): Promise<DocumentExtractResult> {
   const { buffer, fileName = "", mimeType = "" } = options;
+
+  if (!buffer || buffer.byteLength === 0) {
+    throw new AiServiceError(AI_ERROR_CODES.SOURCE_EMPTY, "File dokumen kosong (0 byte).");
+  }
+
   const lowerName = fileName.toLowerCase();
   const lowerMime = mimeType.toLowerCase();
 
