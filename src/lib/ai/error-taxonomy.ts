@@ -12,10 +12,13 @@ export const AI_ERROR_CODES = {
   SOURCE_EMPTY: "SOURCE_EMPTY",
   SOURCE_TOO_LARGE: "SOURCE_TOO_LARGE",
   RETRIEVAL_ERROR: "RETRIEVAL_ERROR",
+  INSUFFICIENT_EVIDENCE: "INSUFFICIENT_EVIDENCE",
+  GROUNDING_FAILED: "GROUNDING_FAILED",
   AI_PROVIDER_ERROR: "AI_PROVIDER_ERROR",
   AI_TIMEOUT: "AI_TIMEOUT",
   AI_RATE_LIMIT: "AI_RATE_LIMIT",
   AI_OUTPUT_INVALID: "AI_OUTPUT_INVALID",
+  PROVIDER_MALFORMED_OUTPUT: "PROVIDER_MALFORMED_OUTPUT",
   AI_GROUNDING_ERROR: "AI_GROUNDING_ERROR",
   PERSISTENCE_ERROR: "PERSISTENCE_ERROR",
 } as const;
@@ -32,10 +35,13 @@ const USER_MESSAGES: Record<AiErrorCode, string> = {
   SOURCE_EMPTY: "Isi materi sumber terlalu sedikit atau kosong. Masukkan materi yang memadai.",
   SOURCE_TOO_LARGE: "Ukuran konten sumber melebihi batas maksimal (maksimal 2MB).",
   RETRIEVAL_ERROR: "Gagal mengambil potongan konteks materi sumber yang sesuai.",
+  INSUFFICIENT_EVIDENCE: "Materi sumber yang dipilih tidak mencakup bukti yang memadai untuk topik pembelajaran yang diminta.",
+  GROUNDING_FAILED: "Validasi grounding gagal. Output AI merujuk pada bukti yang tidak valid atau di luar materi sumber.",
   AI_PROVIDER_ERROR: "Layanan penyedia AI sedang mengalami kendala. Silakan coba kembali sesaat lagi.",
   AI_TIMEOUT: "Permintaan AI melebihi batas waktu maksimal. Gunakan materi yang lebih ringkas.",
   AI_RATE_LIMIT: "Frekuensi permintaan AI melebihi batas wajar. Mohon tunggu sejenak.",
   AI_OUTPUT_INVALID: "Hasil respons AI tidak memenuhi skema format yang diharapkan.",
+  PROVIDER_MALFORMED_OUTPUT: "Keluaran penyedia AI tidak memenuhi struktur JSON atau skema kanonikal yang diharapkan.",
   AI_GROUNDING_ERROR: "Fakta yang diminta tidak ditemukan di dalam materi sumber acuan.",
   PERSISTENCE_ERROR: "Terjadi kesalahan saat menyimpan snapshot data sumber ke basis data.",
 };
@@ -75,6 +81,9 @@ export class AiServiceError extends Error {
       case "SOURCE_FETCH_ERROR":
       case "SOURCE_PARSE_ERROR":
       case "RETRIEVAL_ERROR":
+      case "INSUFFICIENT_EVIDENCE":
+      case "GROUNDING_FAILED":
+      case "PROVIDER_MALFORMED_OUTPUT":
       case "PERSISTENCE_ERROR":
       case "AI_OUTPUT_INVALID":
       case "AI_GROUNDING_ERROR":

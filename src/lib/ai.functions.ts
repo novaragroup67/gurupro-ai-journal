@@ -3,6 +3,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth, requireGuruAuth, requireTeacherAiAuth } from "@/integrations/supabase/auth-middleware";
 import {
   buildModulGroundingContext,
+  generateGroundedModulAjar,
+  type ModulAiGenerationResult,
   type ModulGroundingContext,
   type TeacherAcademicContext,
 } from "./ai/modul-contract";
@@ -1072,4 +1074,52 @@ export const buildModulGroundingContextServerFn = createServerFn({ method: "POST
 
     return buildModulGroundingContext(data, teacherContext);
   });
+
+/**
+ * GuruPro AI Foundation (AI-2C) — Server-Side Real AI Modul Ajar Generation Server Function
+ *
+ * Authenticates verified teacher, builds grounded context from source snapshots,
+ * invokes real AI model with conservative factual parameters, validates output schema,
+ * verifies grounding evidence provenance, and returns canonical Modul Ajar draft (status: 'Draft').
+ *
+ * Strictly NEVER auto-publishes. Fails closed with normalized AI service error taxonomy.
+ */
+export const generateModulAjarServerFn = createServerFn({ method: "POST" })
+  .middleware([requireTeacherAiAuth])
+  .validator((input: unknown) => input)
+  .handler(async ({ context, data }): Promise<ModulAiGenerationResult> => {
+    const supabase = (context as any).supabase;
+    const userId = (context as any).userId;
+    const profile = (context as any).profile;
+
+    // Load teacher's classes from DB
+    const { data: classesData, error: classErr } = await supabase
+      .from("kelas")
+      .select("id, nama, tingkat, mapel, tahun_ajaran, guru_id")
+      .eq("guru_id", userId);
+
+    if (classErr) {
+      throw new Error(`Gagal memuat daftar kelas guru: ${classErr.message}`);
+    }
+
+    const teacherClasses = (classesData || []).map((k: any) => ({
+      id: k.id,
+      namaKelas: k.nama,
+      tingkat: k.tingkat,
+      mapel: k.mapel,
+      tahunAjaran: k.tahun_ajaran,
+      guruId: k.guru_id,
+    }));
+
+    const teacherContext: TeacherAcademicContext = {
+      teacherId: userId,
+      teacherRole: "guru",
+      verificationStatus: profile?.status_verifikasi || "terverifikasi",
+      teacherClasses,
+      availableSourceSnapshots: [], // Automatically resolved from server store
+    };
+
+    return generateGroundedModulAjar(data, teacherContext);
+  });
+
 

@@ -589,3 +589,11 @@ export {
   type RetrievalQueryBundle,
 } from "./modul-context-builder";
 
+// Re-export AI-2C real AI generation engine & types
+export {
+  generateGroundedModulAjar,
+  type GenerateModulAjarOptions,
+  type ModulAiGenerationResult,
+} from "./modul-generator";
+
+
