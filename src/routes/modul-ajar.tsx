@@ -53,6 +53,10 @@ import {
   useModuls,
 } from "@/lib/modul-store";
 import { formatTanggal, type Modul } from "@/lib/modul-types";
+import { useServerFn } from "@tanstack/react-start";
+import { publishModulServerFn } from "@/lib/ai.functions";
+import { supabase } from "@/integrations/supabase/client";
+import { isRecoverableAuthError, withAuthRetry } from "@/integrations/supabase/auth-token";
 
 export const Route = createFileRoute("/modul-ajar")({
   head: () => ({
@@ -90,6 +94,39 @@ function ModulAjarPage() {
   const [hapus, setHapus] = useState<Modul | null>(null);
   const [targetArsip, setTargetArsip] = useState<Modul | null>(null);
   const [arsipLoading, setArsipLoading] = useState(false);
+  const [targetPublish, setTargetPublish] = useState<Modul | null>(null);
+  const [publishLoading, setPublishLoading] = useState(false);
+  const publishModulFn = useServerFn(publishModulServerFn);
+
+  const handleConfirmPublish = async () => {
+    if (!targetPublish) return;
+    setPublishLoading(true);
+    try {
+      const res = await withAuthRetry(
+        () => supabase.auth.refreshSession(),
+        () =>
+          publishModulFn({
+            data: {
+              modulId: targetPublish.id,
+              expectedUpdatedAt: targetPublish.updatedAt,
+            },
+          }),
+      );
+      if (res.status === "success") {
+        toast.success(`Modul "${targetPublish.judul}" berhasil dipublikasikan.`);
+        await reloadModuls();
+        setTargetPublish(null);
+      }
+    } catch (err: any) {
+      console.error("[handleConfirmPublish] Gagal mempublikasikan modul:", err);
+      const message = isRecoverableAuthError(err)
+        ? "Sesi login tidak valid atau kedaluwarsa. Silakan masuk kembali."
+        : err?.message || "Gagal mempublikasikan modul.";
+      toast.error(message);
+    } finally {
+      setPublishLoading(false);
+    }
+  };
 
   const teacherClassesInYear = useMemo(() => {
     const list = Array.isArray(kelasList) ? kelasList : [];
@@ -170,10 +207,8 @@ function ModulAjarPage() {
         onSaveDraft={async () => {
           await reloadModuls();
         }}
-        onPublish={() => {
-          saveModul({ ...editing, status: "Terbit" });
-          setEditing({ ...editing, status: "Terbit" });
-          toast.success("Modul berhasil dipublikasikan.");
+        onPublish={async () => {
+          await reloadModuls();
         }}
       />
     );
@@ -299,10 +334,7 @@ function ModulAjarPage() {
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => {
-                        saveModul({ ...m, status: "Terbit" });
-                        toast.success("Modul berhasil dipublikasikan.");
-                      }}
+                      onClick={() => setTargetPublish(m)}
                     >
                       <Send className="h-4 w-4" />
                       Publikasikan
@@ -315,19 +347,20 @@ function ModulAjarPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={() => setEditing(m)}>Edit modul</DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={() => {
-                          saveModul({ ...m, status: m.status === "Terbit" ? "Draft" : "Terbit" });
-                          toast.success(
-                            m.status === "Terbit"
-                              ? "Modul dikembalikan ke draft."
-                              : "Modul dipublikasikan.",
-                          );
-                        }}
-                      >
-                        {m.status === "Terbit" ? "Jadikan draft" : "Publikasikan"}
+                      <DropdownMenuItem onSelect={() => setEditing(m)}>
+                        {m.status === "Terbit" ? "Lihat detail modul" : "Edit modul"}
                       </DropdownMenuItem>
+                      {m.status === "Draft" ? (
+                        <DropdownMenuItem
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            setTargetPublish(m);
+                          }}
+                        >
+                          <Send className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                          Publikasikan modul
+                        </DropdownMenuItem>
+                      ) : null}
                       <DropdownMenuItem
                         onSelect={(e) => {
                           e.preventDefault();
@@ -434,6 +467,77 @@ function ModulAjarPage() {
               }}
             >
               Hapus
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog Konfirmasi Publikasi dari Daftar (AI-3C) */}
+      <AlertDialog open={Boolean(targetPublish)} onOpenChange={(open) => !open && !publishLoading && setTargetPublish(null)}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 font-display text-navy text-lg">
+              <Send className="h-5 w-5 text-primary" />
+              Konfirmasi Publikasi Modul Ajar
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3 pt-2 text-left text-sm">
+              <p>
+                Apakah Anda yakin ingin mempublikasikan modul ajar{" "}
+                <span className="font-semibold text-foreground">"{targetPublish?.judul}"</span>?
+              </p>
+              {targetPublish && (
+                <div className="rounded-lg border bg-muted/40 p-3 text-xs space-y-1.5 text-muted-foreground">
+                  <div className="flex justify-between">
+                    <span>Kelas / Mapel:</span>
+                    <span className="font-medium text-foreground">
+                      {[targetPublish.mapel, targetPublish.kelas].filter(Boolean).join(" · ") || "-"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Jumlah Bab Materi:</span>
+                    <span className="font-medium text-foreground">{targetPublish.sections.length} bab</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Status Mutu AI:</span>
+                    <span className="font-medium text-foreground">
+                      {targetPublish.aiMetadata?.originalQualityValidation?.decision ||
+                        targetPublish.aiMetadata?.qualityValidation?.decision ||
+                        "PASS"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Status Tinjauan Guru:</span>
+                    <span className="font-medium text-foreground">
+                      {targetPublish.aiMetadata?.teacherEdited ? "Sudah Ditinjau & Diedit" : "Draf Asli AI"}
+                    </span>
+                  </div>
+                </div>
+              )}
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Penting: Setelah dipublikasikan, status berubah menjadi <strong>Terbit</strong> dan materi akan dapat diakses secara resmi oleh siswa di kelas terdaftar. Tindakan publikasi ini merupakan tanggung jawab pendidik.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <AlertDialogCancel disabled={publishLoading} onClick={() => setTargetPublish(null)}>
+              Batal
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleConfirmPublish();
+              }}
+              disabled={publishLoading}
+              className="bg-primary hover:bg-primary/90 text-white font-medium"
+            >
+              {publishLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Mempublikasikan…
+                </>
+              ) : (
+                "Ya, Publikasikan Modul"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

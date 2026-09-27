@@ -49,7 +49,7 @@ import { exportModulAjarPdf, unduhPdf, unduhPpt, unduhWord } from "@/lib/exporte
 import { buatIlustrasi, buatSlides } from "@/lib/modul-ai";
 import { formatTanggal, type Modul } from "@/lib/modul-types";
 import { useServerFn } from "@tanstack/react-start";
-import { editModulAi, generateModulAi, saveModulDraftServerFn } from "@/lib/ai.functions";
+import { editModulAi, generateModulAi, saveModulDraftServerFn, publishModulServerFn } from "@/lib/ai.functions";
 import { validateTeacherDraftEdit } from "@/lib/ai/modul-contract";
 import { supabase } from "@/integrations/supabase/client";
 import { isRecoverableAuthError, withAuthRetry } from "@/integrations/supabase/auth-token";
@@ -89,19 +89,24 @@ export function ModulEditor({
   const [saveStatus, setSaveStatus] = useState<"clean" | "dirty" | "saving" | "saved" | "error">("clean");
   const [unsavedLeaveOpen, setUnsavedLeaveOpen] = useState(false);
 
+  // Publish Confirmation & Execution State
+  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+
   const editAi = useServerFn(editModulAi);
   const generateAi = useServerFn(generateModulAi);
   const saveDraft = useServerFn(saveModulDraftServerFn);
+  const publishModul = useServerFn(publishModulServerFn);
 
   useEffect(() => {
-    if (saveStatus === "saving") return;
+    if (saveStatus === "saving" || isPublishing) return;
     const current = JSON.stringify(modul);
     if (current !== initialSnapshot) {
       setSaveStatus("dirty");
     } else {
       setSaveStatus("clean");
     }
-  }, [modul, initialSnapshot, saveStatus]);
+  }, [modul, initialSnapshot, saveStatus, isPublishing]);
 
   const punyaIlustrasi = modul.sections.some((s) => s.ilustrasi);
 
@@ -385,6 +390,48 @@ export function ModulEditor({
     }
   };
 
+  const executePublish = async () => {
+    setIsPublishing(true);
+    try {
+      if (saveStatus === "dirty") {
+        const saved = await handleSaveDraft();
+        if (!saved) {
+          setIsPublishing(false);
+          return;
+        }
+      }
+
+      const result = await withAuthRetry(
+        () => supabase.auth.refreshSession(),
+        () =>
+          publishModul({
+            data: {
+              modulId: modul.id,
+              expectedUpdatedAt: modul.updatedAt,
+            },
+          }),
+      );
+
+      if (result.status === "success" && result.publishedModul) {
+        setInitialSnapshot(JSON.stringify(result.publishedModul));
+        setSaveStatus("saved");
+        setPublishConfirmOpen(false);
+        setManual(false);
+        onChange(result.publishedModul);
+        toast.success("Modul ajar berhasil dipublikasikan.");
+        onPublish?.();
+      }
+    } catch (err: any) {
+      console.error("[executePublish] Gagal mempublikasikan modul:", err);
+      const message = isRecoverableAuthError(err)
+        ? "Sesi login tidak valid atau kedaluwarsa. Silakan masuk kembali."
+        : err?.message || "Gagal mempublikasikan modul.";
+      toast.error(message);
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
   const runAiEdit = async () => {
     if (!instruksi.trim()) {
       toast.error("Tulis dulu instruksi untuk AI.");
@@ -578,43 +625,70 @@ export function ModulEditor({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-          <Button
-            variant={manual ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => setManual((v) => !v)}
-          >
-            {manual ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-            {manual ? "Selesai Edit" : "Edit Terstruktur"}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setAiOpen(true)}>
-            <Sparkles className="h-4 w-4" />
-            Edit dengan AI
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setRegenerateOpen(true)}>
-            <RefreshCw className="h-4 w-4" />
-            Regenerasi
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleSaveDraft}
-            disabled={saveStatus === "saving"}
-            className="bg-navy hover:bg-navy/90 text-white font-medium"
-          >
-            {saveStatus === "saving" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            {saveStatus === "saving" ? "Menyimpan…" : "Simpan Draft"}
-          </Button>
-          {onPublish ? (
-            <Button size="sm" variant="secondary" onClick={onPublish}>
-              <Send className="h-4 w-4" />
-              Publikasikan
-            </Button>
-          ) : null}
+          {modul.status === "Terbit" ? (
+            <Badge
+              variant="outline"
+              className="border-emerald-500/40 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 text-xs px-3 py-1.5 flex items-center gap-1.5 font-medium"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" /> Modul Terbit (Read-Only)
+            </Badge>
+          ) : (
+            <>
+              <Button
+                variant={manual ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setManual((v) => !v)}
+              >
+                {manual ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+                {manual ? "Selesai Edit" : "Edit Terstruktur"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setAiOpen(true)}>
+                <Sparkles className="h-4 w-4" />
+                Edit dengan AI
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setRegenerateOpen(true)}>
+                <RefreshCw className="h-4 w-4" />
+                Regenerasi
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSaveDraft}
+                disabled={saveStatus === "saving" || isPublishing}
+                className="bg-navy hover:bg-navy/90 text-white font-medium"
+              >
+                {saveStatus === "saving" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {saveStatus === "saving" ? "Menyimpan…" : "Simpan Draft"}
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setPublishConfirmOpen(true)}
+                disabled={saveStatus === "saving" || isPublishing}
+              >
+                <Send className="h-4 w-4" />
+                Publikasikan
+              </Button>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Terbit Informational Notice Banner */}
+      {modul.status === "Terbit" && (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-950/20 p-4 text-sm text-emerald-900 dark:text-emerald-300 flex items-center gap-3">
+          <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+          <div>
+            <p className="font-semibold">Modul Ajar ini Telah Terbit</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Materi pembelajaran telah resmi dipublikasikan dan dapat diakses siswa dari kelas terdaftar secara mandiri. Penyuntingan draf dinonaktifkan untuk menjaga integritas akademik.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Provenance & AI Grounding Overview Card */}
       {modul.aiMetadata && (
@@ -626,8 +700,11 @@ export function ModulEditor({
                 <span>Rekam Jejak & Mutu Modul (AI-2D Provenance)</span>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="text-xs">
-                  Status: {modul.status}
+                <Badge
+                  variant="secondary"
+                  className={modul.status === "Terbit" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 text-xs" : "text-xs"}
+                >
+                  Status: {modul.status === "Terbit" ? "Terbit (Publik)" : "Draft"}
                 </Badge>
                 {modul.aiMetadata.teacherEdited ? (
                   <Badge
@@ -639,6 +716,14 @@ export function ModulEditor({
                 ) : (
                   <Badge variant="outline" className="border-muted text-muted-foreground text-xs">
                     Ditinjau Guru: Belum
+                  </Badge>
+                )}
+                {modul.status === "Terbit" && (
+                  <Badge
+                    variant="outline"
+                    className="border-emerald-500/40 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 text-xs"
+                  >
+                    Dipublikasikan: {formatTanggal(modul.aiMetadata.publishedAt || modul.updatedAt)}
                   </Badge>
                 )}
               </div>
@@ -1435,6 +1520,75 @@ export function ModulEditor({
               className="bg-navy hover:bg-navy/90 text-white"
             >
               Simpan & Kembali
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog Konfirmasi Publikasi Modul Ajar (AI-3C) */}
+      <AlertDialog open={publishConfirmOpen} onOpenChange={setPublishConfirmOpen}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 font-display text-navy text-lg">
+              <Send className="h-5 w-5 text-primary" />
+              Konfirmasi Publikasi Modul Ajar
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3 pt-2 text-left text-sm">
+              <p>
+                Apakah Anda yakin ingin mempublikasikan modul ajar{" "}
+                <span className="font-semibold text-foreground">"{modul.judul}"</span>?
+              </p>
+              <div className="rounded-lg border bg-muted/40 p-3 text-xs space-y-1.5 text-muted-foreground">
+                <div className="flex justify-between">
+                  <span>Kelas / Mapel:</span>
+                  <span className="font-medium text-foreground">
+                    {[modul.mapel, modul.kelas].filter(Boolean).join(" · ") || "-"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Jumlah Bab Materi:</span>
+                  <span className="font-medium text-foreground">{modul.sections.length} bab</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Status Mutu AI:</span>
+                  <span className="font-medium text-foreground">
+                    {modul.aiMetadata?.originalQualityValidation?.decision ||
+                      modul.aiMetadata?.qualityValidation?.decision ||
+                      "PASS"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Status Tinjauan Guru:</span>
+                  <span className="font-medium text-foreground">
+                    {modul.aiMetadata?.teacherEdited ? "Sudah Ditinjau & Diedit" : "Draf Asli AI"}
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Penting: Setelah dipublikasikan, status berubah menjadi <strong>Terbit</strong> dan materi akan dapat diakses secara resmi oleh siswa di kelas terdaftar. Tindakan publikasi ini merupakan tanggung jawab pendidik.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <AlertDialogCancel disabled={isPublishing} onClick={() => setPublishConfirmOpen(false)}>
+              Batal
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                executePublish();
+              }}
+              disabled={isPublishing}
+              className="bg-primary hover:bg-primary/90 text-white font-medium"
+            >
+              {isPublishing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Mempublikasikan…
+                </>
+              ) : (
+                "Ya, Publikasikan Modul"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

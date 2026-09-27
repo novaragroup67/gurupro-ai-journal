@@ -401,6 +401,8 @@ export interface ModulAiMetadata {
   editedAt?: string;
   lastEditedBy?: string;
   originalQualityValidation?: ModulQualityValidationSummary;
+  publishedAt?: string;
+  publishedBy?: string;
 }
 
 export const ModulAiMetadataSchema = z.object({
@@ -419,6 +421,8 @@ export const ModulAiMetadataSchema = z.object({
   editedAt: z.string().optional(),
   lastEditedBy: z.string().optional(),
   originalQualityValidation: ModulQualityValidationSummarySchema.optional(),
+  publishedAt: z.string().optional(),
+  publishedBy: z.string().optional(),
 });
 
 export const TeacherDraftEditSchema = z.object({
@@ -482,6 +486,109 @@ export function validateTeacherDraftEdit(data: unknown): TeacherDraftEditPayload
     );
   }
   return parsed.data;
+}
+
+export interface PublishEligibilityResult {
+  eligible: true;
+  validatedPayload: TeacherDraftEditPayload;
+}
+
+/**
+ * Validates that an existing Modul record is structurally and logically eligible for publication:
+ * 1. Current status must be strictly 'Draft'.
+ * 2. Record must NOT be archived (is_archived !== true).
+ * 3. Canonical Modul schema and minimum cardinalities must be satisfied (>= 1 section, >= 1 objective, etc.).
+ * 4. Evidence reference integrity: any evidenceIds must exist in evidenceRefs (no dangling evidence).
+ * 5. No subjective AI score threshold: both PASS and REVISE, as well as teacher-edited modules, can be published.
+ */
+export function validateModulPublishEligibility(modul: any): PublishEligibilityResult {
+  if (!modul || typeof modul !== "object") {
+    throw new AiServiceError(
+      AI_ERROR_CODES.INVALID_REQUEST,
+      "Data modul ajar tidak valid untuk evaluasi kelayakan publikasi.",
+    );
+  }
+
+  // 1. Status Guard
+  if (modul.status === "Terbit") {
+    throw new AiServiceError(
+      AI_ERROR_CODES.INVALID_REQUEST,
+      "Modul ajar ini sudah berstatus Terbit.",
+    );
+  }
+  if (modul.status !== "Draft") {
+    throw new AiServiceError(
+      AI_ERROR_CODES.INVALID_REQUEST,
+      `Hanya modul berstatus Draft yang dapat dipublikasikan. Status saat ini: "${modul.status}".`,
+    );
+  }
+
+  // 2. Archive Guard
+  if (Boolean(modul.is_archived || modul.isArchived)) {
+    throw new AiServiceError(
+      AI_ERROR_CODES.INVALID_REQUEST,
+      "Modul ajar yang diarsipkan tidak dapat dipublikasikan.",
+    );
+  }
+
+  // 3. Structural Canonical Schema Validation
+  const aiMeta = modul.ai_metadata || modul.aiMetadata || {};
+  const payloadCandidate = {
+    judul: modul.judul,
+    ringkasan: modul.ringkasan,
+    sections: Array.isArray(modul.sections) ? modul.sections : [],
+    tujuanPembelajaran: aiMeta.tujuanPembelajaran,
+    kegiatanPembelajaran: aiMeta.kegiatanPembelajaran,
+    asesmen: aiMeta.asesmen,
+    catatanKeterbatasan: aiMeta.catatanKeterbatasan,
+    aiMetadata: aiMeta,
+  };
+
+  const validatedPayload = validateTeacherDraftEdit(payloadCandidate);
+
+  // 4. Evidence Reference Integrity Validation
+  if (Array.isArray(aiMeta.evidenceRefs) && aiMeta.evidenceRefs.length > 0) {
+    const validEvidenceIds = new Set<string>();
+    for (const ref of aiMeta.evidenceRefs) {
+      if (ref.chunkId) validEvidenceIds.add(ref.chunkId);
+      if (ref.sourceId) validEvidenceIds.add(ref.sourceId);
+    }
+
+    if (Array.isArray(validatedPayload.tujuanPembelajaran)) {
+      for (const obj of validatedPayload.tujuanPembelajaran) {
+        if (Array.isArray(obj.evidenceIds)) {
+          for (const eid of obj.evidenceIds) {
+            if (!validEvidenceIds.has(eid)) {
+              throw new AiServiceError(
+                AI_ERROR_CODES.GROUNDING_FAILED,
+                `Kelayakan publikasi gagal: Referensi bukti "${eid}" pada tujuan pembelajaran "${obj.id}" tidak ditemukan dalam daftar evidenceRefs.`,
+              );
+            }
+          }
+        }
+      }
+    }
+
+    if (Array.isArray(validatedPayload.sections)) {
+      for (const sec of validatedPayload.sections) {
+        if (Array.isArray(sec.evidenceIds)) {
+          for (const eid of sec.evidenceIds) {
+            if (!validEvidenceIds.has(eid)) {
+              throw new AiServiceError(
+                AI_ERROR_CODES.GROUNDING_FAILED,
+                `Kelayakan publikasi gagal: Referensi bukti "${eid}" pada bab materi "${sec.judul}" tidak ditemukan dalam daftar evidenceRefs.`,
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    eligible: true,
+    validatedPayload,
+  };
 }
 
 // ==============================================================================

@@ -6,6 +6,7 @@ import {
   generateGroundedModulAjar,
   validateGeneratedModulAjar,
   validateTeacherDraftEdit,
+  validateModulPublishEligibility,
   type ModulAiGenerationResult,
   type ModulGroundingContext,
   type ModulQualityValidationResult,
@@ -1463,5 +1464,149 @@ export const saveModulDraftServerFn = createServerFn({ method: "POST" })
     };
   });
 
+export interface PublishModulInput {
+  modulId: string;
+  expectedUpdatedAt?: string;
+}
 
+export interface PublishModulResult {
+  status: "success";
+  publishedModulId: string;
+  publishedModul: Modul;
+}
 
+/**
+ * GuruPro AI Foundation (AI-3C) — Server-Side Modul Ajar Publish Server Function
+ *
+ * Enforces:
+ * 1. Verified Teacher Authentication (requireTeacherAiAuth)
+ * 2. Record ownership: user_id must equal authenticated teacher's ID
+ * 3. Strict Status Transition: only records with status 'Draft' can be published;
+ *    moduls already 'Terbit' cannot be re-published; non-Draft status rejected.
+ * 4. Non-Archived: archived moduls cannot be published.
+ * 5. Publish Eligibility: canonical schema and minimum cardinalities validated,
+ *    and evidence reference integrity checked (no dangling evidence IDs).
+ * 6. Concurrency / Stale Data Protection: rejects publish if record was modified concurrently.
+ * 7. AI Provenance Preservation: preserves originalQualityValidation, teacherEdited,
+ *    evidenceRefs, and records publishedAt / publishedBy.
+ * 8. Persistence: updates status to 'Terbit' and persists to Supabase moduls table.
+ */
+export const publishModulServerFn = createServerFn({ method: "POST" })
+  .middleware([requireTeacherAiAuth])
+  .validator((input: PublishModulInput) => input)
+  .handler(async ({ context, data }): Promise<PublishModulResult> => {
+    const supabase = (context as any).supabase;
+    const userId = (context as any).userId;
+
+    if (!data?.modulId || typeof data.modulId !== "string") {
+      throw new AiServiceError(
+        AI_ERROR_CODES.INVALID_REQUEST,
+        "ID Modul wajib disertakan dalam permintaan publikasi modul ajar.",
+      );
+    }
+
+    // 1. Fetch authoritative existing record from DB
+    const { data: existing, error: fetchErr } = await supabase
+      .from("moduls")
+      .select("*")
+      .eq("id", data.modulId)
+      .maybeSingle();
+
+    if (fetchErr) {
+      console.error("[publishModulServerFn] DB fetch error:", fetchErr);
+      throw new AiServiceError(
+        AI_ERROR_CODES.PERSISTENCE_ERROR,
+        `Gagal memeriksa data modul dari database: ${fetchErr.message}`,
+      );
+    }
+
+    if (!existing) {
+      throw new AiServiceError(
+        AI_ERROR_CODES.INVALID_REQUEST,
+        "Modul ajar yang ingin dipublikasikan tidak ditemukan.",
+      );
+    }
+
+    // 2. Enforce Teacher Ownership
+    if (existing.user_id !== userId) {
+      throw new AiServiceError(
+        AI_ERROR_CODES.ROLE_FORBIDDEN,
+        "Akses ditolak: Anda bukan pemilik modul ajar ini.",
+      );
+    }
+
+    // 3. Stale Data / Concurrency Protection
+    if (data.expectedUpdatedAt) {
+      const dbTime = new Date(existing.updated_at).getTime();
+      const clientTime = new Date(data.expectedUpdatedAt).getTime();
+      if (!Number.isNaN(dbTime) && !Number.isNaN(clientTime) && dbTime > clientTime) {
+        throw new AiServiceError(
+          AI_ERROR_CODES.INVALID_REQUEST,
+          "Draf modul telah diperbarui oleh sesi lain. Muat ulang halaman untuk meninjau versi terbaru sebelum mempublikasikan.",
+        );
+      }
+    }
+
+    // 4. Validate Publish Eligibility (Status, Archive, Canonical Structure, Evidence Integrity)
+    validateModulPublishEligibility(existing);
+
+    // 5. Provenance Preservation & Audit Timestamp
+    const existingAiMetadata = (existing.ai_metadata || {}) as any;
+    const nowIso = new Date().toISOString();
+
+    const updatedAiMetadata = {
+      ...existingAiMetadata,
+      originalQualityValidation:
+        existingAiMetadata.originalQualityValidation ||
+        existingAiMetadata.qualityValidation ||
+        undefined,
+      publishedAt: nowIso,
+      publishedBy: userId,
+    };
+
+    // 6. Persist to Supabase Database (status: 'Terbit' strictly enforced)
+    const { data: updated, error: updateErr } = await supabase
+      .from("moduls")
+      .update({
+        status: "Terbit",
+        ai_metadata: updatedAiMetadata,
+        updated_at: nowIso,
+      })
+      .eq("id", data.modulId)
+      .eq("user_id", userId)
+      .select("*")
+      .single();
+
+    if (updateErr) {
+      console.error("[publishModulServerFn] Update error:", updateErr);
+      throw new AiServiceError(
+        AI_ERROR_CODES.PERSISTENCE_ERROR,
+        `Gagal mempublikasikan modul ajar: ${updateErr.message}`,
+      );
+    }
+
+    return {
+      status: "success",
+      publishedModulId: updated.id,
+      publishedModul: {
+        id: updated.id,
+        judul: updated.judul,
+        kelas: updated.kelas,
+        kelasId: updated.kelas_id || undefined,
+        mapel: updated.mapel,
+        status: updated.status,
+        sumberTipe: updated.sumber_tipe,
+        sumberInput: updated.sumber_input,
+        sumberUrl: updated.sumber_url || undefined,
+        sumberJudul: updated.sumber_judul || undefined,
+        sumberKutipan: updated.sumber_kutipan || undefined,
+        ringkasan: updated.ringkasan,
+        sections: Array.isArray(updated.sections) ? updated.sections : [],
+        slides: Array.isArray(updated.slides) ? updated.slides : [],
+        createdAt: updated.created_at,
+        updatedAt: updated.updated_at,
+        isArchived: Boolean(updated.is_archived),
+        aiMetadata: updated.ai_metadata,
+      },
+    };
+  });
