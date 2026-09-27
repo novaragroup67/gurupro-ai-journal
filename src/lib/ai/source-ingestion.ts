@@ -359,8 +359,20 @@ export async function ingestSource(options: IngestionOptions): Promise<AiSourceS
   return snapshot;
 }
 
+export function setCachedSourceSnapshot(snapshot: AiSourceSnapshot): void {
+  inMemorySnapshots.set(snapshot.id, snapshot);
+}
+
 export function getCachedSourceSnapshot(snapshotId: string): AiSourceSnapshot | undefined {
   return inMemorySnapshots.get(snapshotId);
+}
+
+export function getAllCachedSnapshots(): AiSourceSnapshot[] {
+  return Array.from(inMemorySnapshots.values());
+}
+
+export function getCachedSnapshotsForUser(userId: string): AiSourceSnapshot[] {
+  return Array.from(inMemorySnapshots.values()).filter((s) => s.userId === userId);
 }
 
 export function clearSnapshotCacheForTesting() {

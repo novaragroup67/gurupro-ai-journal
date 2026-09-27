@@ -48,6 +48,7 @@ import {
   addModul,
   deleteModul,
   getPublishedModulsForSiswa,
+  reloadModuls,
   saveModul,
   useModuls,
 } from "@/lib/modul-store";
@@ -253,6 +254,21 @@ function ModulAjarPage() {
                     >
                       {m.status === "Terbit" ? "Dipublikasikan" : "Draft"}
                     </Badge>
+                    {m.aiMetadata && (
+                      <Badge variant="outline" className="border-primary/30 text-primary bg-primary/5 text-xs flex items-center gap-1">
+                        <Sparkles className="h-3 w-3" /> AI Grounded
+                      </Badge>
+                    )}
+                    {m.aiMetadata?.qualityValidation?.decision === "PASS" && (
+                      <Badge variant="outline" className="border-emerald-500/40 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 text-xs">
+                        Mutu: PASS
+                      </Badge>
+                    )}
+                    {m.aiMetadata?.qualityValidation?.decision === "REVISE" && (
+                      <Badge variant="outline" className="border-amber-500/40 text-amber-700 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-400 text-xs">
+                        Mutu: REVISE
+                      </Badge>
+                    )}
                     <span className="text-xs text-muted-foreground">Sumber: {m.sumberTipe}</span>
                     <span className="text-xs text-muted-foreground">
                       Diperbarui {formatTanggal(m.updatedAt)}
@@ -342,9 +358,9 @@ function ModulAjarPage() {
       <ModulGeneratorDialog
         open={openGenerator}
         onOpenChange={setOpenGenerator}
-        onGenerated={async (draft) => {
-          const created = await addModul(draft);
-          setEditing(created);
+        onGenerated={async (persistedModul) => {
+          await reloadModuls();
+          setEditing(persistedModul);
         }}
       />
 

@@ -10,6 +10,9 @@ import {
   type ModulQualityValidationResult,
   type TeacherAcademicContext,
 } from "./ai/modul-contract";
+import { getCachedSnapshotsForUser, setCachedSourceSnapshot } from "./ai/source-ingestion";
+import { AiServiceError, AI_ERROR_CODES } from "./ai/error-taxonomy";
+import type { Modul } from "./modul-types";
 
 const MODEL = "google/gemini-2.5-flash";
 const ENDPOINT = "https://ai.gateway.lovable.dev/v1/chat/completions";
@@ -1113,15 +1116,127 @@ export const generateModulAjarServerFn = createServerFn({ method: "POST" })
       guruId: k.guru_id,
     }));
 
+    // Resolve available source snapshots for this teacher from server cache and database
+    const cachedForUser = getCachedSnapshotsForUser(userId);
+    const availableSourceSnapshots = [...cachedForUser];
+
+    // For any requested snapshot not in memory, query Supabase ai_source_snapshots if present
+    const requestedIds = Array.isArray((data as any)?.sourceSnapshotIds)
+      ? (data as any).sourceSnapshotIds
+      : [];
+    for (const snapId of requestedIds) {
+      if (!availableSourceSnapshots.some((s) => s.id === snapId)) {
+        try {
+          const { data: dbSnap } = await supabase
+            .from("ai_source_snapshots")
+            .select("*")
+            .eq("id", snapId)
+            .eq("user_id", userId)
+            .maybeSingle();
+
+          if (dbSnap) {
+            const reconstructed = {
+              id: dbSnap.id,
+              userId: dbSnap.user_id,
+              sourceType: dbSnap.source_type,
+              sourceTitle: dbSnap.source_title,
+              sourceUrl: dbSnap.source_url,
+              contentHash: dbSnap.content_hash,
+              normalizedContent: dbSnap.normalized_content,
+              wordCount: dbSnap.word_count,
+              chunks: dbSnap.chunks || [],
+              metadata: dbSnap.metadata || {},
+              ingestionStatus: dbSnap.ingestion_status || "completed",
+              createdAt: dbSnap.created_at,
+            };
+            setCachedSourceSnapshot(reconstructed as any);
+            availableSourceSnapshots.push(reconstructed as any);
+          }
+        } catch {
+          // Ignore DB fetch error and rely on in-memory cache
+        }
+      }
+    }
+
     const teacherContext: TeacherAcademicContext = {
       teacherId: userId,
       teacherRole: "guru",
       verificationStatus: profile?.status_verifikasi || "terverifikasi",
       teacherClasses,
-      availableSourceSnapshots: [], // Automatically resolved from server store
+      availableSourceSnapshots,
     };
 
-    return generateGroundedModulAjar(data, teacherContext);
+    const result = await generateGroundedModulAjar(data, teacherContext);
+
+    // AI-3A Persistence Contract: Persist generated draft to 'moduls' table in Supabase
+    if (result.status === "success" && result.draftModul) {
+      try {
+        const { data: inserted, error: insertErr } = await supabase
+          .from("moduls")
+          .insert({
+            user_id: userId,
+            judul: result.draftModul.judul,
+            kelas: result.draftModul.kelas,
+            kelas_id: result.draftModul.kelasId || null,
+            mapel: result.draftModul.mapel,
+            status: "Draft", // Strict Draft Invariant: never auto-publish
+            sumber_tipe: result.draftModul.sumberTipe,
+            sumber_input: result.draftModul.sumberInput,
+            sumber_url: result.draftModul.sumberUrl || null,
+            sumber_judul: result.draftModul.sumberJudul || null,
+            sumber_kutipan: result.draftModul.sumberKutipan || null,
+            ringkasan: result.draftModul.ringkasan,
+            sections: result.draftModul.sections,
+            slides: result.draftModul.slides || [],
+            is_archived: false,
+            ai_metadata: result.draftModul.aiMetadata || null,
+          })
+          .select("*")
+          .single();
+
+        if (insertErr) {
+          console.error("[generateModulAjarServerFn] Supabase insert error:", insertErr);
+          throw new AiServiceError(
+            AI_ERROR_CODES.PERSISTENCE_ERROR,
+            `Draf Modul Ajar berhasil disusun oleh AI namun gagal disimpan ke basis data: ${insertErr.message}`,
+          );
+        }
+
+        return {
+          ...result,
+          persistedModulId: inserted.id,
+          persistedModul: {
+            id: inserted.id,
+            judul: inserted.judul,
+            kelas: inserted.kelas,
+            kelasId: inserted.kelas_id || undefined,
+            mapel: inserted.mapel,
+            status: inserted.status,
+            sumberTipe: inserted.sumber_tipe,
+            sumberInput: inserted.sumber_input,
+            sumberUrl: inserted.sumber_url || undefined,
+            sumberJudul: inserted.sumber_judul || undefined,
+            sumberKutipan: inserted.sumber_kutipan || undefined,
+            ringkasan: inserted.ringkasan,
+            sections: Array.isArray(inserted.sections) ? inserted.sections : [],
+            slides: Array.isArray(inserted.slides) ? inserted.slides : [],
+            createdAt: inserted.created_at,
+            updatedAt: inserted.updated_at,
+            isArchived: Boolean(inserted.is_archived),
+            aiMetadata: inserted.ai_metadata,
+          },
+        };
+      } catch (dbErr: any) {
+        if (dbErr instanceof AiServiceError) throw dbErr;
+        console.error("[generateModulAjarServerFn] Persistence exception:", dbErr);
+        throw new AiServiceError(
+          AI_ERROR_CODES.PERSISTENCE_ERROR,
+          `Draf Modul Ajar berhasil disusun oleh AI namun gagal disimpan ke basis data: ${dbErr?.message || "Kesalahan database"}`,
+        );
+      }
+    }
+
+    return result;
   });
 
 /**
@@ -1160,12 +1275,14 @@ export const validateModulAjarQualityServerFn = createServerFn({ method: "POST" 
       guruId: k.guru_id,
     }));
 
+    const availableSourceSnapshots = getCachedSnapshotsForUser(userId);
+
     const teacherContext: TeacherAcademicContext = {
       teacherId: userId,
       teacherRole: "guru",
       verificationStatus: profile?.status_verifikasi || "terverifikasi",
       teacherClasses,
-      availableSourceSnapshots: [],
+      availableSourceSnapshots,
     };
 
     const groundingContext = await buildModulGroundingContext(data.generationInput, teacherContext);

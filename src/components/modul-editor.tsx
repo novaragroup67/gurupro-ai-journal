@@ -226,10 +226,37 @@ export function ModulEditor({
             >
               {modul.status === "Terbit" ? "Dipublikasikan" : "Draft"}
             </Badge>
+            {modul.aiMetadata && (
+              <Badge
+                variant="outline"
+                className="border-primary/30 text-primary bg-primary/5 text-xs flex items-center gap-1"
+              >
+                <Sparkles className="h-3 w-3" /> AI Generated (Draft)
+              </Badge>
+            )}
+            {modul.aiMetadata?.qualityValidation?.decision === "PASS" && (
+              <Badge
+                variant="outline"
+                className="border-emerald-500/40 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 text-xs"
+              >
+                Mutu: Terverifikasi (PASS)
+              </Badge>
+            )}
+            {modul.aiMetadata?.qualityValidation?.decision === "REVISE" && (
+              <Badge
+                variant="outline"
+                className="border-amber-500/40 text-amber-700 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-400 text-xs"
+              >
+                Mutu: Perlu Tinjauan (REVISE)
+              </Badge>
+            )}
             <span>
               {[modul.mapel, modul.kelas].filter(Boolean).join(" · ") || "Belum ada kelas"}
             </span>
             <span>· Sumber: {modul.sumberTipe}</span>
+            {modul.sumberJudul && (
+              <span className="truncate max-w-xs text-xs">({modul.sumberJudul})</span>
+            )}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 lg:justify-end">
@@ -280,6 +307,35 @@ export function ModulEditor({
           </CardContent>
         </Card>
       ) : null}
+
+      {modul.aiMetadata && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-4 text-xs sm:text-sm text-foreground/90 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 font-medium text-navy">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span>Grounding & Validasi Mutu AI (AI-2D)</span>
+              </div>
+              {modul.aiMetadata.qualityValidation && (
+                <span className="font-semibold text-muted-foreground">
+                  Cakupan Bukti: {Math.round((modul.aiMetadata.qualityValidation.coverageRatio || 0) * 100)}%
+                </span>
+              )}
+            </div>
+            {modul.aiMetadata.catatanKeterbatasan && (
+              <p className="text-muted-foreground">
+                <strong className="text-foreground">Catatan Keterbatasan:</strong>{" "}
+                {modul.aiMetadata.catatanKeterbatasan}
+              </p>
+            )}
+            {modul.aiMetadata.qualityValidation?.decision === "REVISE" && (
+              <p className="font-medium text-amber-700 dark:text-amber-400">
+                Modul ini ditandai perbaikan (REVISE). Beberapa butir capaian/aktivitas pembelajaran disarankan untuk ditinjau guru sebelum dipublikasikan.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="isi">
         <TabsList className="w-full justify-start overflow-x-auto">

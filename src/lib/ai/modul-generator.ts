@@ -62,6 +62,8 @@ export interface ModulAiGenerationResult {
   output?: GroundedModulAjarOutput;
   draftModul?: Omit<Modul, "id" | "createdAt" | "updatedAt">;
   qualityValidation?: ModulQualityValidationResult;
+  persistedModulId?: string;
+  persistedModul?: Modul;
   metadata: {
     promptVersion: string;
     schemaVersion: string;

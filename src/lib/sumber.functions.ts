@@ -3,7 +3,7 @@ import net from "node:net";
 import { createServerFn } from "@tanstack/react-start";
 
 import { requireTeacherAiAuth } from "@/integrations/supabase/auth-middleware";
-import { ingestSource } from "./ai/source-ingestion";
+import { ingestSource, getCachedSnapshotsForUser } from "./ai/source-ingestion";
 
 export interface SumberPreview {
   url: string;
@@ -268,5 +268,67 @@ export const analisisSumberDokumen = createServerFn({ method: "POST" })
       snapshotId: snapshot.id,
       contentHash: snapshot.contentHash,
     };
+  });
+
+export interface TextInputPayload {
+  text: string;
+  title?: string;
+}
+
+/** Mengekstrak dan menyerap teks input langsung / CP-ATP di sisi server menjadi AiSourceSnapshot */
+export const analisisSumberTeks = createServerFn({ method: "POST" })
+  .middleware([requireTeacherAiAuth])
+  .inputValidator((input: TextInputPayload) => {
+    const raw = String(input?.text ?? "").trim();
+    if (raw.length < 50) {
+      throw new Error("Materi teks terlalu pendek (minimal 50 karakter) agar modul dapat disusun secara faktual.");
+    }
+    return {
+      text: raw,
+      title: String(input?.title || "").trim(),
+    };
+  })
+  .handler(async ({ data, context }): Promise<SumberPreview> => {
+    const userId = (context as any)?.userId || (context as any)?.profile?.id || "teacher_user";
+    const snapshot = await ingestSource({
+      sourceType: "text",
+      input: data.text,
+      title: data.title || "Materi Teks Pembelajaran",
+      userId,
+    });
+
+    return {
+      url: "",
+      judul: snapshot.sourceTitle || "Materi Teks Pembelajaran",
+      situs: "Teks / Catatan Guru",
+      konten: snapshot.normalizedContent,
+      jumlahKata: snapshot.wordCount,
+      cukup: snapshot.wordCount >= 20,
+      snapshotId: snapshot.id,
+      contentHash: snapshot.contentHash,
+    };
+  });
+
+export interface TeacherSourceItem {
+  id: string;
+  title: string;
+  type: string;
+  wordCount: number;
+  createdAt: string;
+}
+
+/** Menampilkan daftar materi sumber yang telah diserap oleh guru yang sedang login */
+export const listTeacherSourcesServerFn = createServerFn({ method: "GET" })
+  .middleware([requireTeacherAiAuth])
+  .handler(async ({ context }): Promise<TeacherSourceItem[]> => {
+    const userId = (context as any)?.userId;
+    const snapshots = getCachedSnapshotsForUser(userId);
+    return snapshots.map((s) => ({
+      id: s.id,
+      title: s.sourceTitle || "Materi Sumber",
+      type: s.sourceType,
+      wordCount: s.wordCount,
+      createdAt: s.createdAt,
+    }));
   });
 
