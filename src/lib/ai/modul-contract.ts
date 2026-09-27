@@ -397,13 +397,17 @@ export interface ModulAiMetadata {
   asesmen: PedagogicalAssessment;
   catatanKeterbatasan?: string;
   qualityValidation?: ModulQualityValidationSummary;
+  teacherEdited?: boolean;
+  editedAt?: string;
+  lastEditedBy?: string;
+  originalQualityValidation?: ModulQualityValidationSummary;
 }
 
 export const ModulAiMetadataSchema = z.object({
   promptVersion: z.string().min(1),
   sourceSnapshotIds: z.array(z.string().min(1)),
   schemaVersion: z.string().min(1),
-  generatedAt: z.string().datetime(),
+  generatedAt: z.string(),
   validationStatus: z.enum(["valid", "invalid"]),
   evidenceRefs: z.array(GroundingEvidenceRefSchema),
   tujuanPembelajaran: z.array(GroundedObjectiveSchema),
@@ -411,7 +415,74 @@ export const ModulAiMetadataSchema = z.object({
   asesmen: PedagogicalAssessmentSchema,
   catatanKeterbatasan: z.string().optional(),
   qualityValidation: ModulQualityValidationSummarySchema.optional(),
+  teacherEdited: z.boolean().optional(),
+  editedAt: z.string().optional(),
+  lastEditedBy: z.string().optional(),
+  originalQualityValidation: ModulQualityValidationSummarySchema.optional(),
 });
+
+export const TeacherDraftEditSchema = z.object({
+  judul: z.string().trim().min(3, "Judul modul ajar minimal 3 karakter."),
+  ringkasan: z.string().trim().min(10, "Ringkasan modul minimal 10 karakter."),
+  sections: z.array(
+    z.object({
+      id: z.string().min(1),
+      judul: z.string().trim().min(3, "Judul bab/bagian minimal 3 karakter."),
+      poin: z.array(z.string().trim().min(2)).min(1, "Minimal satu poin capaian per bab."),
+      isi: z.string().trim().min(20, "Uraian materi per bab minimal 20 karakter."),
+      keyTerms: z.array(z.string()).optional(),
+      ilustrasi: z.string().optional(),
+      evidenceIds: z.array(z.string()).optional().default([]),
+      status: GroundingStatusSchema.optional().default("SUPPORTED"),
+    }),
+  ).min(1, "Minimal satu bab materi pokok wajib ada."),
+  tujuanPembelajaran: z.array(
+    z.object({
+      id: z.string().min(1),
+      deskripsi: z.string().trim().min(5, "Deskripsi tujuan pembelajaran minimal 5 karakter."),
+      evidenceIds: z.array(z.string()).optional().default([]),
+      status: GroundingStatusSchema.optional().default("SUPPORTED"),
+    }),
+  ).min(1, "Minimal satu tujuan pembelajaran wajib ada.").optional(),
+  kegiatanPembelajaran: z.object({
+    pendahuluan: z.object({
+      alokasiMenit: z.number().int().positive().optional(),
+      aktivitas: z.array(z.string().trim().min(3)).min(1, "Minimal satu butir kegiatan pendahuluan."),
+      evidenceIds: z.array(z.string()).optional().default([]),
+    }),
+    inti: z.object({
+      alokasiMenit: z.number().int().positive().optional(),
+      aktivitas: z.array(z.string().trim().min(3)).min(1, "Minimal satu butir kegiatan inti."),
+      evidenceIds: z.array(z.string()).optional().default([]),
+    }),
+    penutup: z.object({
+      alokasiMenit: z.number().int().positive().optional(),
+      aktivitas: z.array(z.string().trim().min(3)).min(1, "Minimal satu butir kegiatan penutup."),
+      evidenceIds: z.array(z.string()).optional().default([]),
+    }),
+  }).optional(),
+  asesmen: z.object({
+    kriteria: z.array(z.string().trim().min(3)).min(1, "Minimal satu kriteria asesmen."),
+    teknik: z.string().trim().min(3, "Teknik asesmen wajib diisi."),
+    instrumen: z.string().trim().min(3, "Instrumen asesmen wajib diisi."),
+  }).optional(),
+  catatanKeterbatasan: z.string().trim().optional(),
+  aiMetadata: ModulAiMetadataSchema.optional(),
+});
+
+export type TeacherDraftEditPayload = z.infer<typeof TeacherDraftEditSchema>;
+
+export function validateTeacherDraftEdit(data: unknown): TeacherDraftEditPayload {
+  const parsed = TeacherDraftEditSchema.safeParse(data);
+  if (!parsed.success) {
+    const details = parsed.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join("; ");
+    throw new AiServiceError(
+      AI_ERROR_CODES.INVALID_REQUEST,
+      `Validasi draf suntingan guru gagal: ${details}`,
+    );
+  }
+  return parsed.data;
+}
 
 // ==============================================================================
 // 4. VALIDATION & PARSING FUNCTIONS

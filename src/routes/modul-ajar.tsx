@@ -163,11 +163,12 @@ function ModulAjarPage() {
       <ModulEditor
         modul={editing}
         onChange={setEditing}
-        onBack={() => setEditing(null)}
-        onSaveDraft={() => {
-          saveModul({ ...editing, status: "Draft" });
-          setEditing({ ...editing, status: "Draft" });
-          toast.success("Modul disimpan sebagai draft.");
+        onBack={async () => {
+          await reloadModuls();
+          setEditing(null);
+        }}
+        onSaveDraft={async () => {
+          await reloadModuls();
         }}
         onPublish={() => {
           saveModul({ ...editing, status: "Terbit" });

@@ -5,10 +5,12 @@ import {
   buildModulGroundingContext,
   generateGroundedModulAjar,
   validateGeneratedModulAjar,
+  validateTeacherDraftEdit,
   type ModulAiGenerationResult,
   type ModulGroundingContext,
   type ModulQualityValidationResult,
   type TeacherAcademicContext,
+  type TeacherDraftEditPayload,
 } from "./ai/modul-contract";
 import { getCachedSnapshotsForUser, setCachedSourceSnapshot } from "./ai/source-ingestion";
 import { AiServiceError, AI_ERROR_CODES } from "./ai/error-taxonomy";
@@ -1287,6 +1289,178 @@ export const validateModulAjarQualityServerFn = createServerFn({ method: "POST" 
 
     const groundingContext = await buildModulGroundingContext(data.generationInput, teacherContext);
     return validateGeneratedModulAjar(data.output, groundingContext);
+  });
+
+export interface SaveModulDraftInput {
+  modulId: string;
+  draftData: TeacherDraftEditPayload;
+  expectedUpdatedAt?: string;
+}
+
+export interface SaveModulDraftResult {
+  status: "success";
+  persistedModulId: string;
+  persistedModul: Modul;
+}
+
+/**
+ * GuruPro AI Foundation (AI-3B) — Server-Side Modul Ajar Draft Save Server Function
+ *
+ * Enforces:
+ * 1. Verified Teacher Authentication (requireTeacherAiAuth)
+ * 2. Record ownership: user_id must equal authenticated teacher's ID
+ * 3. Strict Draft Invariant: only records with status 'Draft' can be edited/saved;
+ *    saving edits NEVER changes status to 'Terbit'
+ * 4. Stale Data Protection: rejects save if record was modified concurrently
+ * 5. Canonical Zod Schema Validation: validates structure before database persistence
+ * 6. Provenance Preservation: preserves existing evidenceRefs and AI quality validation;
+ *    attaches teacherEdited: true, editedAt, and lastEditedBy
+ */
+export const saveModulDraftServerFn = createServerFn({ method: "POST" })
+  .middleware([requireTeacherAiAuth])
+  .validator((input: SaveModulDraftInput) => input)
+  .handler(async ({ context, data }): Promise<SaveModulDraftResult> => {
+    const supabase = (context as any).supabase;
+    const userId = (context as any).userId;
+
+    if (!data?.modulId || typeof data.modulId !== "string") {
+      throw new AiServiceError(
+        AI_ERROR_CODES.INVALID_REQUEST,
+        "ID Modul wajib disertakan dalam permintaan penyimpanan draf.",
+      );
+    }
+
+    // 1. Fetch authoritative existing record from DB
+    const { data: existing, error: fetchErr } = await supabase
+      .from("moduls")
+      .select("*")
+      .eq("id", data.modulId)
+      .maybeSingle();
+
+    if (fetchErr) {
+      console.error("[saveModulDraftServerFn] DB fetch error:", fetchErr);
+      throw new AiServiceError(
+        AI_ERROR_CODES.PERSISTENCE_ERROR,
+        `Gagal memeriksa data modul dari database: ${fetchErr.message}`,
+      );
+    }
+
+    if (!existing) {
+      throw new AiServiceError(
+        AI_ERROR_CODES.INVALID_REQUEST,
+        "Modul ajar yang ingin disimpan tidak ditemukan.",
+      );
+    }
+
+    // 2. Enforce Teacher Ownership
+    if (existing.user_id !== userId) {
+      throw new AiServiceError(
+        AI_ERROR_CODES.ROLE_FORBIDDEN,
+        "Akses ditolak: Anda bukan pemilik draf modul ajar ini.",
+      );
+    }
+
+    // 3. Enforce Strict Draft Invariant
+    if (existing.status !== "Draft") {
+      throw new AiServiceError(
+        AI_ERROR_CODES.INVALID_REQUEST,
+        "Hanya modul dengan status Draft yang dapat diperbarui melalui alur peninjauan guru.",
+      );
+    }
+
+    // 4. Stale Data / Concurrency Protection
+    if (data.expectedUpdatedAt) {
+      const dbTime = new Date(existing.updated_at).getTime();
+      const clientTime = new Date(data.expectedUpdatedAt).getTime();
+      if (!Number.isNaN(dbTime) && !Number.isNaN(clientTime) && dbTime > clientTime) {
+        throw new AiServiceError(
+          AI_ERROR_CODES.INVALID_REQUEST,
+          "Draf modul telah diperbarui oleh sesi lain. Muat ulang halaman untuk meninjau versi terbaru.",
+        );
+      }
+    }
+
+    // 5. Canonical Zod Schema Validation
+    const validatedData = validateTeacherDraftEdit(data.draftData);
+
+    // 6. Provenance Preservation
+    const existingAiMetadata = (existing.ai_metadata || {}) as any;
+    const nowIso = new Date().toISOString();
+
+    const updatedAiMetadata = {
+      ...existingAiMetadata,
+      ...(validatedData.aiMetadata || {}),
+      evidenceRefs: existingAiMetadata.evidenceRefs || validatedData.aiMetadata?.evidenceRefs || [],
+      originalQualityValidation:
+        existingAiMetadata.originalQualityValidation ||
+        existingAiMetadata.qualityValidation ||
+        undefined,
+      teacherEdited: true,
+      editedAt: nowIso,
+      lastEditedBy: userId,
+    };
+
+    if (validatedData.tujuanPembelajaran) {
+      updatedAiMetadata.tujuanPembelajaran = validatedData.tujuanPembelajaran;
+    }
+    if (validatedData.kegiatanPembelajaran) {
+      updatedAiMetadata.kegiatanPembelajaran = validatedData.kegiatanPembelajaran;
+    }
+    if (validatedData.asesmen) {
+      updatedAiMetadata.asesmen = validatedData.asesmen;
+    }
+    if (validatedData.catatanKeterbatasan !== undefined) {
+      updatedAiMetadata.catatanKeterbatasan = validatedData.catatanKeterbatasan;
+    }
+
+    // 7. Persist to Supabase Database (status: 'Draft' strictly enforced)
+    const { data: updated, error: updateErr } = await supabase
+      .from("moduls")
+      .update({
+        judul: validatedData.judul,
+        ringkasan: validatedData.ringkasan,
+        sections: validatedData.sections,
+        status: "Draft", // Strict Draft Invariant: saving edits NEVER changes to 'Terbit'
+        ai_metadata: updatedAiMetadata,
+        updated_at: nowIso,
+      })
+      .eq("id", data.modulId)
+      .eq("user_id", userId)
+      .select("*")
+      .single();
+
+    if (updateErr) {
+      console.error("[saveModulDraftServerFn] Update error:", updateErr);
+      throw new AiServiceError(
+        AI_ERROR_CODES.PERSISTENCE_ERROR,
+        `Gagal menyimpan perubahan draf modul: ${updateErr.message}`,
+      );
+    }
+
+    return {
+      status: "success",
+      persistedModulId: updated.id,
+      persistedModul: {
+        id: updated.id,
+        judul: updated.judul,
+        kelas: updated.kelas,
+        kelasId: updated.kelas_id || undefined,
+        mapel: updated.mapel,
+        status: updated.status,
+        sumberTipe: updated.sumber_tipe,
+        sumberInput: updated.sumber_input,
+        sumberUrl: updated.sumber_url || undefined,
+        sumberJudul: updated.sumber_judul || undefined,
+        sumberKutipan: updated.sumber_kutipan || undefined,
+        ringkasan: updated.ringkasan,
+        sections: Array.isArray(updated.sections) ? updated.sections : [],
+        slides: Array.isArray(updated.slides) ? updated.slides : [],
+        createdAt: updated.created_at,
+        updatedAt: updated.updated_at,
+        isArchived: Boolean(updated.is_archived),
+        aiMetadata: updated.ai_metadata,
+      },
+    };
   });
 
 
