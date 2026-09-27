@@ -39,6 +39,12 @@ import { resolveServerAiConfig } from "./ai-service";
 import type { AiModelConfig, AiSourceSnapshot } from "./types";
 import type { Modul } from "../modul-types";
 
+import {
+  validateGeneratedModulAjar,
+  type ModulQualityValidationResult,
+  type QualityValidationOptions,
+} from "./modul-quality-validator";
+
 const DEFAULT_TIMEOUT_MS = 60000;
 const MAX_TRANSIENT_RETRIES = 2;
 
@@ -47,12 +53,15 @@ export interface GenerateModulAjarOptions extends BuildContextOptions {
   maxRetries?: number;
   mockProviderCall?: (systemPrompt: string, userPrompt: string) => Promise<string>;
   modelConfig?: Partial<AiModelConfig>;
+  enableSemanticCorrection?: boolean;
+  qualityValidationOptions?: QualityValidationOptions;
 }
 
 export interface ModulAiGenerationResult {
   status: "success" | "error";
   output?: GroundedModulAjarOutput;
   draftModul?: Omit<Modul, "id" | "createdAt" | "updatedAt">;
+  qualityValidation?: ModulQualityValidationResult;
   metadata: {
     promptVersion: string;
     schemaVersion: string;
@@ -384,6 +393,79 @@ export async function generateGroundedModulAjar(
     validateGroundedModulAjarOutput(parsedOutput);
     performGroundingPostCheck(parsedOutput, groundedContext);
 
+    // 8.5. AI-2D Semantic Quality Gate Validation
+    let qualityResult = validateGeneratedModulAjar(
+      parsedOutput,
+      groundedContext,
+      options.qualityValidationOptions,
+    );
+
+    // Bounded semantic correction retry (max 1 retry if status === 'REVISE' and enabled)
+    if (
+      qualityResult.status === "REVISE" &&
+      options.enableSemanticCorrection !== false
+    ) {
+      try {
+        totalRetries++;
+        const feedbackList: string[] = [];
+        if (qualityResult.unsupportedClaims.length > 0) {
+          feedbackList.push(
+            `Klaim/angka belum sesuai sumber: ${qualityResult.unsupportedClaims.map((c) => c.reason).join("; ")}`,
+          );
+        }
+        if (qualityResult.pedagogicalIssues.length > 0) {
+          feedbackList.push(
+            `Isu pedagogis: ${qualityResult.pedagogicalIssues.map((p) => p.description).join("; ")}`,
+          );
+        }
+        if (qualityResult.sourceConflicts.filter((c) => !c.isAcknowledged).length > 0) {
+          feedbackList.push(
+            `Harap sebutkan secara eksplisit pertentangan data antar-sumber rujukan pada catatanKeterbatasan.`,
+          );
+        }
+
+        const semanticCorrectionPrompt = `${userPrompt}\n\nPERINGATAN KUALITAS AI-2D: Output sebelumnya memerlukan revisi berdasarkan evaluasi berikut:\n${feedbackList.map((f) => `- ${f}`).join("\n")}\n\nHarap perbaiki Modul Ajar agar 100% selaras dengan bukti rujukan dan aturan pedagogis. Balas HANYA JSON murni yang sesuai skema.`;
+
+        const correctedProviderResult = await callAiProviderWithRetry(
+          systemPrompt,
+          semanticCorrectionPrompt,
+          config,
+          timeoutMs,
+          1,
+          options,
+        );
+        const correctedOutput = parseAiModulResponse(correctedProviderResult.text);
+        validateGroundedModulAjarOutput(correctedOutput);
+        performGroundingPostCheck(correctedOutput, groundedContext);
+        const recheckQuality = validateGeneratedModulAjar(
+          correctedOutput,
+          groundedContext,
+          options.qualityValidationOptions,
+        );
+        if (recheckQuality.status === "PASS" || recheckQuality.status === "REVISE") {
+          parsedOutput = correctedOutput;
+          qualityResult = recheckQuality;
+        }
+      } catch {
+        // Semantic correction failed, retain original qualityResult
+      }
+    }
+
+    // Fail closed if quality decision is REJECT
+    if (qualityResult.status === "REJECT") {
+      const topIssue =
+        qualityResult.unsupportedClaims[0]?.reason ||
+        qualityResult.structuralIssues[0]?.issue ||
+        qualityResult.pedagogicalIssues[0]?.description ||
+        qualityResult.sourceConflicts[0]?.description ||
+        "Draf modul ajar tidak memenuhi kriteria penjaminan mutu dan grounding AI-2D.";
+      throw new AiServiceError(
+        AI_ERROR_CODES.QUALITY_VALIDATION_FAILED,
+        `Validasi mutu draf Modul Ajar gagal (REJECT): ${topIssue}`,
+        qualityResult,
+      );
+    }
+
     // 9. Map into Canonical Modul Draft (status: 'Draft' strictly enforced)
     const draftModul = mapGroundedOutputToModulDraft(parsedOutput, {
       promptVersion,
@@ -391,6 +473,11 @@ export async function generateGroundedModulAjar(
       kelasId: input.kelasId,
       sumberJudul: groundedContext.sourceMetadata.map((s) => s.sourceTitle).join("; "),
     });
+
+    // Attach quality validation summary to draftModul.aiMetadata
+    if (draftModul.aiMetadata) {
+      draftModul.aiMetadata.qualityValidation = qualityResult.summary;
+    }
 
     const latencyMs = Date.now() - startTime;
 
@@ -411,6 +498,7 @@ export async function generateGroundedModulAjar(
       status: "success",
       output: parsedOutput,
       draftModul,
+      qualityValidation: qualityResult,
       metadata: {
         promptVersion,
         schemaVersion: CANONICAL_OUTPUT_SCHEMA_VERSION,

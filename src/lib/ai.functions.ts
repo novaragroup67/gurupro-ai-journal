@@ -4,8 +4,10 @@ import { requireSupabaseAuth, requireGuruAuth, requireTeacherAiAuth } from "@/in
 import {
   buildModulGroundingContext,
   generateGroundedModulAjar,
+  validateGeneratedModulAjar,
   type ModulAiGenerationResult,
   type ModulGroundingContext,
+  type ModulQualityValidationResult,
   type TeacherAcademicContext,
 } from "./ai/modul-contract";
 
@@ -1121,5 +1123,54 @@ export const generateModulAjarServerFn = createServerFn({ method: "POST" })
 
     return generateGroundedModulAjar(data, teacherContext);
   });
+
+/**
+ * GuruPro AI Foundation (AI-2D) — Server-Side Modul Ajar Quality Gate Server Function
+ *
+ * Authenticates verified teacher, builds grounded context from source snapshots,
+ * and runs deterministic semantic quality validation (grounding, unsupported claims,
+ * evidence coverage, conflict detection, pedagogical coherence).
+ *
+ * Produces structured quality decision: PASS | REVISE | REJECT.
+ */
+export const validateModulAjarQualityServerFn = createServerFn({ method: "POST" })
+  .middleware([requireTeacherAiAuth])
+  .validator((input: { output: unknown; generationInput: unknown }) => input)
+  .handler(async ({ context, data }): Promise<ModulQualityValidationResult> => {
+    const supabase = (context as any).supabase;
+    const userId = (context as any).userId;
+    const profile = (context as any).profile;
+
+    // Load teacher's classes from DB
+    const { data: classesData, error: classErr } = await supabase
+      .from("kelas")
+      .select("id, nama, tingkat, mapel, tahun_ajaran, guru_id")
+      .eq("guru_id", userId);
+
+    if (classErr) {
+      throw new Error(`Gagal memuat daftar kelas guru: ${classErr.message}`);
+    }
+
+    const teacherClasses = (classesData || []).map((k: any) => ({
+      id: k.id,
+      namaKelas: k.nama,
+      tingkat: k.tingkat,
+      mapel: k.mapel,
+      tahunAjaran: k.tahun_ajaran,
+      guruId: k.guru_id,
+    }));
+
+    const teacherContext: TeacherAcademicContext = {
+      teacherId: userId,
+      teacherRole: "guru",
+      verificationStatus: profile?.status_verifikasi || "terverifikasi",
+      teacherClasses,
+      availableSourceSnapshots: [],
+    };
+
+    const groundingContext = await buildModulGroundingContext(data.generationInput, teacherContext);
+    return validateGeneratedModulAjar(data.output, groundingContext);
+  });
+
 
 

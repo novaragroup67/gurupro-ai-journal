@@ -357,6 +357,34 @@ export type GroundedModulAjarOutput = z.infer<typeof GroundedModulAjarOutputSche
 // 3. PERSISTENCE METADATA & DOMAIN MAPPING
 // ==============================================================================
 
+export const CANONICAL_QUALITY_VALIDATION_VERSION = "ai-modul-quality-v1";
+
+export interface ModulQualityValidationSummary {
+  validationVersion: string;
+  decision: "PASS" | "REVISE" | "REJECT";
+  validatedAt: string;
+  coverageRatio: number;
+  issueCounts: {
+    unsupportedClaims: number;
+    sourceConflicts: number;
+    pedagogicalIssues: number;
+    structuralIssues: number;
+  };
+}
+
+export const ModulQualityValidationSummarySchema = z.object({
+  validationVersion: z.string().min(1),
+  decision: z.enum(["PASS", "REVISE", "REJECT"]),
+  validatedAt: z.string(),
+  coverageRatio: z.number().min(0).max(1),
+  issueCounts: z.object({
+    unsupportedClaims: z.number().int().min(0),
+    sourceConflicts: z.number().int().min(0),
+    pedagogicalIssues: z.number().int().min(0),
+    structuralIssues: z.number().int().min(0),
+  }),
+});
+
 export interface ModulAiMetadata {
   promptVersion: string;
   sourceSnapshotIds: string[];
@@ -368,6 +396,7 @@ export interface ModulAiMetadata {
   kegiatanPembelajaran: LearningActivities;
   asesmen: PedagogicalAssessment;
   catatanKeterbatasan?: string;
+  qualityValidation?: ModulQualityValidationSummary;
 }
 
 export const ModulAiMetadataSchema = z.object({
@@ -381,6 +410,7 @@ export const ModulAiMetadataSchema = z.object({
   kegiatanPembelajaran: LearningActivitiesSchema,
   asesmen: PedagogicalAssessmentSchema,
   catatanKeterbatasan: z.string().optional(),
+  qualityValidation: ModulQualityValidationSummarySchema.optional(),
 });
 
 // ==============================================================================
@@ -595,5 +625,25 @@ export {
   type GenerateModulAjarOptions,
   type ModulAiGenerationResult,
 } from "./modul-generator";
+
+// Re-export AI-2D semantic quality validator & types
+export {
+  validateGeneratedModulAjar,
+  validateStructuralIntegrity,
+  validateFactualGrounding,
+  validateEvidenceCoverage,
+  detectSourceConflictsInOutput,
+  validatePedagogicalCoherence,
+  evaluateQualityDecision,
+  type ModulQualityDecision,
+  type ModulQualityValidationResult,
+  type QualityValidationOptions,
+  type UnsupportedClaimIssue,
+  type EvidenceCoverageResult,
+  type SourceConflictValidationIssue,
+  type PedagogicalValidationIssue,
+  type StructuralValidationIssue,
+} from "./modul-quality-validator";
+
 
 

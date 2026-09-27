@@ -21,6 +21,10 @@ export const AI_ERROR_CODES = {
   PROVIDER_MALFORMED_OUTPUT: "PROVIDER_MALFORMED_OUTPUT",
   AI_GROUNDING_ERROR: "AI_GROUNDING_ERROR",
   PERSISTENCE_ERROR: "PERSISTENCE_ERROR",
+  UNSUPPORTED_FACTUAL_CLAIM: "UNSUPPORTED_FACTUAL_CLAIM",
+  SOURCE_CONFLICT: "SOURCE_CONFLICT",
+  PEDAGOGICAL_VALIDATION_FAILED: "PEDAGOGICAL_VALIDATION_FAILED",
+  QUALITY_VALIDATION_FAILED: "QUALITY_VALIDATION_FAILED",
 } as const;
 
 export type AiErrorCode = (typeof AI_ERROR_CODES)[keyof typeof AI_ERROR_CODES];
@@ -44,6 +48,10 @@ const USER_MESSAGES: Record<AiErrorCode, string> = {
   PROVIDER_MALFORMED_OUTPUT: "Keluaran penyedia AI tidak memenuhi struktur JSON atau skema kanonikal yang diharapkan.",
   AI_GROUNDING_ERROR: "Fakta yang diminta tidak ditemukan di dalam materi sumber acuan.",
   PERSISTENCE_ERROR: "Terjadi kesalahan saat menyimpan snapshot data sumber ke basis data.",
+  UNSUPPORTED_FACTUAL_CLAIM: "Draf Modul Ajar memuat klaim atau data teknis yang tidak didukung oleh materi sumber.",
+  SOURCE_CONFLICT: "Draf Modul Ajar memuat data yang saling bertentangan antar-sumber rujukan tanpa catatan klarifikasi.",
+  PEDAGOGICAL_VALIDATION_FAILED: "Draf Modul Ajar tidak memenuhi standar pedagogis atau urutan fase pembelajaran yang konsisten.",
+  QUALITY_VALIDATION_FAILED: "Draf Modul Ajar gagal memenuhi kriteria penjaminan mutu dan grounding AI-2D.",
 };
 
 export class AiServiceError extends Error {
@@ -87,6 +95,10 @@ export class AiServiceError extends Error {
       case "PERSISTENCE_ERROR":
       case "AI_OUTPUT_INVALID":
       case "AI_GROUNDING_ERROR":
+      case "UNSUPPORTED_FACTUAL_CLAIM":
+      case "SOURCE_CONFLICT":
+      case "PEDAGOGICAL_VALIDATION_FAILED":
+      case "QUALITY_VALIDATION_FAILED":
         this.statusCode = 422;
         this.isRetryable = false;
         break;

@@ -206,7 +206,7 @@ function buildMockRoutingOutput(sourceId, chunkId) {
     kelas: "XI TKJ 1",
     fase: "F",
     alokasiWaktu: "2 x 45 menit",
-    ringkasan: "Modul ajar ini membimbing peserta didik memahami konsep dasar routing statis, prinsip tabel forwarding, dan konfigurasi default gateway pada MikroTik RouterOS v7.",
+    ringkasan: "Modul ajar ini membimbing peserta didik memahami konsep dasar routing statis, prinsip tabel forwarding, dan konfigurasi default gateway pada MikroTik RouterOS.",
     tujuanPembelajaran: [
       {
         id: "TP-01",
@@ -220,7 +220,7 @@ function buildMockRoutingOutput(sourceId, chunkId) {
         id: "SEC-01",
         judul: "Konsep Dasar Routing Statis",
         poin: ["Prinsip kerja tabel routing", "Fungsi default route 0.0.0.0/0", "Administrative Distance"],
-        isi: "Routing statis adalah proses pemilihan rute secara manual oleh administrator jaringan. Pada MikroTik RouterOS v7, rute ditambahkan melalui menu IP Routes dengan menentukan Dst-Address dan Gateway.",
+        isi: "Routing statis adalah proses pemilihan rute secara manual oleh administrator jaringan. Pada MikroTik RouterOS, rute ditambahkan melalui menu IP Routes dengan menentukan Dst-Address dan Gateway.",
         evidenceIds: [chunkId],
         status: "SUPPORTED",
         keyTerms: ["Routing Statis", "Gateway", "Administrative Distance"],
@@ -1078,7 +1078,7 @@ function buildMockRoutingOutput(sourceId, chunkId) {
       {
         id: "SEC-01",
         judul: "Komponen Utama Sistem Electronic Fuel Injection",
-        poin: ["Sensor MAP/MAF", "Electronic Control Unit (ECU)", "Injektor dan Fuel Pressure Regulator"],
+        poin: ["Sensor Mass Air Flow (MAF)", "Electronic Control Unit (ECU)", "Injektor dan Fuel Pressure Regulator"],
         isi: "Sistem EFI menggunakan sensor untuk mendeteksi kondisi kerja mesin dan mengirimkan data ke ECU untuk menghitung durasi injeksi yang optimal.",
         evidenceIds: [firstChunkId],
         status: "SUPPORTED",
