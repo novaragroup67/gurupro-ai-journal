@@ -8,6 +8,10 @@ export interface Soal {
   jenis: JenisSoal;
   opsi: string[];
   kunci: string;
+  penjelasan?: string;
+  tingkat?: Tingkat;
+  tujuanPembelajaranId?: string;
+  evidenceIds?: string[];
 }
 
 export interface PaketSoal {
@@ -22,6 +26,7 @@ export interface PaketSoal {
   isArchived?: boolean;
   archivedAt?: string | null;
   archivedBy?: string | null;
+  ai_metadata?: Record<string, unknown> | null;
 }
 
 export const JENIS_SOAL: JenisSoal[] = ["Pilihan Ganda", "Esai"];

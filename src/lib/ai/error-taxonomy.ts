@@ -25,6 +25,10 @@ export const AI_ERROR_CODES = {
   SOURCE_CONFLICT: "SOURCE_CONFLICT",
   PEDAGOGICAL_VALIDATION_FAILED: "PEDAGOGICAL_VALIDATION_FAILED",
   QUALITY_VALIDATION_FAILED: "QUALITY_VALIDATION_FAILED",
+  QUESTION_SCHEMA_INVALID: "QUESTION_SCHEMA_INVALID",
+  QUESTION_TYPE_UNSUPPORTED: "QUESTION_TYPE_UNSUPPORTED",
+  ANSWER_KEY_INVALID: "ANSWER_KEY_INVALID",
+  QUESTION_GROUNDING_FAILED: "QUESTION_GROUNDING_FAILED",
 } as const;
 
 export type AiErrorCode = (typeof AI_ERROR_CODES)[keyof typeof AI_ERROR_CODES];
@@ -52,6 +56,10 @@ const USER_MESSAGES: Record<AiErrorCode, string> = {
   SOURCE_CONFLICT: "Draf Modul Ajar memuat data yang saling bertentangan antar-sumber rujukan tanpa catatan klarifikasi.",
   PEDAGOGICAL_VALIDATION_FAILED: "Draf Modul Ajar tidak memenuhi standar pedagogis atau urutan fase pembelajaran yang konsisten.",
   QUALITY_VALIDATION_FAILED: "Draf Modul Ajar gagal memenuhi kriteria penjaminan mutu dan grounding AI-2D.",
+  QUESTION_SCHEMA_INVALID: "Skema butir soal tidak valid atau tidak memenuhi kontrak kanonikal yang ditentukan.",
+  QUESTION_TYPE_UNSUPPORTED: "Jenis soal tidak didukung oleh sistem (hanya Pilihan Ganda dan Esai yang didukung).",
+  ANSWER_KEY_INVALID: "Kunci jawaban soal tidak valid atau tidak merujuk pada opsi yang tersedia.",
+  QUESTION_GROUNDING_FAILED: "Butir soal atau kunci jawaban merujuk pada bukti yang tidak valid atau di luar materi sumber.",
 };
 
 export class AiServiceError extends Error {
@@ -99,6 +107,10 @@ export class AiServiceError extends Error {
       case "SOURCE_CONFLICT":
       case "PEDAGOGICAL_VALIDATION_FAILED":
       case "QUALITY_VALIDATION_FAILED":
+      case "QUESTION_SCHEMA_INVALID":
+      case "QUESTION_TYPE_UNSUPPORTED":
+      case "ANSWER_KEY_INVALID":
+      case "QUESTION_GROUNDING_FAILED":
         this.statusCode = 422;
         this.isRetryable = false;
         break;
