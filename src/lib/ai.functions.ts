@@ -18,6 +18,10 @@ import {
   type GroundedQuestionContext,
   type QuestionGroundingInput,
 } from "./ai/question-context-builder";
+import {
+  generateGroundedQuestions,
+  type QuestionAiGenerationResult,
+} from "./ai/question-generator";
 import { getCachedSnapshotsForUser, setCachedSourceSnapshot } from "./ai/source-ingestion";
 import { AiServiceError, AI_ERROR_CODES } from "./ai/error-taxonomy";
 import type { Modul } from "./modul-types";
@@ -1167,6 +1171,90 @@ export const buildQuestionGroundingContextServerFn = createServerFn({ method: "P
     };
 
     return buildQuestionGroundingContext(data, teacherContext);
+  });
+
+/**
+ * GuruPro AI Question Foundation (AI-4C) — Server-Side Real AI Question Generation Server Function
+ *
+ * Authenticates verified teacher, resolves source snapshots, enforces AI-4B grounding preconditions,
+ * invokes real AI provider with strict anti-hallucination prompts, validates AI-4A canonical output,
+ * verifies evidence provenance, and optionally persists an AI-generated draft to 'paket_soal' (status: 'Draft').
+ *
+ * Strictly NEVER auto-publishes. Fails closed with normalized AI service error taxonomy.
+ */
+export const generateQuestionsServerFn = createServerFn({ method: "POST" })
+  .middleware([requireTeacherAiAuth])
+  .validator((input: unknown) => input)
+  .handler(async ({ context, data }): Promise<QuestionAiGenerationResult> => {
+    const supabase = (context as any).supabase;
+    const userId = (context as any).userId;
+    const profile = (context as any).profile;
+
+    // Load teacher's classes from DB
+    const { data: classesData, error: classErr } = await supabase
+      .from("kelas")
+      .select("id, nama, tingkat, mapel, tahun_ajaran, guru_id")
+      .eq("guru_id", userId);
+
+    if (classErr) {
+      throw new Error(`Gagal memuat daftar kelas guru: ${classErr.message}`);
+    }
+
+    const teacherClasses = (classesData || []).map((k: any) => ({
+      id: k.id,
+      namaKelas: k.nama,
+      tingkat: k.tingkat,
+      mapel: k.mapel,
+      tahunAjaran: k.tahun_ajaran,
+      guruId: k.guru_id,
+    }));
+
+    // If requested snapshots are not in cache, load them from ai_source_snapshots DB table
+    const requestedIds = Array.isArray((data as any)?.sourceSnapshotIds)
+      ? (data as any).sourceSnapshotIds
+      : [];
+    for (const snapId of requestedIds) {
+      try {
+        const { data: dbSnap } = await supabase
+          .from("ai_source_snapshots")
+          .select("*")
+          .eq("id", snapId)
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (dbSnap) {
+          const reconstructed = {
+            id: dbSnap.id,
+            userId: dbSnap.user_id,
+            sourceType: dbSnap.source_type,
+            sourceTitle: dbSnap.source_title,
+            sourceUrl: dbSnap.source_url,
+            contentHash: dbSnap.content_hash,
+            normalizedContent: dbSnap.normalized_content,
+            wordCount: dbSnap.word_count,
+            chunks: dbSnap.chunks || [],
+            metadata: dbSnap.metadata || {},
+            ingestionStatus: dbSnap.ingestion_status || "completed",
+            createdAt: dbSnap.created_at,
+          };
+          setCachedSourceSnapshot(reconstructed as any);
+        }
+      } catch {
+        // Ignore DB fetch error and rely on in-memory cache
+      }
+    }
+
+    const teacherContext: TeacherAcademicContext = {
+      teacherId: userId,
+      teacherRole: "guru",
+      verificationStatus: profile?.status_verifikasi || "terverifikasi",
+      teacherClasses,
+      availableSourceSnapshots: [],
+    };
+
+    const persistDraft = (data as any)?.persistDraft ?? true;
+
+    return generateGroundedQuestions(data, teacherContext, { persistDraft });
   });
 
 /**

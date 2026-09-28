@@ -29,6 +29,8 @@ export const AI_ERROR_CODES = {
   QUESTION_TYPE_UNSUPPORTED: "QUESTION_TYPE_UNSUPPORTED",
   ANSWER_KEY_INVALID: "ANSWER_KEY_INVALID",
   QUESTION_GROUNDING_FAILED: "QUESTION_GROUNDING_FAILED",
+  QUESTION_GENERATION_FAILED: "QUESTION_GENERATION_FAILED",
+  QUESTION_COUNT_MISMATCH: "QUESTION_COUNT_MISMATCH",
 } as const;
 
 export type AiErrorCode = (typeof AI_ERROR_CODES)[keyof typeof AI_ERROR_CODES];
@@ -60,6 +62,8 @@ const USER_MESSAGES: Record<AiErrorCode, string> = {
   QUESTION_TYPE_UNSUPPORTED: "Jenis soal tidak didukung oleh sistem (hanya Pilihan Ganda dan Esai yang didukung).",
   ANSWER_KEY_INVALID: "Kunci jawaban soal tidak valid atau tidak merujuk pada opsi yang tersedia.",
   QUESTION_GROUNDING_FAILED: "Butir soal atau kunci jawaban merujuk pada bukti yang tidak valid atau di luar materi sumber.",
+  QUESTION_GENERATION_FAILED: "Gagal menghasilkan butir soal yang memenuhi standar kanonikal.",
+  QUESTION_COUNT_MISMATCH: "Jumlah butir soal yang dihasilkan AI tidak sesuai dengan target yang diminta.",
 };
 
 export class AiServiceError extends Error {
@@ -111,6 +115,8 @@ export class AiServiceError extends Error {
       case "QUESTION_TYPE_UNSUPPORTED":
       case "ANSWER_KEY_INVALID":
       case "QUESTION_GROUNDING_FAILED":
+      case "QUESTION_GENERATION_FAILED":
+      case "QUESTION_COUNT_MISMATCH":
         this.statusCode = 422;
         this.isRetryable = false;
         break;

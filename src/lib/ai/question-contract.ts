@@ -408,3 +408,12 @@ export {
   type QuestionRetrievalQueryBundle,
 } from "./question-context-builder";
 
+// Re-export AI-4C Real AI Question Generation Engine
+export {
+  generateGroundedQuestions,
+  parseAiQuestionResponse,
+  type GenerateQuestionsOptions,
+  type QuestionAiGenerationResult,
+} from "./question-generator";
+
+
