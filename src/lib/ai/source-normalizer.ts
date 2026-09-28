@@ -60,11 +60,10 @@ export function normalizeHtmlContent(html: string): { normalized: string; title?
   // Remove comments
   cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, " ");
 
-  // Prefer main content container if present
+  // Prefer main content container if present (article, main, body)
   const mainContent =
     /<article\b[^>]*>([\s\S]*?)<\/article>/i.exec(cleaned)?.[1] ??
     /<main\b[^>]*>([\s\S]*?)<\/main>/i.exec(cleaned)?.[1] ??
-    /<div[^>]+id=["'](?:content|main|article)["'][^>]*>([\s\S]*?)<\/div>/i.exec(cleaned)?.[1] ??
     /<body\b[^>]*>([\s\S]*?)<\/body>/i.exec(cleaned)?.[1] ??
     cleaned;
 
