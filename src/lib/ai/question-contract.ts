@@ -393,3 +393,18 @@ export function fromExistingSoal(
     status: "SUPPORTED",
   });
 }
+
+// Re-export AI-4B Question Grounded Context Builder
+export {
+  CANONICAL_QUESTION_CONTEXT_VERSION,
+  QuestionGroundingInputSchema,
+  GroundedQuestionContextSchema,
+  buildQuestionDeterministicQueries,
+  buildQuestionGroundingContext,
+  serializeQuestionGroundingContext,
+  type QuestionGroundingInput,
+  type GroundedQuestionContext,
+  type BuildQuestionContextOptions,
+  type QuestionRetrievalQueryBundle,
+} from "./question-context-builder";
+

@@ -13,6 +13,11 @@ import {
   type TeacherAcademicContext,
   type TeacherDraftEditPayload,
 } from "./ai/modul-contract";
+import {
+  buildQuestionGroundingContext,
+  type GroundedQuestionContext,
+  type QuestionGroundingInput,
+} from "./ai/question-context-builder";
 import { getCachedSnapshotsForUser, setCachedSourceSnapshot } from "./ai/source-ingestion";
 import { AiServiceError, AI_ERROR_CODES } from "./ai/error-taxonomy";
 import type { Modul } from "./modul-types";
@@ -1081,6 +1086,87 @@ export const buildModulGroundingContextServerFn = createServerFn({ method: "POST
     };
 
     return buildModulGroundingContext(data, teacherContext);
+  });
+
+/**
+ * GuruPro AI Question Foundation (AI-4B) — Server-Side Question Grounded Context Builder Server Function
+ *
+ * Takes untrusted client generation input, authenticates the teacher, verifies class and snapshot ownership,
+ * executes multi-query retrieval, assembles deduplicated evidence, and produces GroundedQuestionContext.
+ *
+ * Strictly NEVER calls Gemini, OpenAI, Lovable Gateway, or any LLM.
+ */
+export const buildQuestionGroundingContextServerFn = createServerFn({ method: "POST" })
+  .middleware([requireTeacherAiAuth])
+  .validator((input: unknown) => input)
+  .handler(async ({ context, data }): Promise<GroundedQuestionContext> => {
+    const supabase = (context as any).supabase;
+    const userId = (context as any).userId;
+    const profile = (context as any).profile;
+
+    // Load teacher's classes from DB
+    const { data: classesData, error: classErr } = await supabase
+      .from("kelas")
+      .select("id, nama, tingkat, mapel, tahun_ajaran, guru_id")
+      .eq("guru_id", userId);
+
+    if (classErr) {
+      throw new Error(`Gagal memuat daftar kelas guru: ${classErr.message}`);
+    }
+
+    const teacherClasses = (classesData || []).map((k: any) => ({
+      id: k.id,
+      namaKelas: k.nama,
+      tingkat: k.tingkat,
+      mapel: k.mapel,
+      tahunAjaran: k.tahun_ajaran,
+      guruId: k.guru_id,
+    }));
+
+    // If requested snapshots are not in cache, load them from ai_source_snapshots DB table
+    const requestedIds = Array.isArray((data as any)?.sourceSnapshotIds)
+      ? (data as any).sourceSnapshotIds
+      : [];
+    for (const snapId of requestedIds) {
+      try {
+        const { data: dbSnap } = await supabase
+          .from("ai_source_snapshots")
+          .select("*")
+          .eq("id", snapId)
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (dbSnap) {
+          const reconstructed = {
+            id: dbSnap.id,
+            userId: dbSnap.user_id,
+            sourceType: dbSnap.source_type,
+            sourceTitle: dbSnap.source_title,
+            sourceUrl: dbSnap.source_url,
+            contentHash: dbSnap.content_hash,
+            normalizedContent: dbSnap.normalized_content,
+            wordCount: dbSnap.word_count,
+            chunks: dbSnap.chunks || [],
+            metadata: dbSnap.metadata || {},
+            ingestionStatus: dbSnap.ingestion_status || "completed",
+            createdAt: dbSnap.created_at,
+          };
+          setCachedSourceSnapshot(reconstructed as any);
+        }
+      } catch {
+        // Ignore DB fetch error and rely on in-memory cache
+      }
+    }
+
+    const teacherContext: TeacherAcademicContext = {
+      teacherId: userId,
+      teacherRole: "guru",
+      verificationStatus: profile?.status_verifikasi || "terverifikasi",
+      teacherClasses,
+      availableSourceSnapshots: [],
+    };
+
+    return buildQuestionGroundingContext(data, teacherContext);
   });
 
 /**
