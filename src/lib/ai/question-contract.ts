@@ -50,6 +50,7 @@ export const BaseMultipleChoiceQuestionSchema = z.object({
   tujuanPembelajaranId: z.string().optional(),
   evidenceIds: z.array(z.string().min(1)).min(1, "Minimal satu referensi bukti materi sumber."),
   status: GroundingStatusSchema.default("SUPPORTED"),
+  teacherEdited: z.boolean().optional(),
 });
 
 export const CanonicalMultipleChoiceQuestionSchema = BaseMultipleChoiceQuestionSchema.superRefine((val, ctx) => {
@@ -92,6 +93,7 @@ export const BaseEssayQuestionSchema = z.object({
   tujuanPembelajaranId: z.string().optional(),
   evidenceIds: z.array(z.string().min(1)).min(1, "Minimal satu referensi bukti materi sumber."),
   status: GroundingStatusSchema.default("SUPPORTED"),
+  teacherEdited: z.boolean().optional(),
 });
 
 export const CanonicalEssayQuestionSchema = BaseEssayQuestionSchema;
@@ -144,6 +146,9 @@ export const QuestionAiMetadataSchema = z.object({
   editedAt: z.string().optional(),
   lastEditedBy: z.string().optional(),
   originalGeneratedCount: z.number().int().min(1).optional(),
+  originalQualityValidation: z.any().optional(),
+  originalQualityFindings: z.array(z.any()).optional(),
+  currentValidationStatus: z.enum(["valid", "invalid", "needs_revision"]).optional(),
 });
 
 export type QuestionAiMetadata = z.infer<typeof QuestionAiMetadataSchema>;
@@ -205,6 +210,30 @@ export const QuestionGenerationInputSchema = z.object({
 });
 
 export type QuestionGenerationInput = z.infer<typeof QuestionGenerationInputSchema>;
+
+// ==============================================================================
+// 8B. TEACHER DRAFT SAVE CONTRACT (AI-4E)
+// ==============================================================================
+
+export const SaveQuestionDraftInputSchema = z.object({
+  paketId: z.string().min(1, "ID paket soal wajib ada."),
+  judul: z.string().trim().min(3, "Judul paket soal minimal 3 karakter."),
+  topik: z.string().trim().min(3, "Topik paket soal minimal 3 karakter."),
+  modulId: z.string().optional(),
+  questions: z.array(CanonicalQuestionSchema).min(1, "Minimal satu butir soal dalam paket soal."),
+  expectedUpdatedAt: z.string().optional(),
+});
+
+export type SaveQuestionDraftInput = z.infer<typeof SaveQuestionDraftInputSchema>;
+
+export interface SaveQuestionDraftResult {
+  status: "success";
+  persistedPackageId: string;
+  persistedPackage: PaketSoal;
+  canonicalPackage: CanonicalQuestionPackage;
+  studentSafeQuestions: StudentSafeQuestion[];
+  metadata: QuestionAiMetadata;
+}
 
 // ==============================================================================
 // 9. VALIDATION & INVARIANT ENFORCEMENT FUNCTIONS

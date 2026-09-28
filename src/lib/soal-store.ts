@@ -14,9 +14,13 @@ type Row = {
   is_archived?: boolean;
   archived_at?: string | null;
   archived_by?: string | null;
+  ai_metadata?: Record<string, unknown> | null;
+  updated_at?: string;
 };
 
 function toPaket(row: Row): PaketSoal {
+  const meta = row.ai_metadata || null;
+  const teacherEdited = Boolean(meta && (meta as any).teacherEdited);
   return {
     id: row.id,
     judul: row.judul,
@@ -26,9 +30,12 @@ function toPaket(row: Row): PaketSoal {
     kelas: row.kelas ?? [],
     soal: (Array.isArray(row.soal) ? row.soal : []) as Soal[],
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
     isArchived: Boolean(row.is_archived),
     archivedAt: row.archived_at || null,
     archivedBy: row.archived_by || null,
+    ai_metadata: meta,
+    teacherEdited,
   };
 }
 
@@ -43,6 +50,7 @@ function toRow(paket: Partial<PaketSoal>) {
   if (paket.isArchived !== undefined) row["is_archived"] = paket.isArchived;
   if (paket.archivedAt !== undefined) row["archived_at"] = paket.archivedAt;
   if (paket.archivedBy !== undefined) row["archived_by"] = paket.archivedBy;
+  if (paket.ai_metadata !== undefined) row["ai_metadata"] = paket.ai_metadata;
   return row;
 }
 

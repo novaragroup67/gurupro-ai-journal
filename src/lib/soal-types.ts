@@ -12,6 +12,7 @@ export interface Soal {
   tingkat?: Tingkat;
   tujuanPembelajaranId?: string;
   evidenceIds?: string[];
+  teacherEdited?: boolean;
 }
 
 export interface PaketSoal {
@@ -23,10 +24,12 @@ export interface PaketSoal {
   kelas: string[];
   soal: Soal[];
   createdAt: string;
+  updatedAt?: string;
   isArchived?: boolean;
   archivedAt?: string | null;
   archivedBy?: string | null;
   ai_metadata?: Record<string, unknown> | null;
+  teacherEdited?: boolean;
 }
 
 export const JENIS_SOAL: JenisSoal[] = ["Pilihan Ganda", "Esai"];

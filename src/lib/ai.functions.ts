@@ -27,6 +27,20 @@ import {
   type QuestionPackageQualityResult,
   type QuestionQualityValidationOptions,
 } from "./ai/question-quality-validator";
+import {
+  CANONICAL_QUESTION_PROMPT_VERSION,
+  CANONICAL_QUESTION_SCHEMA_VERSION,
+  SaveQuestionDraftInputSchema,
+  toExistingSoal,
+  toStudentSafeQuestion,
+  validateCanonicalQuestionPackage,
+  type CanonicalQuestion,
+  type CanonicalQuestionPackage,
+  type QuestionAiMetadata,
+  type SaveQuestionDraftInput,
+  type SaveQuestionDraftResult,
+  type StudentSafeQuestion,
+} from "./ai/question-contract";
 import { getCachedSnapshotsForUser, setCachedSourceSnapshot } from "./ai/source-ingestion";
 import { AiServiceError, AI_ERROR_CODES } from "./ai/error-taxonomy";
 import type { Modul } from "./modul-types";
@@ -1291,6 +1305,232 @@ export const validateQuestionQualityServerFn = createServerFn({ method: "POST" }
     };
 
     return validateQuestionPackageQuality(payload.package, payload.context, payload.options);
+  });
+
+/**
+ * GuruPro AI Question Foundation (AI-4E) — Server-Side Teacher Question Draft Save Server Function
+ *
+ * Enforces:
+ * 1. Verified Teacher Authentication (requireTeacherAiAuth)
+ * 2. Tenant Ownership Isolation: existing.user_id === authResult.user.id
+ * 3. Strict Draft Invariant: existing.status === 'Draft'; saving edits NEVER publishes or changes status to 'Terbit'
+ * 4. Stale Data / Concurrency Protection: rejects save if record was modified concurrently (expectedUpdatedAt)
+ * 5. Canonical Question Contract Validation: validates all questions against AI-4A schema
+ * 6. Evidence & Grounding Preservation: maintains source evidence references; rejects dangling or cross-tenant IDs
+ * 7. Provenance Preservation & Teacher Edit Audit: preserves AI promptVersion, schemaVersion, sourceSnapshotIds,
+ *    and originalQualityValidation; records teacherEdited: true, editedAt, lastEditedBy, and item-level teacherEdited
+ * 8. Atomic Persistence to public.paket_soal
+ */
+export const saveQuestionDraftServerFn = createServerFn({ method: "POST" })
+  .middleware([requireTeacherAiAuth])
+  .validator((input: SaveQuestionDraftInput) => {
+    return SaveQuestionDraftInputSchema.parse(input);
+  })
+  .handler(async ({ context, data }): Promise<SaveQuestionDraftResult> => {
+    const supabase = (context as any).supabase;
+    const userId = (context as any).userId;
+
+    if (!data?.paketId || typeof data.paketId !== "string") {
+      throw new AiServiceError(
+        AI_ERROR_CODES.INVALID_REQUEST,
+        "ID Paket Soal wajib disertakan dalam permintaan penyimpanan draf.",
+      );
+    }
+
+    // 1. Fetch authoritative existing record from DB
+    const { data: existing, error: fetchErr } = await supabase
+      .from("paket_soal")
+      .select("*")
+      .eq("id", data.paketId)
+      .maybeSingle();
+
+    if (fetchErr) {
+      console.error("[saveQuestionDraftServerFn] DB fetch error:", fetchErr);
+      throw new AiServiceError(
+        AI_ERROR_CODES.PERSISTENCE_ERROR,
+        `Gagal memeriksa data paket soal dari database: ${fetchErr.message}`,
+      );
+    }
+
+    if (!existing) {
+      throw new AiServiceError(
+        AI_ERROR_CODES.INVALID_REQUEST,
+        "Paket soal yang ingin disimpan tidak ditemukan.",
+      );
+    }
+
+    // 2. Enforce Teacher Ownership
+    if (existing.user_id !== userId) {
+      throw new AiServiceError(
+        AI_ERROR_CODES.ROLE_FORBIDDEN,
+        "Akses ditolak: Anda bukan pemilik draf paket soal ini.",
+      );
+    }
+
+    // 3. Enforce Strict Draft Invariant
+    if (existing.status !== "Draft") {
+      throw new AiServiceError(
+        AI_ERROR_CODES.INVALID_REQUEST,
+        "Hanya paket soal dengan status Draft yang dapat diperbarui melalui alur peninjauan guru.",
+      );
+    }
+
+    // 4. Stale Data / Concurrency Protection
+    if (data.expectedUpdatedAt && existing.updated_at) {
+      const dbTime = new Date(existing.updated_at).getTime();
+      const clientTime = new Date(data.expectedUpdatedAt).getTime();
+      if (!Number.isNaN(dbTime) && !Number.isNaN(clientTime) && dbTime > clientTime) {
+        throw new AiServiceError(
+          AI_ERROR_CODES.INVALID_REQUEST,
+          "Draf paket soal telah diperbarui oleh sesi lain. Muat ulang halaman untuk meninjau versi terbaru.",
+        );
+      }
+    }
+
+    // 5. Canonical Question Contract Validation
+    const existingAiMetadata = (existing.ai_metadata || {}) as any;
+    const existingEvidenceRefs = existingAiMetadata.evidenceRefs || [];
+    const existingSnapshotIds = existingAiMetadata.sourceSnapshotIds || [];
+
+    // Verify evidence references: construct allowed evidence IDs from existing evidenceRefs and existing questions
+    const allowedEvidenceIds = new Set<string>();
+    for (const ref of existingEvidenceRefs) {
+      if (ref.evidenceId) allowedEvidenceIds.add(ref.evidenceId);
+    }
+    if (Array.isArray(existing.soal)) {
+      for (const eq of existing.soal) {
+        if (Array.isArray(eq.evidenceIds)) {
+          for (const ev of eq.evidenceIds) allowedEvidenceIds.add(ev);
+        }
+      }
+    }
+
+    // Canonical package validation
+    const candidatePackage: CanonicalQuestionPackage = {
+      schemaVersion: CANONICAL_QUESTION_SCHEMA_VERSION,
+      judul: data.judul.trim(),
+      topik: data.topik.trim(),
+      modulId: data.modulId || existing.modul_id || undefined,
+      tingkat: data.questions[0]?.tingkat || "Sedang",
+      questions: data.questions,
+      evidenceRefs: existingEvidenceRefs,
+    };
+
+    const validatedPackage = validateCanonicalQuestionPackage(candidatePackage, {
+      allowedEvidenceIds: allowedEvidenceIds.size > 0 ? allowedEvidenceIds : undefined,
+    });
+
+    // 6. Question-Level Edit Tracking & Provenance Preservation
+    const existingQuestions = Array.isArray(existing.soal) ? (existing.soal as any[]) : [];
+    const nowIso = new Date().toISOString();
+
+    const questionsWithTracking: CanonicalQuestion[] = validatedPackage.questions.map((q, idx) => {
+      const existingQ = existingQuestions.find((eq) => eq.id === q.id) || existingQuestions[idx];
+      let isItemEdited = false;
+      if (existingQ) {
+        const textChanged = existingQ.pertanyaan !== q.pertanyaan;
+        const keyChanged = existingQ.kunci !== q.kunci;
+        const explChanged = (existingQ.penjelasan || "") !== (q.penjelasan || "");
+        const optionsChanged =
+          Array.isArray(existingQ.opsi) && Array.isArray(q.opsi)
+            ? existingQ.opsi.length !== q.opsi.length ||
+              existingQ.opsi.some((o: string, oi: number) => o !== q.opsi[oi])
+            : false;
+        isItemEdited = textChanged || keyChanged || explChanged || optionsChanged;
+      } else {
+        isItemEdited = true;
+      }
+
+      return {
+        ...q,
+        teacherEdited: isItemEdited || q.teacherEdited || false,
+      };
+    });
+
+    const anyQuestionEdited = questionsWithTracking.some((q) => q.teacherEdited);
+    const titleChanged = existing.judul !== data.judul.trim();
+    const topicChanged = existing.topik !== data.topik.trim();
+    const isPackageTeacherEdited =
+      existingAiMetadata.teacherEdited || anyQuestionEdited || titleChanged || topicChanged;
+
+    const updatedAiMetadata: QuestionAiMetadata = {
+      promptVersion: existingAiMetadata.promptVersion || CANONICAL_QUESTION_PROMPT_VERSION,
+      schemaVersion: existingAiMetadata.schemaVersion || CANONICAL_QUESTION_SCHEMA_VERSION,
+      generatedAt: existingAiMetadata.generatedAt || existing.created_at || nowIso,
+      sourceSnapshotIds: existingSnapshotIds.length > 0 ? existingSnapshotIds : [existing.id],
+      validationStatus: existingAiMetadata.validationStatus || "valid",
+      evidenceRefs: existingEvidenceRefs,
+      originalGeneratedCount:
+        existingAiMetadata.originalGeneratedCount || existingQuestions.length || questionsWithTracking.length,
+      originalQualityValidation:
+        existingAiMetadata.originalQualityValidation ||
+        existingAiMetadata.qualityResult ||
+        undefined,
+      originalQualityFindings:
+        existingAiMetadata.originalQualityFindings ||
+        existingAiMetadata.qualityFindings ||
+        undefined,
+      teacherEdited: isPackageTeacherEdited,
+      editedAt: isPackageTeacherEdited ? nowIso : existingAiMetadata.editedAt,
+      lastEditedBy: isPackageTeacherEdited ? userId : existingAiMetadata.lastEditedBy,
+    };
+
+    // 7. Atomic Persistence to Supabase (Strict Draft Invariant: status remains 'Draft')
+    const finalSoalArray = questionsWithTracking.map(toExistingSoal);
+
+    const { data: updated, error: updateErr } = await supabase
+      .from("paket_soal")
+      .update({
+        judul: validatedPackage.judul,
+        topik: validatedPackage.topik,
+        soal: finalSoalArray as never,
+        status: "Draft", // Strict Draft Invariant: saving edits NEVER changes to 'Terbit'
+        ai_metadata: updatedAiMetadata as never,
+        updated_at: nowIso,
+      })
+      .eq("id", data.paketId)
+      .eq("user_id", userId)
+      .select("*")
+      .single();
+
+    if (updateErr) {
+      console.error("[saveQuestionDraftServerFn] Update error:", updateErr);
+      throw new AiServiceError(
+        AI_ERROR_CODES.PERSISTENCE_ERROR,
+        `Gagal menyimpan perubahan draf paket soal: ${updateErr.message}`,
+      );
+    }
+
+    const persistedPackage: PaketSoal = {
+      id: updated.id,
+      judul: updated.judul,
+      topik: updated.topik,
+      modulId: updated.modul_id || undefined,
+      status: (updated.status as any) || "Draft",
+      kelas: Array.isArray(updated.kelas) ? updated.kelas : [],
+      soal: Array.isArray(updated.soal) ? (updated.soal as any[]) : finalSoalArray,
+      createdAt: updated.created_at,
+      updatedAt: updated.updated_at,
+      ai_metadata: updated.ai_metadata,
+      teacherEdited: isPackageTeacherEdited,
+    };
+
+    const finalCanonicalPackage: CanonicalQuestionPackage = {
+      ...validatedPackage,
+      questions: questionsWithTracking,
+      aiMetadata: updatedAiMetadata,
+    };
+
+    const studentSafeQuestions = questionsWithTracking.map(toStudentSafeQuestion);
+
+    return {
+      status: "success",
+      persistedPackageId: updated.id,
+      persistedPackage,
+      canonicalPackage: finalCanonicalPackage,
+      studentSafeQuestions,
+      metadata: updatedAiMetadata,
+    };
   });
 
 
