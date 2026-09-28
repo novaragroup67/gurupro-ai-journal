@@ -30,6 +30,8 @@ export interface PaketSoal {
   archivedBy?: string | null;
   ai_metadata?: Record<string, unknown> | null;
   teacherEdited?: boolean;
+  publishedAt?: string;
+  publishedBy?: string;
 }
 
 export const JENIS_SOAL: JenisSoal[] = ["Pilihan Ganda", "Esai"];

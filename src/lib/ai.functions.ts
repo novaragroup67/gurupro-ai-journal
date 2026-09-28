@@ -30,12 +30,16 @@ import {
 import {
   CANONICAL_QUESTION_PROMPT_VERSION,
   CANONICAL_QUESTION_SCHEMA_VERSION,
+  PublishQuestionPackageInputSchema,
   SaveQuestionDraftInputSchema,
   toExistingSoal,
   toStudentSafeQuestion,
   validateCanonicalQuestionPackage,
+  validateQuestionPackagePublishEligibility,
   type CanonicalQuestion,
   type CanonicalQuestionPackage,
+  type PublishQuestionPackageInput,
+  type PublishQuestionPackageResult,
   type QuestionAiMetadata,
   type SaveQuestionDraftInput,
   type SaveQuestionDraftResult,
@@ -1532,6 +1536,178 @@ export const saveQuestionDraftServerFn = createServerFn({ method: "POST" })
       metadata: updatedAiMetadata,
     };
   });
+
+/**
+ * GuruPro AI Question Bank Publish (AI-4F-A) — Server-Side Question Package Publish Server Function
+ *
+ * Establishes the authoritative server-side transition for:
+ * Draft Question Package -> Published Question Bank Package ('Draft' -> 'Terbit')
+ *
+ * Invariants Enforced:
+ * 1. Authenticated User & Verified Guru Role via requireTeacherAiAuth.
+ * 2. Strict Tenant Ownership: existing.user_id === userId.
+ * 3. Stale Data / Concurrency Protection: expectedUpdatedAt vs existing.updated_at.
+ * 4. Publish Eligibility via validateQuestionPackagePublishEligibility:
+ *    - Status must be 'Draft' (rejects 'Terbit' / double-publish protected).
+ *    - Must not be archived (is_archived: false).
+ *    - Minimum 1 question.
+ *    - Quality invariant: packages with decision 'REJECT' cannot be published.
+ *    - Canonical Question Schema (MC 4 options & valid key, Essay empty options & rubric >= 10 chars).
+ *    - Evidence reference integrity (no dangling evidence IDs).
+ * 5. Provenance Preservation:
+ *    - Preserves promptVersion, schemaVersion, sourceSnapshotIds, evidenceRefs,
+ *      originalQualityValidation, teacherEdited, editedAt, lastEditedBy.
+ *    - Records publishedAt (ISO timestamp) and publishedBy (userId).
+ * 6. Atomic Persistence to public.paket_soal:
+ *    - status: 'Terbit'
+ *    - updated_at: nowIso
+ *    - ai_metadata: updatedAiMetadata
+ * 7. Student Security: returns studentSafeQuestions stripping all answer keys and rubrics.
+ */
+export const publishQuestionPackageServerFn = createServerFn({ method: "POST" })
+  .middleware([requireTeacherAiAuth])
+  .validator((input: PublishQuestionPackageInput) => input)
+  .handler(async ({ context, data }): Promise<PublishQuestionPackageResult> => {
+    const supabase = (context as any).supabase;
+    const userId = (context as any).userId;
+
+    if (!data?.paketId || typeof data.paketId !== "string") {
+      throw new AiServiceError(
+        AI_ERROR_CODES.INVALID_REQUEST,
+        "ID Paket Soal wajib disertakan dalam permintaan publikasi ke Bank Soal.",
+      );
+    }
+
+    // 1. Fetch authoritative existing record from DB
+    const { data: existing, error: fetchErr } = await supabase
+      .from("paket_soal")
+      .select("*")
+      .eq("id", data.paketId)
+      .maybeSingle();
+
+    if (fetchErr) {
+      console.error("[publishQuestionPackageServerFn] DB fetch error:", fetchErr);
+      throw new AiServiceError(
+        AI_ERROR_CODES.PERSISTENCE_ERROR,
+        `Gagal memeriksa data paket soal dari database: ${fetchErr.message}`,
+      );
+    }
+
+    if (!existing) {
+      throw new AiServiceError(
+        AI_ERROR_CODES.INVALID_REQUEST,
+        "Paket soal yang ingin dipublikasikan tidak ditemukan.",
+      );
+    }
+
+    // 2. Enforce Teacher Ownership
+    if (existing.user_id !== userId) {
+      throw new AiServiceError(
+        AI_ERROR_CODES.ROLE_FORBIDDEN,
+        "Akses ditolak: Anda bukan pemilik draf paket soal ini.",
+      );
+    }
+
+    // 3. Stale Data / Concurrency Protection
+    if (data.expectedUpdatedAt && existing.updated_at) {
+      const dbTime = new Date(existing.updated_at).getTime();
+      const clientTime = new Date(data.expectedUpdatedAt).getTime();
+      if (!Number.isNaN(dbTime) && !Number.isNaN(clientTime) && dbTime > clientTime) {
+        throw new AiServiceError(
+          AI_ERROR_CODES.INVALID_REQUEST,
+          "Draf paket soal telah diperbarui oleh sesi lain. Muat ulang halaman untuk meninjau versi terbaru sebelum mempublikasikan.",
+        );
+      }
+    }
+
+    // 4. Validate Publish Eligibility (Status, Archive, AI-4D Quality, Canonical Structure, Evidence Integrity)
+    const eligibilityResult = validateQuestionPackagePublishEligibility(existing);
+    const validatedPackage = eligibilityResult.validatedPackage;
+
+    // 5. Provenance Preservation & Audit Timestamp
+    const existingAiMetadata = (existing.ai_metadata || {}) as any;
+    const nowIso = new Date().toISOString();
+
+    const updatedAiMetadata: QuestionAiMetadata = {
+      ...existingAiMetadata,
+      promptVersion: existingAiMetadata.promptVersion || CANONICAL_QUESTION_PROMPT_VERSION,
+      schemaVersion: existingAiMetadata.schemaVersion || CANONICAL_QUESTION_SCHEMA_VERSION,
+      generatedAt: existingAiMetadata.generatedAt || existing.created_at || nowIso,
+      sourceSnapshotIds: existingAiMetadata.sourceSnapshotIds || [existing.id],
+      validationStatus: existingAiMetadata.validationStatus || "valid",
+      evidenceRefs: existingAiMetadata.evidenceRefs || [],
+      originalGeneratedCount:
+        existingAiMetadata.originalGeneratedCount || validatedPackage.questions.length,
+      originalQualityValidation:
+        existingAiMetadata.originalQualityValidation ||
+        existingAiMetadata.qualityResult ||
+        undefined,
+      originalQualityFindings:
+        existingAiMetadata.originalQualityFindings ||
+        existingAiMetadata.qualityFindings ||
+        undefined,
+      teacherEdited: existingAiMetadata.teacherEdited ?? false,
+      editedAt: existingAiMetadata.editedAt,
+      lastEditedBy: existingAiMetadata.lastEditedBy,
+      publishedAt: nowIso,
+      publishedBy: userId,
+    };
+
+    // 6. Atomic Persistence to Supabase (status: 'Terbit' strictly enforced)
+    const { data: updated, error: updateErr } = await supabase
+      .from("paket_soal")
+      .update({
+        status: "Terbit",
+        ai_metadata: updatedAiMetadata as never,
+        updated_at: nowIso,
+      })
+      .eq("id", data.paketId)
+      .eq("user_id", userId)
+      .select("*")
+      .single();
+
+    if (updateErr) {
+      console.error("[publishQuestionPackageServerFn] Update error:", updateErr);
+      throw new AiServiceError(
+        AI_ERROR_CODES.PERSISTENCE_ERROR,
+        `Gagal mempublikasikan paket soal ke Bank Soal: ${updateErr.message}`,
+      );
+    }
+
+    const persistedPackage: PaketSoal = {
+      id: updated.id,
+      judul: updated.judul,
+      topik: updated.topik,
+      modulId: updated.modul_id || undefined,
+      status: (updated.status as any) || "Terbit",
+      kelas: Array.isArray(updated.kelas) ? updated.kelas : [],
+      soal: Array.isArray(updated.soal) ? (updated.soal as any[]) : validatedPackage.questions.map(toExistingSoal),
+      createdAt: updated.created_at,
+      updatedAt: updated.updated_at,
+      isArchived: Boolean(updated.is_archived),
+      archivedAt: updated.archived_at || null,
+      archivedBy: updated.archived_by || null,
+      ai_metadata: updated.ai_metadata,
+      teacherEdited: Boolean(updatedAiMetadata.teacherEdited),
+      publishedAt: updatedAiMetadata.publishedAt,
+      publishedBy: updatedAiMetadata.publishedBy,
+    };
+
+    const studentSafeQuestions = validatedPackage.questions.map(toStudentSafeQuestion);
+
+    return {
+      status: "success",
+      publishedPackageId: updated.id,
+      publishedPackage,
+      canonicalPackage: {
+        ...validatedPackage,
+        aiMetadata: updatedAiMetadata,
+      },
+      studentSafeQuestions,
+      metadata: updatedAiMetadata,
+    };
+  });
+
 
 
 /**

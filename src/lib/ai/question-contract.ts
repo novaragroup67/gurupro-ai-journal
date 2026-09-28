@@ -149,6 +149,8 @@ export const QuestionAiMetadataSchema = z.object({
   originalQualityValidation: z.any().optional(),
   originalQualityFindings: z.array(z.any()).optional(),
   currentValidationStatus: z.enum(["valid", "invalid", "needs_revision"]).optional(),
+  publishedAt: z.string().optional(),
+  publishedBy: z.string().optional(),
 });
 
 export type QuestionAiMetadata = z.infer<typeof QuestionAiMetadataSchema>;
@@ -233,6 +235,31 @@ export interface SaveQuestionDraftResult {
   canonicalPackage: CanonicalQuestionPackage;
   studentSafeQuestions: StudentSafeQuestion[];
   metadata: QuestionAiMetadata;
+}
+
+// ==============================================================================
+// 8C. QUESTION BANK PUBLISH CONTRACT (AI-4F-A)
+// ==============================================================================
+
+export const PublishQuestionPackageInputSchema = z.object({
+  paketId: z.string().min(1, "ID paket soal wajib disertakan."),
+  expectedUpdatedAt: z.string().optional(),
+});
+
+export type PublishQuestionPackageInput = z.infer<typeof PublishQuestionPackageInputSchema>;
+
+export interface PublishQuestionPackageResult {
+  status: "success";
+  publishedPackageId: string;
+  publishedPackage: PaketSoal;
+  canonicalPackage: CanonicalQuestionPackage;
+  studentSafeQuestions: StudentSafeQuestion[];
+  metadata: QuestionAiMetadata;
+}
+
+export interface QuestionPublishEligibilityResult {
+  eligible: boolean;
+  validatedPackage: CanonicalQuestionPackage;
 }
 
 // ==============================================================================
@@ -331,6 +358,136 @@ export function validateCanonicalQuestionPackage(
   return {
     ...pkg,
     questions: validatedQuestions,
+  };
+}
+
+/**
+ * Validates the complete publish eligibility for a Question Package (AI-4F-A).
+ *
+ * Enforces:
+ * 1. Package must be in 'Draft' state (never 'Terbit' / double-publish protected).
+ * 2. Package must not be archived (is_archived: false).
+ * 3. Cardinality: at least 1 question.
+ * 4. AI-4D Quality Invariant: packages with decision 'REJECT' cannot be published.
+ * 5. Canonical Question Schema: MC (4 distinct options, valid key A-D, explanation)
+ *    and Essay (empty options [], rubric >= 10 chars).
+ * 6. Evidence reference integrity: any evidenceIds must be registered in evidenceRefs.
+ * 7. AI provenance and teacher edit metadata are retained.
+ */
+export function validateQuestionPackagePublishEligibility(
+  pkg: any,
+  options?: QuestionValidationOptions,
+): QuestionPublishEligibilityResult {
+  if (!pkg || typeof pkg !== "object") {
+    throw new AiServiceError(
+      AI_ERROR_CODES.INVALID_REQUEST,
+      "Data paket soal tidak valid untuk evaluasi kelayakan publikasi.",
+    );
+  }
+
+  // 1. Status Guard & Double-Publish Protection
+  if (pkg.status === "Terbit") {
+    throw new AiServiceError(
+      AI_ERROR_CODES.INVALID_REQUEST,
+      "Paket soal ini sudah berstatus Terbit.",
+    );
+  }
+  if (pkg.status !== "Draft") {
+    throw new AiServiceError(
+      AI_ERROR_CODES.INVALID_REQUEST,
+      `Hanya paket soal berstatus Draft yang dapat dipublikasikan. Status saat ini: "${pkg.status}".`,
+    );
+  }
+
+  // 2. Archive Guard
+  if (Boolean(pkg.is_archived || pkg.isArchived)) {
+    throw new AiServiceError(
+      AI_ERROR_CODES.INVALID_REQUEST,
+      "Paket soal yang diarsipkan tidak dapat dipublikasikan.",
+    );
+  }
+
+  // 3. Question Cardinality Guard (>= 1 question)
+  const rawQuestions = Array.isArray(pkg.soal)
+    ? pkg.soal
+    : Array.isArray(pkg.questions)
+      ? pkg.questions
+      : [];
+
+  if (rawQuestions.length === 0) {
+    throw new AiServiceError(
+      AI_ERROR_CODES.QUESTION_SCHEMA_INVALID,
+      "Kelayakan publikasi gagal: Paket soal wajib memiliki minimal 1 butir soal.",
+    );
+  }
+
+  // 4. AI-4D Quality Invariant: REJECT state cannot be published
+  const aiMeta = pkg.ai_metadata || pkg.aiMetadata || {};
+  const qualityResult = aiMeta.originalQualityValidation || aiMeta.qualityResult;
+  if (qualityResult && typeof qualityResult === "object" && qualityResult.decision === "REJECT") {
+    throw new AiServiceError(
+      AI_ERROR_CODES.QUESTION_QUALITY_VALIDATION_FAILED,
+      "Paket soal dengan hasil validasi mutu REJECT tidak dapat dipublikasikan ke Bank Soal.",
+    );
+  }
+
+  // 5. Evidence Reference Collection & Integrity
+  const evidenceRefs = Array.isArray(aiMeta.evidenceRefs) ? aiMeta.evidenceRefs : [];
+  const allowedEvidenceIds = new Set<string>();
+  if (options?.allowedEvidenceIds) {
+    const customAllowed = options.allowedEvidenceIds instanceof Set
+      ? options.allowedEvidenceIds
+      : new Set(options.allowedEvidenceIds);
+    for (const id of customAllowed) allowedEvidenceIds.add(id);
+  } else if (evidenceRefs.length > 0) {
+    for (const ref of evidenceRefs) {
+      if (ref.evidenceId) allowedEvidenceIds.add(ref.evidenceId);
+      if (ref.chunkId) allowedEvidenceIds.add(ref.chunkId);
+      if (ref.sourceId) allowedEvidenceIds.add(ref.sourceId);
+    }
+  }
+
+  // 6. Canonical Validation of Each Question
+  const canonicalQuestions: CanonicalQuestion[] = [];
+  for (let i = 0; i < rawQuestions.length; i++) {
+    const rawQ = rawQuestions[i];
+    try {
+      const validatedQ = validateCanonicalQuestion(rawQ, {
+        allowedEvidenceIds: allowedEvidenceIds.size > 0 ? allowedEvidenceIds : undefined,
+        evidenceStatusMap: options?.evidenceStatusMap,
+      });
+      canonicalQuestions.push(validatedQ);
+    } catch (err: any) {
+      if (err instanceof AiServiceError) {
+        throw err;
+      }
+      throw new AiServiceError(
+        AI_ERROR_CODES.QUESTION_SCHEMA_INVALID,
+        `Butir soal ke-${i + 1} (${rawQ?.id || "tanpa ID"}) tidak valid: ${err?.message || "Format tidak sesuai kontrak kanonikal."}`,
+      );
+    }
+  }
+
+  // 7. Canonical Package Validation
+  const candidatePackage: CanonicalQuestionPackage = {
+    schemaVersion: CANONICAL_QUESTION_SCHEMA_VERSION,
+    judul: String(pkg.judul || "").trim(),
+    topik: String(pkg.topik || "").trim(),
+    modulId: pkg.modul_id || pkg.modulId || undefined,
+    tingkat: canonicalQuestions[0]?.tingkat || "Sedang",
+    questions: canonicalQuestions,
+    evidenceRefs,
+    aiMetadata: Object.keys(aiMeta).length > 0 ? aiMeta : undefined,
+  };
+
+  const validatedPackage = validateCanonicalQuestionPackage(candidatePackage, {
+    allowedEvidenceIds: allowedEvidenceIds.size > 0 ? allowedEvidenceIds : undefined,
+    evidenceStatusMap: options?.evidenceStatusMap,
+  });
+
+  return {
+    eligible: true,
+    validatedPackage,
   };
 }
 

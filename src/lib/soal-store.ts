@@ -21,6 +21,8 @@ type Row = {
 function toPaket(row: Row): PaketSoal {
   const meta = row.ai_metadata || null;
   const teacherEdited = Boolean(meta && (meta as any).teacherEdited);
+  const publishedAt = meta && typeof (meta as any).publishedAt === "string" ? (meta as any).publishedAt : undefined;
+  const publishedBy = meta && typeof (meta as any).publishedBy === "string" ? (meta as any).publishedBy : undefined;
   return {
     id: row.id,
     judul: row.judul,
@@ -36,6 +38,8 @@ function toPaket(row: Row): PaketSoal {
     archivedBy: row.archived_by || null,
     ai_metadata: meta,
     teacherEdited,
+    publishedAt,
+    publishedBy,
   };
 }
 
