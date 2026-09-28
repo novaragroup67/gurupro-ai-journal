@@ -71,19 +71,44 @@ function createUserScopedSupabaseClient(
   });
 }
 
+export function sanitizeEnvValue(val?: string | null): string {
+  if (!val || typeof val !== "string") return "";
+  let cleaned = val.trim();
+  if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+  return cleaned;
+}
+
+export function resolveSupabaseUrl(): string {
+  const raw =
+    process.env["SUPABASE_URL"] ||
+    process.env["VITE_SUPABASE_URL"] ||
+    process.env["NEXT_PUBLIC_SUPABASE_URL"] ||
+    (typeof import.meta !== "undefined" ? import.meta.env?.["VITE_SUPABASE_URL"] : undefined) ||
+    (typeof import.meta !== "undefined" ? import.meta.env?.["NEXT_PUBLIC_SUPABASE_URL"] : undefined) ||
+    "https://dxzzpsrgbiummjplggyo.supabase.co";
+  return sanitizeEnvValue(raw).replace(/\/+$/, "");
+}
+
+export function resolveSupabasePublishableKey(): string {
+  const raw =
+    process.env["SUPABASE_PUBLISHABLE_KEY"] ||
+    process.env["SUPABASE_ANON_KEY"] ||
+    process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+    process.env["VITE_SUPABASE_ANON_KEY"] ||
+    process.env["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] ||
+    process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"] ||
+    (typeof import.meta !== "undefined" ? import.meta.env?.["VITE_SUPABASE_PUBLISHABLE_KEY"] : undefined) ||
+    (typeof import.meta !== "undefined" ? import.meta.env?.["VITE_SUPABASE_ANON_KEY"] : undefined) ||
+    "sb_publishable_T_KM74qD7YgJYa4Om9jnww_HTzRSjs-";
+  return sanitizeEnvValue(raw);
+}
+
 export const requireSupabaseAuth = createMiddleware({ type: "function" }).server(
   async ({ next }) => {
-    const SUPABASE_URL =
-      process.env["SUPABASE_URL"] ||
-      process.env["VITE_SUPABASE_URL"] ||
-      (typeof import.meta !== "undefined" ? import.meta.env?.["VITE_SUPABASE_URL"] : undefined) ||
-      "https://dxzzpsrgbiummjplggyo.supabase.co";
-
-    const SUPABASE_PUBLISHABLE_KEY =
-      process.env["SUPABASE_PUBLISHABLE_KEY"] ||
-      process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
-      (typeof import.meta !== "undefined" ? import.meta.env?.["VITE_SUPABASE_PUBLISHABLE_KEY"] : undefined) ||
-      "sb_publishable_T_KM74qD7YgJYa4Om9jnww_HTzRSjs-";
+    const SUPABASE_URL = resolveSupabaseUrl();
+    const SUPABASE_PUBLISHABLE_KEY = resolveSupabasePublishableKey();
 
     if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
       const missing = [
@@ -234,6 +259,26 @@ export const requireGuruAuth = createMiddleware({ type: "function" })
       console.warn("[AuthMiddleware] Exception querying profiles:", err?.message);
     }
 
+    if (!profile && dbError) {
+      if (process.env["SUPABASE_SERVICE_ROLE_KEY"] || process.env["SERVICE_ROLE_KEY"]) {
+        try {
+          const { supabaseAdmin } = await import("./client.server");
+          const { data: adminProfile, error: adminErr } = await supabaseAdmin
+            .from("profiles")
+            .select("role, status_verifikasi")
+            .eq("id", userId)
+            .maybeSingle();
+
+          if (!adminErr && adminProfile) {
+            profile = adminProfile;
+            dbError = null;
+          }
+        } catch {
+          // Keep original dbError if admin fallback fails
+        }
+      }
+    }
+
     if (!profile) {
       if (dbError) {
         console.error("[AuthMiddleware] Failed to query profiles:", dbError.message);
@@ -289,6 +334,26 @@ export const requireTeacherAiAuth = createMiddleware({ type: "function" })
       }
     } catch (err: any) {
       dbError = err;
+    }
+
+    if (!profile && dbError) {
+      if (process.env["SUPABASE_SERVICE_ROLE_KEY"] || process.env["SERVICE_ROLE_KEY"]) {
+        try {
+          const { supabaseAdmin } = await import("./client.server");
+          const { data: adminProfile, error: adminErr } = await supabaseAdmin
+            .from("profiles")
+            .select("role, status_verifikasi")
+            .eq("id", userId)
+            .maybeSingle();
+
+          if (!adminErr && adminProfile) {
+            profile = adminProfile;
+            dbError = null;
+          }
+        } catch {
+          // Keep original dbError if admin fallback fails
+        }
+      }
     }
 
     if (!profile) {

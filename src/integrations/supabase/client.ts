@@ -28,15 +28,30 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
   };
 }
 
-const SUPABASE_URL =
-  (typeof import.meta !== "undefined" && import.meta.env?.["VITE_SUPABASE_URL"]) ||
-  (typeof process !== "undefined" ? process.env?.["SUPABASE_URL"] : "") ||
-  "https://dxzzpsrgbiummjplggyo.supabase.co";
+function sanitizeEnvValue(val?: string | null): string {
+  if (!val || typeof val !== "string") return "";
+  let cleaned = val.trim();
+  if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+  return cleaned;
+}
 
-const SUPABASE_PUBLISHABLE_KEY =
+const SUPABASE_URL = sanitizeEnvValue(
+  (typeof import.meta !== "undefined" && import.meta.env?.["VITE_SUPABASE_URL"]) ||
+  (typeof import.meta !== "undefined" && import.meta.env?.["NEXT_PUBLIC_SUPABASE_URL"]) ||
+  (typeof process !== "undefined" ? process.env?.["SUPABASE_URL"] || process.env?.["VITE_SUPABASE_URL"] : "") ||
+  "https://dxzzpsrgbiummjplggyo.supabase.co"
+).replace(/\/+$/, "");
+
+const SUPABASE_PUBLISHABLE_KEY = sanitizeEnvValue(
   (typeof import.meta !== "undefined" && import.meta.env?.["VITE_SUPABASE_PUBLISHABLE_KEY"]) ||
-  (typeof process !== "undefined" ? process.env?.["SUPABASE_PUBLISHABLE_KEY"] : "") ||
-  "sb_publishable_T_KM74qD7YgJYa4Om9jnww_HTzRSjs-";
+  (typeof import.meta !== "undefined" && import.meta.env?.["VITE_SUPABASE_ANON_KEY"]) ||
+  (typeof import.meta !== "undefined" && import.meta.env?.["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]) ||
+  (typeof import.meta !== "undefined" && import.meta.env?.["NEXT_PUBLIC_SUPABASE_ANON_KEY"]) ||
+  (typeof process !== "undefined" ? process.env?.["SUPABASE_PUBLISHABLE_KEY"] || process.env?.["SUPABASE_ANON_KEY"] : "") ||
+  "sb_publishable_T_KM74qD7YgJYa4Om9jnww_HTzRSjs-"
+);
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   global: {

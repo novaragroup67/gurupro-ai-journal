@@ -1,5 +1,4 @@
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import type { jsPDF } from "jspdf";
 import type { Modul } from "./modul-types";
 import type { KelasRekapData } from "./rekap-store";
 
@@ -188,6 +187,10 @@ export async function exportRekapNilaiPdf(
   metadata: { guruNama: string; sekolahNama?: string },
   options?: { assignmentId?: string }
 ): Promise<ExportPdfResult> {
+  const { jsPDF } = await import("jspdf");
+  const autoTableModule = await import("jspdf-autotable");
+  const autoTable = (autoTableModule as any).default || autoTableModule;
+
   const doc = new jsPDF({
     orientation: "landscape",
     unit: "mm",
@@ -413,6 +416,8 @@ export async function exportModulAjarPdf(
     sekolahNama?: string;
   }
 ): Promise<ExportPdfResult> {
+  const { jsPDF } = await import("jspdf");
+
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
