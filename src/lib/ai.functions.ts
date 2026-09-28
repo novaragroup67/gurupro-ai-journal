@@ -45,6 +45,7 @@ import {
   type SaveQuestionDraftResult,
   type StudentSafeQuestion,
 } from "./ai/question-contract";
+import { getCachedSnapshotsForUser, setCachedSourceSnapshot } from "./ai/source-ingestion";
 import { AiServiceError, AI_ERROR_CODES } from "./ai/error-taxonomy";
 import type { Modul } from "./modul-types";
 
@@ -1087,7 +1088,7 @@ export const buildModulGroundingContextServerFn = createServerFn({ method: "POST
     // Load teacher's classes from DB
     const { data: classesData, error: classErr } = await supabase
       .from("kelas")
-      .select("id, nama, tingkat, mapel, tahun_ajaran, guru_id")
+      .select("id, nama_kelas, tingkat, mapel, tahun_ajaran, guru_id")
       .eq("guru_id", userId);
 
     if (classErr) {
@@ -1096,7 +1097,7 @@ export const buildModulGroundingContextServerFn = createServerFn({ method: "POST
 
     const teacherClasses = (classesData || []).map((k: any) => ({
       id: k.id,
-      namaKelas: k.nama,
+      namaKelas: k.nama_kelas || k.nama || "",
       tingkat: k.tingkat,
       mapel: k.mapel,
       tahunAjaran: k.tahun_ajaran,
@@ -1133,7 +1134,7 @@ export const buildQuestionGroundingContextServerFn = createServerFn({ method: "P
     // Load teacher's classes from DB
     const { data: classesData, error: classErr } = await supabase
       .from("kelas")
-      .select("id, nama, tingkat, mapel, tahun_ajaran, guru_id")
+      .select("id, nama_kelas, tingkat, mapel, tahun_ajaran, guru_id")
       .eq("guru_id", userId);
 
     if (classErr) {
@@ -1142,7 +1143,7 @@ export const buildQuestionGroundingContextServerFn = createServerFn({ method: "P
 
     const teacherClasses = (classesData || []).map((k: any) => ({
       id: k.id,
-      namaKelas: k.nama,
+      namaKelas: k.nama_kelas || k.nama || "",
       tingkat: k.tingkat,
       mapel: k.mapel,
       tahunAjaran: k.tahun_ajaran,
@@ -1215,7 +1216,7 @@ export const generateQuestionsServerFn = createServerFn({ method: "POST" })
     // Load teacher's classes from DB
     const { data: classesData, error: classErr } = await supabase
       .from("kelas")
-      .select("id, nama, tingkat, mapel, tahun_ajaran, guru_id")
+      .select("id, nama_kelas, tingkat, mapel, tahun_ajaran, guru_id")
       .eq("guru_id", userId);
 
     if (classErr) {
@@ -1224,7 +1225,7 @@ export const generateQuestionsServerFn = createServerFn({ method: "POST" })
 
     const teacherClasses = (classesData || []).map((k: any) => ({
       id: k.id,
-      namaKelas: k.nama,
+      namaKelas: k.nama_kelas || k.nama || "",
       tingkat: k.tingkat,
       mapel: k.mapel,
       tahunAjaran: k.tahun_ajaran,
@@ -1729,7 +1730,7 @@ export const generateModulAjarServerFn = createServerFn({ method: "POST" })
     // Load teacher's classes from DB
     const { data: classesData, error: classErr } = await supabase
       .from("kelas")
-      .select("id, nama, tingkat, mapel, tahun_ajaran, guru_id")
+      .select("id, nama_kelas, tingkat, mapel, tahun_ajaran, guru_id")
       .eq("guru_id", userId);
 
     if (classErr) {
@@ -1738,7 +1739,7 @@ export const generateModulAjarServerFn = createServerFn({ method: "POST" })
 
     const teacherClasses = (classesData || []).map((k: any) => ({
       id: k.id,
-      namaKelas: k.nama,
+      namaKelas: k.nama_kelas || k.nama || "",
       tingkat: k.tingkat,
       mapel: k.mapel,
       tahunAjaran: k.tahun_ajaran,
@@ -1888,7 +1889,7 @@ export const validateModulAjarQualityServerFn = createServerFn({ method: "POST" 
     // Load teacher's classes from DB
     const { data: classesData, error: classErr } = await supabase
       .from("kelas")
-      .select("id, nama, tingkat, mapel, tahun_ajaran, guru_id")
+      .select("id, nama_kelas, tingkat, mapel, tahun_ajaran, guru_id")
       .eq("guru_id", userId);
 
     if (classErr) {
@@ -1897,7 +1898,7 @@ export const validateModulAjarQualityServerFn = createServerFn({ method: "POST" 
 
     const teacherClasses = (classesData || []).map((k: any) => ({
       id: k.id,
-      namaKelas: k.nama,
+      namaKelas: k.nama_kelas || k.nama || "",
       tingkat: k.tingkat,
       mapel: k.mapel,
       tahunAjaran: k.tahun_ajaran,
