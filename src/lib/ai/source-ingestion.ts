@@ -5,14 +5,15 @@
  * SHA-256 content hashing, normalization, chunking, and snapshot creation.
  */
 
-import { createHash } from "node:crypto";
-import dns from "node:dns/promises";
-import net from "node:net";
+import { sha256Hex } from "./sha256";
+import { isIP, isPrivateOrReservedIp } from "./ip-utils";
 import { AI_ERROR_CODES, AiServiceError } from "./error-taxonomy";
 import { normalizeHtmlContent, normalizeTextContent } from "./source-normalizer";
 import { chunkNormalizedSource } from "./source-chunker";
 import { extractDocumentText } from "./document-parser";
 import type { AiSourceSnapshot, IngestionOptions } from "./types";
+
+export { isPrivateOrReservedIp } from "./ip-utils";
 
 const MAX_BYTES = 2 * 1024 * 1024; // 2MB
 const TIMEOUT_MS = 10000; // 10s
@@ -20,40 +21,6 @@ const MAX_REDIRECTS = 3;
 
 // In-memory snapshot registry for server-side caching & instant retrieval
 const inMemorySnapshots = new Map<string, AiSourceSnapshot>();
-
-export function isPrivateOrReservedIp(ip: string): boolean {
-  let cleanIp = ip.toLowerCase().trim();
-  if (cleanIp === "::1" || cleanIp === "::" || cleanIp === "0.0.0.0") return true;
-  if (cleanIp.startsWith("::ffff:")) {
-    cleanIp = cleanIp.slice(7);
-  }
-  if (net.isIPv4(cleanIp)) {
-    const parts = cleanIp.split(".").map(Number);
-    if (parts.length !== 4 || parts.some((n) => isNaN(n) || n < 0 || n > 255)) return true;
-    const [a, b] = parts;
-    if (a === 0) return true; // 0.0.0.0/8
-    if (a === 10) return true; // 10.0.0.0/8
-    if (a === 127) return true; // 127.0.0.0/8
-    if (a === 169 && b === 254) return true; // 169.254.0.0/16 Link-local / Cloud metadata (AWS/GCP/Azure)
-    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
-    if (a === 192 && b === 168) return true; // 192.168.0.0/16
-    if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT
-    if (a === 192 && b === 0) return true; // 192.0.0.0/24
-    if (a === 198 && (b === 18 || b === 19 || b === 51)) return true; // Benchmark & TEST-NET-2
-    if (a === 203 && b === 0) return true; // TEST-NET-3
-    if (a >= 224) return true; // Multicast & Reserved
-    return false;
-  }
-  if (net.isIPv6(cleanIp)) {
-    if (cleanIp.startsWith("fc") || cleanIp.startsWith("fd")) return true; // ULA fc00::/7
-    if (/^fe[89ab]/i.test(cleanIp)) return true; // Link-local fe80::/10
-    if (cleanIp.startsWith("ff")) return true; // Multicast
-    if (cleanIp.startsWith("2001:db8:")) return true; // Documentation
-    if (cleanIp.startsWith("64:ff9b:")) return true; // NAT64
-    return false;
-  }
-  return true;
-}
 
 export async function validateHostSafety(hostname: string, isRedirect = false): Promise<void> {
   const clean = hostname.replace(/^\[|\]$/g, "").toLowerCase().trim();
@@ -73,7 +40,7 @@ export async function validateHostSafety(hostname: string, isRedirect = false): 
     throw new AiServiceError(AI_ERROR_CODES.SOURCE_VALIDATION_ERROR, errorMsg);
   }
 
-  if (net.isIP(clean)) {
+  if (isIP(clean)) {
     if (isPrivateOrReservedIp(clean)) {
       throw new AiServiceError(AI_ERROR_CODES.SOURCE_VALIDATION_ERROR, errorMsg);
     }
@@ -81,6 +48,8 @@ export async function validateHostSafety(hostname: string, isRedirect = false): 
   }
 
   try {
+    const dnsMod = "node:dns/promises";
+    const dns = await import(/* @vite-ignore */ dnsMod);
     const addresses = await dns.lookup(clean, { all: true });
     if (!addresses || addresses.length === 0) {
       throw new AiServiceError(AI_ERROR_CODES.SOURCE_FETCH_ERROR, "Domain sumber tidak ditemukan atau tidak dapat diakses.");
@@ -330,8 +299,8 @@ export async function ingestSource(options: IngestionOptions): Promise<AiSourceS
   }
 
   // Deterministic content hashing: SHA-256 of normalized text
-  const contentHash = createHash("sha256").update(normalizedContent).digest("hex");
-  const snapshotId = `src_${createHash("sha256").update(`${userId}:${contentHash}`).digest("hex").slice(0, 24)}`;
+  const contentHash = sha256Hex(normalizedContent);
+  const snapshotId = `src_${sha256Hex(`${userId}:${contentHash}`).slice(0, 24)}`;
 
   const chunks = chunkNormalizedSource(snapshotId, normalizedContent);
 

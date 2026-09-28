@@ -45,7 +45,6 @@ import {
   type SaveQuestionDraftResult,
   type StudentSafeQuestion,
 } from "./ai/question-contract";
-import { getCachedSnapshotsForUser, setCachedSourceSnapshot } from "./ai/source-ingestion";
 import { AiServiceError, AI_ERROR_CODES } from "./ai/error-taxonomy";
 import type { Modul } from "./modul-types";
 

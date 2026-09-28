@@ -5,7 +5,7 @@
  * sentence boundaries, and attaching provenance metadata.
  */
 
-import { createHash } from "node:crypto";
+import { sha256Hex } from "./sha256";
 import type { AiSourceChunk } from "./types";
 
 export interface ChunkingOptions {
@@ -43,10 +43,7 @@ export function chunkNormalizedSource(
 
     const content = currentChunkParagraphs.join("\n\n").trim();
     const words = content.split(/\s+/).filter(Boolean);
-    const chunkHash = createHash("sha256")
-      .update(`${sourceId}:${index}:${content}`)
-      .digest("hex")
-      .slice(0, 16);
+    const chunkHash = sha256Hex(`${sourceId}:${index}:${content}`).slice(0, 16);
 
     chunks.push({
       chunkId: `chunk_${chunkHash}`,
@@ -101,10 +98,7 @@ export function chunkNormalizedSource(
   // Fallback: If only 1 small chunk was produced, ensure it has index 0
   if (chunks.length === 0 && normalizedText.trim().length > 0) {
     const words = normalizedText.split(/\s+/).filter(Boolean);
-    const chunkHash = createHash("sha256")
-      .update(`${sourceId}:0:${normalizedText}`)
-      .digest("hex")
-      .slice(0, 16);
+    const chunkHash = sha256Hex(`${sourceId}:0:${normalizedText}`).slice(0, 16);
 
     chunks.push({
       chunkId: `chunk_${chunkHash}`,
