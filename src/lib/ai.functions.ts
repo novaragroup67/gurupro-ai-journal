@@ -22,6 +22,11 @@ import {
   generateGroundedQuestions,
   type QuestionAiGenerationResult,
 } from "./ai/question-generator";
+import {
+  validateQuestionPackageQuality,
+  type QuestionPackageQualityResult,
+  type QuestionQualityValidationOptions,
+} from "./ai/question-quality-validator";
 import { getCachedSnapshotsForUser, setCachedSourceSnapshot } from "./ai/source-ingestion";
 import { AiServiceError, AI_ERROR_CODES } from "./ai/error-taxonomy";
 import type { Modul } from "./modul-types";
@@ -1256,6 +1261,38 @@ export const generateQuestionsServerFn = createServerFn({ method: "POST" })
 
     return generateGroundedQuestions(data, teacherContext, { persistDraft });
   });
+
+/**
+ * GuruPro AI Question Foundation (AI-4D) — Server-Side Question Quality Validation Server Function
+ *
+ * Authenticates verified teacher, evaluates canonical question package against grounded source evidence,
+ * performs 3-layer deterministic and semantic validation, and returns structured audit results (PASS / REVISE / REJECT).
+ *
+ * Enforces answer-key integrity, distractor validity, exact-value preservation, and fail-closed security.
+ */
+export const validateQuestionQualityServerFn = createServerFn({ method: "POST" })
+  .middleware([requireTeacherAiAuth])
+  .validator((input: unknown) => input)
+  .handler(async ({ context, data }): Promise<QuestionPackageQualityResult> => {
+    const userId = (context as any).userId;
+    const profile = (context as any).profile;
+
+    if (!data || typeof data !== "object" || !("package" in data) || !("context" in data)) {
+      throw new AiServiceError(
+        AI_ERROR_CODES.INVALID_REQUEST,
+        "Permintaan validasi mutu soal harus menyertakan properti 'package' dan 'context'.",
+      );
+    }
+
+    const payload = data as {
+      package: unknown;
+      context: GroundedQuestionContext;
+      options?: QuestionQualityValidationOptions;
+    };
+
+    return validateQuestionPackageQuality(payload.package, payload.context, payload.options);
+  });
+
 
 /**
  * GuruPro AI Foundation (AI-2C) — Server-Side Real AI Modul Ajar Generation Server Function

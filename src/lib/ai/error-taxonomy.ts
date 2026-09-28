@@ -31,6 +31,8 @@ export const AI_ERROR_CODES = {
   QUESTION_GROUNDING_FAILED: "QUESTION_GROUNDING_FAILED",
   QUESTION_GENERATION_FAILED: "QUESTION_GENERATION_FAILED",
   QUESTION_COUNT_MISMATCH: "QUESTION_COUNT_MISMATCH",
+  QUESTION_QUALITY_VALIDATION_FAILED: "QUESTION_QUALITY_VALIDATION_FAILED",
+  QUESTION_QUALITY_UNCERTAIN: "QUESTION_QUALITY_UNCERTAIN",
 } as const;
 
 export type AiErrorCode = (typeof AI_ERROR_CODES)[keyof typeof AI_ERROR_CODES];
@@ -64,6 +66,8 @@ const USER_MESSAGES: Record<AiErrorCode, string> = {
   QUESTION_GROUNDING_FAILED: "Butir soal atau kunci jawaban merujuk pada bukti yang tidak valid atau di luar materi sumber.",
   QUESTION_GENERATION_FAILED: "Gagal menghasilkan butir soal yang memenuhi standar kanonikal.",
   QUESTION_COUNT_MISMATCH: "Jumlah butir soal yang dihasilkan AI tidak sesuai dengan target yang diminta.",
+  QUESTION_QUALITY_VALIDATION_FAILED: "Paket butir soal gagal memenuhi standar mutu semantik, ketepatan kunci, atau grounding materi sumber.",
+  QUESTION_QUALITY_UNCERTAIN: "Sistem validasi tidak dapat memastikan kebenaran kunci jawaban berdasarkan materi sumber yang tersedia.",
 };
 
 export class AiServiceError extends Error {
@@ -117,6 +121,8 @@ export class AiServiceError extends Error {
       case "QUESTION_GROUNDING_FAILED":
       case "QUESTION_GENERATION_FAILED":
       case "QUESTION_COUNT_MISMATCH":
+      case "QUESTION_QUALITY_VALIDATION_FAILED":
+      case "QUESTION_QUALITY_UNCERTAIN":
         this.statusCode = 422;
         this.isRetryable = false;
         break;

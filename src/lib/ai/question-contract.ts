@@ -138,7 +138,7 @@ export const QuestionAiMetadataSchema = z.object({
   sourceSnapshotIds: z.array(z.string().min(1)).min(1, "Minimal satu snapshot sumber terdaftar."),
   schemaVersion: z.string().min(1),
   generatedAt: z.string(),
-  validationStatus: z.enum(["valid", "invalid"]),
+  validationStatus: z.enum(["valid", "invalid", "needs_revision"]),
   evidenceRefs: z.array(GroundingEvidenceRefSchema).default([]),
   teacherEdited: z.boolean().optional(),
   editedAt: z.string().optional(),
@@ -415,5 +415,24 @@ export {
   type GenerateQuestionsOptions,
   type QuestionAiGenerationResult,
 } from "./question-generator";
+
+// Re-export AI-4D Question Quality Validation
+export {
+  CANONICAL_QUESTION_QUALITY_VERSION,
+  CANONICAL_QUESTION_VALIDATOR_PROMPT_VERSION,
+  validateQuestionPackageQuality,
+  validateSingleQuestionQuality,
+  validateDeterministicQuestionLayer,
+  detectDuplicateQuestions,
+  validateExactValuesInQuestion,
+  evaluateQuestionQualityDecision,
+  type QuestionQualityDecision,
+  type QuestionQualitySeverity,
+  type QuestionQualityFinding,
+  type QuestionItemQualityResult,
+  type QuestionPackageQualityResult,
+  type QuestionQualityValidationOptions,
+} from "./question-quality-validator";
+
 
 

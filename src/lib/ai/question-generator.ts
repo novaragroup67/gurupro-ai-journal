@@ -50,6 +50,12 @@ import type { AiModelConfig } from "./types";
 import type { TeacherAcademicContext } from "./modul-contract";
 import type { PaketSoal } from "../soal-types";
 
+import {
+  type QuestionPackageQualityResult,
+  type QuestionQualityValidationOptions,
+  validateQuestionPackageQuality,
+} from "./question-quality-validator";
+
 const DEFAULT_TIMEOUT_MS = 60000;
 const MAX_TRANSIENT_RETRIES = 2;
 
@@ -59,6 +65,8 @@ export interface GenerateQuestionsOptions extends BuildQuestionContextOptions {
   mockProviderCall?: (systemPrompt: string, userPrompt: string) => Promise<string>;
   modelConfig?: Partial<AiModelConfig>;
   persistDraft?: boolean;
+  validateQuality?: boolean;
+  qualityOptions?: QuestionQualityValidationOptions;
 }
 
 export interface QuestionAiGenerationResult {
@@ -68,6 +76,7 @@ export interface QuestionAiGenerationResult {
   persistedPackageId?: string;
   persistedPackage?: PaketSoal;
   studentSafeQuestions?: StudentSafeQuestion[];
+  qualityResult?: QuestionPackageQualityResult;
   metadata: {
     promptVersion: string;
     schemaVersion: string;
@@ -81,12 +90,13 @@ export interface QuestionAiGenerationResult {
     hasConflicts: boolean;
     conflictCount: number;
     sourceSnapshotIds?: string[];
+    qualityDecision?: "PASS" | "REVISE" | "REJECT";
   };
   grounding: {
     evidenceSufficiency: "SUFFICIENT" | "INSUFFICIENT" | "CONFLICTED";
     hasUsableEvidence: boolean;
     evidenceCount: number;
-    validationStatus: "valid" | "invalid";
+    validationStatus: "valid" | "invalid" | "needs_revision";
   };
   error?: {
     code: string;
@@ -532,16 +542,98 @@ export async function generateGroundedQuestions(
       }
     }
 
+    // 10B. AI-4D Semantic Quality Validation & Bounded Correction Retry
+    let qualityResult: QuestionPackageQualityResult | undefined = undefined;
+    if (options.validateQuality === true) {
+      qualityResult = await validateQuestionPackageQuality(
+        parsedPackage,
+        groundedContext,
+        options.qualityOptions,
+      );
+
+      // If quality is REVISE and correction is allowed, attempt at most 1 correction retry
+      if (
+        qualityResult.status === "REVISE" &&
+        !options.mockProviderCall &&
+        totalRetries < maxRetries + 1
+      ) {
+        try {
+          totalRetries++;
+          const revisionFindings = [
+            ...qualityResult.answerFindings,
+            ...qualityResult.factualFindings,
+            ...qualityResult.distractorFindings,
+            ...qualityResult.ambiguityFindings,
+            ...qualityResult.explanationFindings,
+            ...qualityResult.objectiveAlignmentFindings,
+          ]
+            .map((f) => `- [${f.severity}] ${f.code}: ${f.message}`)
+            .join("\n");
+
+          const correctionPrompt = `${userPrompt}\n\nCATATAN AUDIT KUALITAS (REVISI DIPERLUKAN):\n${revisionFindings}\n\nHarap perbaiki butir soal di atas agar 100% mematuhi bukti materi sumber dan tidak memiliki kelemahan mutu yang dilaporkan. Balas HANYA JSON murni.`;
+
+          const correctedCall = await callAiProviderWithRetry(
+            systemPrompt,
+            correctionPrompt,
+            config,
+            timeoutMs,
+            1,
+            options,
+          );
+
+          const reParsed = parseAiQuestionResponse(correctedCall.text, {
+            topik: target.topik,
+            tingkat: target.tingkat,
+            modulId: target.modulId,
+          });
+          performEvidenceIntegrityCheck(reParsed, groundedContext);
+
+          const reValidated = await validateQuestionPackageQuality(
+            reParsed,
+            groundedContext,
+            options.qualityOptions,
+          );
+
+          if (reValidated.status === "PASS" || reValidated.status === "REVISE") {
+            parsedPackage = reParsed;
+            qualityResult = reValidated;
+          }
+        } catch {
+          // Keep current quality result
+        }
+      }
+
+      // If quality is REJECT, fail closed: do NOT persist to database
+      if (qualityResult.status === "REJECT") {
+        const criticalMsg = [
+          ...qualityResult.answerFindings,
+          ...qualityResult.factualFindings,
+          ...qualityResult.structuralFindings,
+          ...qualityResult.duplicateFindings,
+        ]
+          .filter((f) => f.severity === "CRITICAL")
+          .map((f) => f.message)
+          .join("; ");
+
+        throw new AiServiceError(
+          AI_ERROR_CODES.QUESTION_QUALITY_VALIDATION_FAILED,
+          `Paket soal ditolak oleh evaluator mutu semantik (REJECT): ${criticalMsg || "Ditemukan kegagalan mutu kritis pada butir soal."}`,
+          { qualityResult },
+        );
+      }
+    }
+
     // 11. Attach Canonical AI Provenance Metadata
     const generatedAtIso = new Date().toISOString();
     const sourceSnapshotIds = groundedContext.sourceMetadata.map((s) => s.sourceId);
+    const validationStatus = qualityResult?.status === "REVISE" ? "needs_revision" : "valid";
 
     const aiMetadata: QuestionAiMetadata = {
       promptVersion,
       sourceSnapshotIds,
       schemaVersion: CANONICAL_QUESTION_SCHEMA_VERSION,
       generatedAt: generatedAtIso,
-      validationStatus: "valid",
+      validationStatus,
       evidenceRefs: parsedPackage.evidenceRefs,
       originalGeneratedCount: parsedPackage.questions.length,
     };
@@ -623,6 +715,7 @@ export async function generateGroundedQuestions(
       persistedPackageId,
       persistedPackage,
       studentSafeQuestions,
+      qualityResult,
       metadata: {
         promptVersion,
         schemaVersion: CANONICAL_QUESTION_SCHEMA_VERSION,
@@ -636,12 +729,13 @@ export async function generateGroundedQuestions(
         hasConflicts: groundedContext.sourceConflicts.length > 0,
         conflictCount: groundedContext.sourceConflicts.length,
         sourceSnapshotIds,
+        qualityDecision: qualityResult?.status,
       },
       grounding: {
         evidenceSufficiency: groundedContext.evidenceSufficiency,
         hasUsableEvidence: groundedContext.hasUsableEvidence,
         evidenceCount: groundedContext.evidenceItems.length,
-        validationStatus: "valid",
+        validationStatus,
       },
     };
   } catch (err: unknown) {
