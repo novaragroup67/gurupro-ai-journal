@@ -145,23 +145,137 @@ Dijalankan melalui `npx tsx tests/ai/generation-planning-foundation.test.mjs`:
 ```
 
 ### 3.2 Eksekusi Penuh Seluruh Suite Pengujian Sistem (`npm test`)
-Seluruh 36 test suites sistem dieksekusi secara otomatis dan lulus 100%:
+Seluruh 37 test suites sistem dieksekusi secara otomatis dan lulus 100%:
 - Keamanan & Remediasi: `security.test.mjs`, `remediation.test.mjs` (LULUS)
 - Peran & Otorisasi: `auth-role.test.mjs`, `dashboard-roles.test.mjs`, `admin-operations.test.mjs` (LULUS)
 - Domain Inti: `kelas-membership.test.mjs`, `mapel-kelas-sync.test.mjs`, `tahun-ajaran-context.test.mjs`, `penugasan.test.mjs`, `kkm-remedial.test.mjs`, `submission.test.mjs`, `penilaian.test.mjs`, `rekap-nilai.test.mjs`, `persistence-integrity.test.mjs`, `export-archive.test.mjs`, `core-system-gate.test.mjs` (LULUS)
 - AI Grounding & Fondasi: `ai-foundation.test.mjs`, `ai-retrieval-validation.test.mjs`, `ai-final-gate.test.mjs` (LULUS)
 - Pipeline Modul Ajar AI: `modul-generation-contract.test.mjs`, `modul-grounding-context.test.mjs`, `modul-ai-generation.test.mjs`, `modul-quality-validation.test.mjs`, `modul-ui-flow.test.mjs`, `modul-teacher-review.test.mjs`, `modul-publish-workflow.test.mjs`, `modul-e2e-quality-gate.test.mjs` (LULUS)
 - Pipeline Paket Soal AI: `question-contract.test.mjs`, `question-grounding-context.test.mjs`, `question-generation.test.mjs`, `question-quality-validation.test.mjs`, `question-teacher-review.test.mjs`, `question-bank-publishing.test.mjs`, `publish-integrity-stabilization.test.mjs` (LULUS)
-- **Fondasi Perencanaan Generasi GEN-0: `generation-planning-foundation.test.mjs` (36/36 LULUS)**
+- Fondasi Perencanaan Generasi GEN-0: `generation-planning-foundation.test.mjs` (36/36 LULUS)
+- **Persiapan Permintaan Generasi Ilustrasi VIS-1A: `illustration-generation-contract.test.mjs` (32/32 LULUS)**
 
 ### 3.3 Kompilasi Build Produksi (`npx vite build`)
-- Berhasil mengompilasi bundel klien dan SSR TanStack Start/Nitro tanpa galat dalam durasi 729ms.
+- Berhasil mengompilasi bundel klien dan SSR TanStack Start/Nitro tanpa galat dalam durasi 840ms.
 
 ---
 
-## 4. Batasan & Kepatuhan Prosedural
+## 4. Rincian Implementasi VIS-1A (Illustration Generation Contract & Request Builder)
+
+```mermaid
+flowchart TD
+    GEN0["Approved GenerationSpecification (GEN-0)"] --> Gate{"Validasi Ulang Sisi Server"}
+    Gate -->|Target !== 'illustration'| Reject1["Tolak: Fail-Closed"]
+    Gate -->|Status !== 'approved'| Reject2["Tolak: Belum Disetujui"]
+    Gate -->|Versi Usang / Outline Berubah| Reject3["Tolak: Stale Approval"]
+    Gate -->|Bukan Guru Pemilik| Reject4["Tolak: Role Forbidden"]
+    Gate -->|Lolos Validasi| Builder["Deterministic Request Builder"]
+    
+    Builder --> Sanitize["Sanitasi Prompt & Anti-Injection"]
+    Builder --> TextPolicy["Kunci Text Policy (allowModelInventedText: false)"]
+    Builder --> Assembly["Assembled Prompt (Indonesian Curriculum Context)"]
+    
+    Assembly --> Request["Canonical IllustrationGenerationRequest"]
+    Request --> DB[("public.illustration_generation_requests")]
+    Request --> Boundary["Provider Adapter Boundary (Kesiapan VIS-1B)"]
+```
+
+### 4.1 Komponen & Berkas Utama
+1. **`src/lib/ai/illustration-generation-contract.ts`**:
+   - Skema parameter `IllustrationGenerationParametersSchema` (resolusi 256-2048, rasio aspek 1:1, 16:9, 4:3, 3:4, 9:16).
+   - Skema kebijakan teks `IllustrationTextPolicySchema` dengan larangan tegas teks buatan model (`allowModelInventedText: false`).
+   - Skema prompt terakit `AssembledIllustrationPromptSchema`.
+   - Kontrak permintaan kanonikal `IllustrationGenerationRequestSchema`.
+   - Kontrak hasil normalisasi `IllustrationGenerationResultSchema`.
+   - Antarmuka adaptor penyedia modular `IllustrationGenerationProvider`.
+2. **`src/lib/ai/illustration-request-builder.ts`**:
+   - Fungsi sanitasi `sanitizePromptText` untuk mengeliminasi upaya *prompt injection* dan script tags.
+   - Perakitan prompt deterministik `assembleIllustrationPrompt` berbasis konteks Kurikulum Merdeka.
+   - Pembangun permintaan murni `buildIllustrationGenerationRequest` dengan validasi kepemilikan dan integritas persetujuan.
+3. **`supabase/migrations/20260929120000_illustration_generation_requests.sql`**:
+   - Tabel `public.illustration_generation_requests` lengkap dengan relasi referensial, indeks, dan RLS guru terverifikasi.
+4. **`src/lib/illustration-generation.functions.ts`**:
+   - Server functions TanStack Start: `prepareIllustrationGenerationRequestServerFn` dan `getIllustrationGenerationRequestServerFn`.
+5. **`src/components/generation-planning-panel.tsx`**:
+   - Penambahan tombol `Siapkan Permintaan Generasi (VIS-1A)` dan inspeksi ringkasan permintaan pada Langkah 5.
+   - Tombol eksekusi gambar nyata dinonaktifkan dengan badge `VIS-1B Segera Hadir`.
+6. **`tests/ai/illustration-generation-contract.test.mjs`**:
+   - 32 skenario pengujian komprehensif yang mencakup parameter, keamanan teks, injeksi prompt, gerbang persetujuan, isolasi RBAC, batas provider, dan invarian non-generasi.
+
+---
+
+## 5. Hasil Pengujian & Verifikasi VIS-1A
+
+### 5.1 Suite Pengujian Khusus VIS-1A (`illustration-generation-contract.test.mjs`)
+Dijalankan melalui `npm run test:vis1a`:
+
+```text
+================================================================================
+  GURUPRO TEST SUITE: VIS-1A ILLUSTRATION GENERATION CONTRACT & REQUEST BUILDER 
+================================================================================
+
+[1. GENERATION PARAMETERS & VALIDATION]
+  • Default parameter values are 1024x1024, 1:1, standard quality, 1 image ... ✓ PASS
+  • Valid custom parameters (16:9 widescreen, HD quality) pass validation ... ✓ PASS
+  • Rejects dimensions smaller than minimum allowed boundary (256px) ... ✓ PASS
+  • Rejects dimensions larger than maximum allowed boundary (2048px) ... ✓ PASS
+  • Rejects unsupported aspect ratio (e.g. 21:9) ... ✓ PASS
+  • Rejects invalid number of images (0 or > 4) ... ✓ PASS
+  • Preserves arbitrary provider extension configurations cleanly ... ✓ PASS
+
+[2. TEXT-IN-IMAGE POLICY & INVARIANTS]
+  • IllustrationTextPolicy strictly prohibits model invented text (allowModelInventedText: false) ... ✓ PASS
+  • Text policy renders 'clean_visual_only' when no labels are requested ... ✓ PASS
+  • Text policy renders 'embedded_labels' when outline requires labels ... ✓ PASS
+
+[3. PROMPT ASSEMBLY & INJECTION DEFENSE]
+  • sanitizePromptText strips instruction hijacking keywords and tags ... ✓ PASS
+  • assembleIllustrationPrompt deterministically produces identical outputs for identical inputs ... ✓ PASS
+  • assembleIllustrationPrompt incorporates Indonesian National Curriculum (Kurikulum Merdeka) context ... ✓ PASS
+  • assembleIllustrationPrompt merges and deduplicates negative prompts with standard safeguards ... ✓ PASS
+
+[4. REQUEST BUILDER: APPROVAL & TARGET GUARDS]
+  • Successfully builds canonical IllustrationGenerationRequest from approved plan ... ✓ PASS
+  • Fail-Closed: Rejects request if spec.targetType is 'presentation' ... ✓ PASS
+  • Fail-Closed: Rejects request if plan.targetType is 'presentation' ... ✓ PASS
+  • Fail-Closed: Rejects request when plan status is 'ready' (unapproved) ... ✓ PASS
+  • Fail-Closed: Rejects request when approval is stale (plan edited after approval) ... ✓ PASS
+  • Fail-Closed: Rejects request when spec outline version does not match plan approved version ... ✓ PASS
+  • Fail-Closed: Rejects request when style is missing on plan ... ✓ PASS
+  • Fail-Closed: Rejects request when plan style does not match spec style ... ✓ PASS
+  • Fail-Closed: Rejects request if style ID is invalid or not in catalog ... ✓ PASS
+
+[5. RBAC & MULTI-TENANT ISOLATION]
+  • Fail-Closed: Rejects request creation by non-owner teacher ... ✓ PASS
+  • Fail-Closed: Rejects request creation by student role ... ✓ PASS
+
+[6. GROUNDING & PROVENANCE PRESERVATION]
+  • Preserves source references and evidence references across plan, spec, and request ... ✓ PASS
+
+[7. PROVIDER ADAPTER BOUNDARY & NORMALIZED RESULT]
+  • IllustrationGenerationResultSchema validates succeeded result correctly ... ✓ PASS
+  • IllustrationGenerationResultSchema validates failed result with error payload ... ✓ PASS
+  • Mock Provider boundary operates without calling any external image APIs ... ✓ PASS
+
+[8. STRICT NON-GENERATION INVARIANT]
+  • Confirm NO real image-generation API or network fetch is performed during VIS-1A ... ✓ PASS
+
+[9. PERSISTENCE & STORAGE INVARIANTS]
+  • StoredIllustrationRequestRow stores full validated request snapshot and teacher ownership ... ✓ PASS
+  • Tenant Isolation: Prevents unauthorized user from reading other teacher's stored request ... ✓ PASS
+
+================================================================================
+  TEST RESULTS: 32 PASSED, 0 FAILED
+================================================================================
+```
+
+---
+
+## 6. Batasan & Kepatuhan Prosedural
 
 Sesuai instruksi khusus:
-- Pekerjaan dibatasi secara ketat hanya pada **GEN-0 — Generation Planning Foundation**.
-- **Generasi gambar AI nyata (VIS-1) dan generasi berkas PPTX nyata (PPT-1) TIDAK DIIMPLEMENTASIKAN** pada tahap ini.
-- Sistem berhenti di sini untuk peninjauan dan persetujuan pengguna sebelum melangkah ke tahap selanjutnya.
+1. **Pekerjaan dibatasi secara ketat pada VIS-1A (Contract & Request Builder)**.
+2. **Generasi gambar AI nyata (VIS-1B) TIDAK DIIMPLEMENTASIKAN** pada tahap ini.
+3. **Tidak ada panggilan API pihak ketiga (Gemini Imagen, OpenAI DALL-E, dsb.)** dan tidak ada gambar mock yang dibuat.
+4. Sistem berhenti di sini untuk peninjauan dan persetujuan pengguna sebelum melangkah ke VIS-1B.
+
