@@ -98,23 +98,12 @@ async function currentUserId() {
 
 export async function addModul(data: Omit<Modul, "id" | "createdAt" | "updatedAt">) {
   const user_id = await currentUserId();
-  const rowData: Record<string, any> = { user_id, ...toRow(data) };
-  let { data: row, error } = await supabase
+  const rowData = { user_id, ...toRow(data) };
+  const { data: row, error } = await supabase
     .from("moduls")
-    .insert(rowData)
+    .insert(rowData as never)
     .select("*")
     .single();
-
-  if (error && (error.message?.includes("ai_metadata") || error.code === "PGRST204")) {
-    delete rowData.ai_metadata;
-    const retry = await supabase
-      .from("moduls")
-      .insert(rowData)
-      .select("*")
-      .single();
-    row = retry.data;
-    error = retry.error;
-  }
 
   if (error) {
     console.error("[addModul] Supabase insert error:", error);
@@ -130,13 +119,11 @@ export async function saveModul(modul: Modul) {
   const next = { ...modul, updatedAt: new Date().toISOString() };
   store.set(previous.map((m) => (m.id === modul.id ? next : m)));
   try {
-    const rowData: Record<string, any> = toRow(modul);
-    let { error } = await supabase.from("moduls").update(rowData).eq("id", modul.id);
-    if (error && (error.message?.includes("ai_metadata") || error.code === "PGRST204")) {
-      delete rowData.ai_metadata;
-      const retry = await supabase.from("moduls").update(rowData).eq("id", modul.id);
-      error = retry.error;
-    }
+    const rowData = toRow(modul);
+    const { error } = await supabase
+      .from("moduls")
+      .update(rowData as never)
+      .eq("id", modul.id);
     if (error) {
       console.error("[saveModul] Supabase update error:", error);
       throw new Error(error.message || "Gagal memperbarui modul.");
@@ -164,9 +151,12 @@ export async function deleteModul(id: string) {
 }
 
 export async function publishModul(id: string) {
-  const found = store.get().find((m) => m.id === id);
-  if (!found) return;
-  await saveModul({ ...found, status: "Terbit" });
+  const { publishModulServerFn } = await import("./ai.functions");
+  const result = await publishModulServerFn({ data: { modulId: id } });
+  if (result.status === "success" && result.publishedModul) {
+    const previous = store.get();
+    store.set(previous.map((m) => (m.id === id ? result.publishedModul : m)));
+  }
 }
 
 export async function setIlustrasi(

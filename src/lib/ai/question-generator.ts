@@ -660,22 +660,11 @@ export async function generateGroundedQuestions(
         ai_metadata: aiMetadata as never,
       };
 
-      let { data: inserted, error: insertErr } = await supabase
+      const { data: inserted, error: insertErr } = await supabase
         .from("paket_soal")
         .insert(packagePayload)
         .select("*")
         .single();
-
-      if (insertErr && (insertErr.message?.includes("ai_metadata") || insertErr.code === "PGRST204")) {
-        delete packagePayload.ai_metadata;
-        const retry = await supabase
-          .from("paket_soal")
-          .insert(packagePayload)
-          .select("*")
-          .single();
-        inserted = retry.data;
-        insertErr = retry.error;
-      }
 
       if (insertErr) {
         console.error("[generateGroundedQuestions] Database insert error:", insertErr);

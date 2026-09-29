@@ -470,6 +470,7 @@ function SoalPage() {
     // Client-side canonical checks before saving
     for (let i = 0; i < draftSoal.length; i++) {
       const q = draftSoal[i];
+      if (!q) continue;
       if (!q.pertanyaan || q.pertanyaan.trim().length < 5) {
         toast.error(`Soal #${i + 1}: Teks pertanyaan minimal 5 karakter.`);
         return;
@@ -519,7 +520,7 @@ function SoalPage() {
           teacherEdited: s.teacherEdited,
         }));
 
-        const res = await withAuthRetry(
+        const res: any = await withAuthRetry(
           () => supabase.auth.refreshSession(),
           () =>
             saveQuestionDraft({
@@ -586,7 +587,7 @@ function SoalPage() {
     const target = aiTarget;
     setAiLoading(true);
     try {
-      const revised = await withAuthRetry(
+      const revised: any = await withAuthRetry(
         () => supabase.auth.refreshSession(),
         () =>
           reviseAi({
@@ -1666,9 +1667,14 @@ function PaketActions({
         <Button
           size="sm"
           variant="secondary"
-          onClick={() => {
-            void publishPaket(paket.id);
-            toast.success("Soal berhasil diterbitkan.");
+          onClick={async () => {
+            try {
+              await publishPaket(paket.id);
+              toast.success("Paket soal berhasil diterbitkan ke Bank Soal.");
+            } catch (err: any) {
+              console.error("[publishPaket] Error:", err);
+              toast.error(err.message || "Gagal menerbitkan paket soal.");
+            }
           }}
         >
           <Send className="h-4 w-4" />

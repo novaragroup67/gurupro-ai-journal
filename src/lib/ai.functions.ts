@@ -1833,22 +1833,11 @@ export const generateModulAjarServerFn = createServerFn({ method: "POST" })
           ai_metadata: result.draftModul.aiMetadata || null,
         };
 
-        let { data: inserted, error: insertErr } = await supabase
+        const { data: inserted, error: insertErr } = await supabase
           .from("moduls")
           .insert(insertPayload)
           .select("*")
           .single();
-
-        if (insertErr && (insertErr.message?.includes("ai_metadata") || insertErr.code === "PGRST204")) {
-          delete insertPayload.ai_metadata;
-          const retry = await supabase
-            .from("moduls")
-            .insert(insertPayload)
-            .select("*")
-            .single();
-          inserted = retry.data;
-          insertErr = retry.error;
-        }
 
         if (insertErr) {
           console.error("[generateModulAjarServerFn] Supabase insert error:", insertErr);
@@ -2077,26 +2066,13 @@ export const saveModulDraftServerFn = createServerFn({ method: "POST" })
       updated_at: nowIso,
     };
 
-    let { data: updated, error: updateErr } = await supabase
+    const { data: updated, error: updateErr } = await supabase
       .from("moduls")
       .update(updatePayload)
       .eq("id", data.modulId)
       .eq("user_id", userId)
       .select("*")
       .single();
-
-    if (updateErr && (updateErr.message?.includes("ai_metadata") || updateErr.code === "PGRST204")) {
-      delete updatePayload.ai_metadata;
-      const retry = await supabase
-        .from("moduls")
-        .update(updatePayload)
-        .eq("id", data.modulId)
-        .eq("user_id", userId)
-        .select("*")
-        .single();
-      updated = retry.data;
-      updateErr = retry.error;
-    }
 
     if (updateErr) {
       console.error("[saveModulDraftServerFn] Update error:", updateErr);
@@ -2239,26 +2215,13 @@ export const publishModulServerFn = createServerFn({ method: "POST" })
       updated_at: nowIso,
     };
 
-    let { data: updated, error: updateErr } = await supabase
+    const { data: updated, error: updateErr } = await supabase
       .from("moduls")
       .update(publishPayload)
       .eq("id", data.modulId)
       .eq("user_id", userId)
       .select("*")
       .single();
-
-    if (updateErr && (updateErr.message?.includes("ai_metadata") || updateErr.code === "PGRST204")) {
-      delete publishPayload.ai_metadata;
-      const retry = await supabase
-        .from("moduls")
-        .update(publishPayload)
-        .eq("id", data.modulId)
-        .eq("user_id", userId)
-        .select("*")
-        .single();
-      updated = retry.data;
-      updateErr = retry.error;
-    }
 
     if (updateErr) {
       console.error("[publishModulServerFn] Update error:", updateErr);

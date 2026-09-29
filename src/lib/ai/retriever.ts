@@ -16,7 +16,7 @@
 
 import { AI_ERROR_CODES, AiServiceError } from "./error-taxonomy";
 import { EDUCATIONAL_SYNONYMS } from "./grounding";
-import { getCachedSourceSnapshot } from "./source-ingestion";
+import { getCachedSourceSnapshot, getPersistedSourceSnapshot } from "./source-ingestion";
 import type { AiSourceChunk, AiSourceSnapshot } from "./types";
 
 export interface SemanticRetrieverPlugin {
@@ -95,7 +95,8 @@ export async function retrieveSourceContext(query: RetrievalQuery): Promise<Retr
     );
   }
 
-  const snapshot: AiSourceSnapshot | undefined = getCachedSourceSnapshot(sourceId);
+  const snapshot: AiSourceSnapshot | undefined =
+    getCachedSourceSnapshot(sourceId) || (await getPersistedSourceSnapshot(sourceId));
   if (!snapshot) {
     throw new AiServiceError(
       AI_ERROR_CODES.RETRIEVAL_ERROR,

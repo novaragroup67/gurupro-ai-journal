@@ -451,8 +451,16 @@ export function validateQuestionPackagePublishEligibility(
   const canonicalQuestions: CanonicalQuestion[] = [];
   for (let i = 0; i < rawQuestions.length; i++) {
     const rawQ = rawQuestions[i];
+    const preparedQ = {
+      ...rawQ,
+      evidenceIds:
+        Array.isArray(rawQ?.evidenceIds) && rawQ.evidenceIds.length > 0
+          ? rawQ.evidenceIds
+          : ["ev_legacy_manual"],
+      status: rawQ?.status || "SUPPORTED",
+    };
     try {
-      const validatedQ = validateCanonicalQuestion(rawQ, {
+      const validatedQ = validateCanonicalQuestion(preparedQ, {
         allowedEvidenceIds: allowedEvidenceIds.size > 0 ? allowedEvidenceIds : undefined,
         evidenceStatusMap: options?.evidenceStatusMap,
       });

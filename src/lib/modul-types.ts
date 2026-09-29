@@ -20,7 +20,7 @@ export interface Modul {
   id: string;
   judul: string;
   kelas: string;
-  kelasId?: string;
+  kelasId?: string | undefined;
   mapel: string;
   status: ModulStatus;
   sumberTipe: SumberTipe;

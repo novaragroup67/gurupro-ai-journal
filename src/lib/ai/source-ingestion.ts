@@ -322,10 +322,51 @@ export async function ingestSource(options: IngestionOptions): Promise<AiSourceS
     createdAt: new Date().toISOString(),
   };
 
-  // Cache in memory for quick retrieval
+  // 1. Cache in memory (L1 fast cache)
   inMemorySnapshots.set(snapshot.id, snapshot);
 
+  // 2. Persist to Supabase database (L2 persistent store)
+  await persistSnapshotToDatabase(snapshot, (options as any)?.supabaseClient);
+
   return snapshot;
+}
+
+async function getSupabase() {
+  try {
+    const mod = await import("../../integrations/supabase/client.js").catch(() =>
+      import("../../integrations/supabase/client"),
+    );
+    return mod.supabase;
+  } catch {
+    return null;
+  }
+}
+
+async function persistSnapshotToDatabase(snapshot: AiSourceSnapshot, client?: any): Promise<void> {
+  try {
+    const supabase = client || (await getSupabase());
+    if (!supabase) return;
+    const row = {
+      id: snapshot.id,
+      user_id: snapshot.userId,
+      source_type: snapshot.sourceType,
+      source_url: snapshot.sourceUrl || null,
+      source_title: snapshot.sourceTitle || null,
+      content_type: snapshot.contentType,
+      content_hash: snapshot.contentHash,
+      retrieved_at: snapshot.retrievedAt,
+      normalized_content: snapshot.normalizedContent,
+      word_count: snapshot.wordCount,
+      char_count: snapshot.charCount,
+      chunks: snapshot.chunks as any,
+      metadata: snapshot.metadata as any,
+      ingestion_status: snapshot.ingestionStatus,
+      created_at: snapshot.createdAt,
+    };
+    await supabase.from("ai_source_snapshots").upsert(row);
+  } catch {
+    // Non-blocking in pure mock/unit test environments
+  }
 }
 
 export function setCachedSourceSnapshot(snapshot: AiSourceSnapshot): void {
@@ -336,6 +377,54 @@ export function getCachedSourceSnapshot(snapshotId: string): AiSourceSnapshot | 
   return inMemorySnapshots.get(snapshotId);
 }
 
+export async function getPersistedSourceSnapshot(
+  snapshotId: string,
+  userId?: string,
+  client?: any,
+): Promise<AiSourceSnapshot | undefined> {
+  // L1: Check in-memory cache first
+  const cached = inMemorySnapshots.get(snapshotId);
+  if (cached) {
+    if (userId && cached.userId !== userId) {
+      return undefined;
+    }
+    return cached;
+  }
+
+  // L2: Query persistent Supabase table
+  try {
+    const supabase = client || (await getSupabase());
+    if (!supabase) return undefined;
+    let query = supabase.from("ai_source_snapshots").select("*").eq("id", snapshotId);
+    if (userId) query = query.eq("user_id", userId);
+    const { data, error } = await query.maybeSingle();
+    if (data && !error) {
+      const restored: AiSourceSnapshot = {
+        id: data.id,
+        userId: data.user_id,
+        sourceType: data.source_type as any,
+        sourceUrl: data.source_url || undefined,
+        sourceTitle: data.source_title || undefined,
+        contentType: data.content_type,
+        contentHash: data.content_hash,
+        retrievedAt: data.retrieved_at,
+        normalizedContent: data.normalized_content,
+        wordCount: data.word_count,
+        charCount: data.char_count,
+        chunks: Array.isArray(data.chunks) ? data.chunks : [],
+        metadata: data.metadata || {},
+        ingestionStatus: data.ingestion_status as any,
+        createdAt: data.created_at,
+      };
+      inMemorySnapshots.set(restored.id, restored);
+      return restored;
+    }
+  } catch {
+    // Fallback if table not available
+  }
+  return undefined;
+}
+
 export function getAllCachedSnapshots(): AiSourceSnapshot[] {
   return Array.from(inMemorySnapshots.values());
 }
@@ -344,6 +433,51 @@ export function getCachedSnapshotsForUser(userId: string): AiSourceSnapshot[] {
   return Array.from(inMemorySnapshots.values()).filter((s) => s.userId === userId);
 }
 
+export async function getPersistedSnapshotsForUser(userId: string): Promise<AiSourceSnapshot[]> {
+  const fromMemory = Array.from(inMemorySnapshots.values()).filter((s) => s.userId === userId);
+  try {
+    const supabase = await getSupabase();
+    if (!supabase) return fromMemory;
+    const { data, error } = await supabase
+      .from("ai_source_snapshots")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    if (data && !error && data.length > 0) {
+      const byId = new Map<string, AiSourceSnapshot>();
+      for (const row of data) {
+        const item: AiSourceSnapshot = {
+          id: row.id,
+          userId: row.user_id,
+          sourceType: row.source_type as any,
+          sourceUrl: row.source_url || undefined,
+          sourceTitle: row.source_title || undefined,
+          contentType: row.content_type,
+          contentHash: row.content_hash,
+          retrievedAt: row.retrieved_at,
+          normalizedContent: row.normalized_content,
+          wordCount: row.word_count,
+          charCount: row.char_count,
+          chunks: Array.isArray(row.chunks) ? row.chunks : [],
+          metadata: row.metadata || {},
+          ingestionStatus: row.ingestion_status as any,
+          createdAt: row.created_at,
+        };
+        byId.set(item.id, item);
+        inMemorySnapshots.set(item.id, item);
+      }
+      for (const m of fromMemory) {
+        byId.set(m.id, m);
+      }
+      return Array.from(byId.values());
+    }
+  } catch {
+    // Fallback to memory
+  }
+  return fromMemory;
+}
+
 export function clearSnapshotCacheForTesting() {
   inMemorySnapshots.clear();
 }
+

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { requireTeacherAiAuth } from "@/integrations/supabase/auth-middleware";
-import { ingestSource, getCachedSnapshotsForUser } from "./ai/source-ingestion";
+import { ingestSource, getCachedSnapshotsForUser, getPersistedSnapshotsForUser } from "./ai/source-ingestion";
 import { isIP, isPrivateOrReservedIp } from "./ai/ip-utils";
 
 export { isPrivateOrReservedIp } from "./ai/ip-utils";
@@ -291,7 +291,7 @@ export const listTeacherSourcesServerFn = createServerFn({ method: "GET" })
   .middleware([requireTeacherAiAuth])
   .handler(async ({ context }): Promise<TeacherSourceItem[]> => {
     const userId = (context as any)?.userId;
-    const snapshots = getCachedSnapshotsForUser(userId);
+    const snapshots = await getPersistedSnapshotsForUser(userId);
     return snapshots.map((s) => ({
       id: s.id,
       title: s.sourceTitle || "Materi Sumber",

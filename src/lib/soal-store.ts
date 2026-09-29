@@ -97,6 +97,11 @@ export async function addPaket(data: Omit<PaketSoal, "id" | "createdAt">) {
 }
 
 export async function updatePaket(id: string, patch: Partial<PaketSoal>) {
+  if (patch.status === "Terbit") {
+    throw new Error(
+      "Publikasi paket soal harus melalui publishPaket() / publishQuestionPackageServerFn untuk validasi otoritatif.",
+    );
+  }
   const previous = store.get();
   store.set(previous.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   try {
@@ -124,7 +129,14 @@ export async function deletePaket(id: string) {
 }
 
 export async function publishPaket(id: string) {
-  await updatePaket(id, { status: "Terbit" });
+  const { publishQuestionPackageServerFn } = await import("./ai.functions");
+  const result = (await publishQuestionPackageServerFn({ data: { paketId: id } })) as any;
+  if (result.status === "success" && result.publishedPackage) {
+    const previous = store.get();
+    store.set(previous.map((p) => (p.id === id ? result.publishedPackage : p)));
+    return result.publishedPackage as PaketSoal;
+  }
+  throw new Error("Gagal menerbitkan paket soal.");
 }
 
 export async function duplicatePaket(id: string) {

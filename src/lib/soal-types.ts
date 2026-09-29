@@ -24,14 +24,14 @@ export interface PaketSoal {
   kelas: string[];
   soal: Soal[];
   createdAt: string;
-  updatedAt?: string;
-  isArchived?: boolean;
-  archivedAt?: string | null;
-  archivedBy?: string | null;
-  ai_metadata?: Record<string, unknown> | null;
-  teacherEdited?: boolean;
-  publishedAt?: string;
-  publishedBy?: string;
+  updatedAt?: string | undefined;
+  isArchived?: boolean | undefined;
+  archivedAt?: string | null | undefined;
+  archivedBy?: string | null | undefined;
+  ai_metadata?: Record<string, unknown> | null | undefined;
+  teacherEdited?: boolean | undefined;
+  publishedAt?: string | undefined;
+  publishedBy?: string | undefined;
 }
 
 export const JENIS_SOAL: JenisSoal[] = ["Pilihan Ganda", "Esai"];

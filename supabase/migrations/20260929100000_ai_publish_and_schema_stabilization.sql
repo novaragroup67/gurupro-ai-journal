@@ -1,6 +1,8 @@
--- Migration: 20260926150000_ai_foundation_and_grounding.sql
--- Description: AI-0 Foundation: persistent source snapshots, content hashing, chunking, and tenant-safe RLS.
+-- Migration: 20260929100000_ai_publish_and_schema_stabilization.sql
+-- Description: AI-4F-A.1 Environment, Schema & Publish Integrity Stabilization
+-- Ensures persistent tables, canonical metadata columns, and database-level publish transition guards.
 
+-- 1. PERSISTENT AI SOURCE SNAPSHOTS TABLE
 CREATE TABLE IF NOT EXISTS public.ai_source_snapshots (
   id TEXT PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -28,7 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_ai_source_snapshots_created_at ON public.ai_sourc
 -- Enable Row Level Security
 ALTER TABLE public.ai_source_snapshots ENABLE ROW LEVEL SECURITY;
 
--- Policy: Teachers can view and manage their own snapshots
+-- Policy: Teachers can view, insert, update, delete their own snapshots
 DROP POLICY IF EXISTS "Guru can select own source snapshots" ON public.ai_source_snapshots;
 CREATE POLICY "Guru can select own source snapshots"
   ON public.ai_source_snapshots
@@ -100,3 +102,53 @@ CREATE POLICY "Admin can view all source snapshots for auditing"
       WHERE profiles.id = auth.uid() AND profiles.role = 'admin'
     )
   );
+
+-- 2. CANONICAL AI METADATA COLUMNS
+ALTER TABLE public.moduls
+  ADD COLUMN IF NOT EXISTS ai_metadata JSONB DEFAULT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_moduls_ai_metadata ON public.moduls USING gin (ai_metadata);
+
+ALTER TABLE public.paket_soal
+  ADD COLUMN IF NOT EXISTS ai_metadata JSONB DEFAULT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_paket_soal_ai_metadata ON public.paket_soal USING gin (ai_metadata);
+
+-- 3. DATABASE-LEVEL PUBLISH GUARD FOR PAKET_SOAL
+-- Prevents unauthorized or invalid transitions to 'Terbit' directly from client
+CREATE OR REPLACE FUNCTION public.guard_paket_soal_publish_transition()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  -- Strict Transition Guard: Draft -> Terbit
+  IF OLD.status = 'Draft' AND NEW.status = 'Terbit' THEN
+    -- Must have publishedAt and publishedBy in ai_metadata
+    IF NEW.ai_metadata IS NULL OR
+       (NEW.ai_metadata->>'publishedAt') IS NULL OR
+       (NEW.ai_metadata->>'publishedBy') IS NULL THEN
+      RAISE EXCEPTION 'Publikasi paket soal ke Bank Soal wajib melalui alur validasi server AI-4F-A (publishQuestionPackageServerFn).';
+    END IF;
+
+    -- Ensure publisher matches owner
+    IF (NEW.ai_metadata->>'publishedBy')::uuid != OLD.user_id THEN
+      RAISE EXCEPTION 'Akses ditolak: Penerbit bukan pemilik draf paket soal.';
+    END IF;
+
+    -- Archived package cannot be published
+    IF OLD.is_archived IS TRUE THEN
+      RAISE EXCEPTION 'Paket soal yang telah diarsipkan tidak dapat dipublikasikan.';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_guard_paket_soal_publish ON public.paket_soal;
+CREATE TRIGGER trg_guard_paket_soal_publish
+  BEFORE UPDATE ON public.paket_soal
+  FOR EACH ROW
+  EXECUTE FUNCTION public.guard_paket_soal_publish_transition();
