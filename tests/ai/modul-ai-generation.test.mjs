@@ -1233,28 +1233,41 @@ function buildMockRoutingOutput(sourceId, chunkId) {
 // -----------------------------------------------------------------------------
 {
   resetRateLimiterForTesting();
-  // When no mockProviderCall is given and no API key is present in server env,
-  // it must throw AI_PROVIDER_ERROR and fail closed without crashing.
-  await assert.rejects(
-    async () => {
-      await generateGroundedModulAjar(
-        {
-          sourceSnapshotIds: [snapRoutingT1.id],
-          kelasId: "b0000000-0000-0000-0000-000000000001",
-          topik: "Routing Statis",
-        },
-        MOCK_TEACHER_1_CONTEXT,
-        // No mockProviderCall provided -> attempts to resolveServerAiConfig
-      );
-    },
-    (err) => {
-      assert.ok(err instanceof AiServiceError);
-      assert.equal(err.code, AI_ERROR_CODES.AI_PROVIDER_ERROR);
-      assert.ok(err.message.includes("Konfigurasi AI server belum siap"));
-      return true;
-    },
-  );
-  pass(30, "Fail-closed provider check: Missing server API key fails closed with AI_PROVIDER_ERROR");
+  const oldGemini = process.env.GEMINI_API_KEY;
+  const oldLovable = process.env.LOVABLE_API_KEY;
+  const oldOpenAI = process.env.OPENAI_API_KEY;
+  delete process.env.GEMINI_API_KEY;
+  delete process.env.LOVABLE_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+
+  try {
+    // When no mockProviderCall is given and no API key is present in server env,
+    // it must throw AI_PROVIDER_ERROR and fail closed without crashing.
+    await assert.rejects(
+      async () => {
+        await generateGroundedModulAjar(
+          {
+            sourceSnapshotIds: [snapRoutingT1.id],
+            kelasId: "b0000000-0000-0000-0000-000000000001",
+            topik: "Routing Statis",
+          },
+          MOCK_TEACHER_1_CONTEXT,
+          // No mockProviderCall provided -> attempts to resolveServerAiConfig
+        );
+      },
+      (err) => {
+        assert.ok(err instanceof AiServiceError);
+        assert.equal(err.code, AI_ERROR_CODES.AI_PROVIDER_ERROR);
+        assert.ok(err.message.includes("Konfigurasi AI server belum siap"));
+        return true;
+      },
+    );
+    pass(30, "Fail-closed provider check: Missing server API key fails closed with AI_PROVIDER_ERROR");
+  } finally {
+    if (oldGemini !== undefined) process.env.GEMINI_API_KEY = oldGemini;
+    if (oldLovable !== undefined) process.env.LOVABLE_API_KEY = oldLovable;
+    if (oldOpenAI !== undefined) process.env.OPENAI_API_KEY = oldOpenAI;
+  }
 }
 
 // -----------------------------------------------------------------------------

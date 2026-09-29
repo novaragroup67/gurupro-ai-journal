@@ -29,6 +29,19 @@ import type {
 const DEFAULT_TIMEOUT_MS = 60000;
 const MAX_BOUNDED_RETRIES = 2;
 
+try {
+  if (typeof process !== "undefined" && typeof (process as any).loadEnvFile === "function") {
+    if (process.env) {
+      for (const k of ["GEMINI_API_KEY", "LOVABLE_API_KEY", "OPENAI_API_KEY", "AI_MODEL", "AI_ENDPOINT"]) {
+        if (process.env[k] === "") {
+          delete process.env[k];
+        }
+      }
+    }
+    (process as any).loadEnvFile();
+  }
+} catch {}
+
 function getServerEnv(name: string): string | undefined {
   if (name.startsWith("VITE_")) {
     // Security Guard: Never allow private AI secrets to be read from VITE_* variables
@@ -75,7 +88,7 @@ export function resolveServerAiConfig(): AiModelConfig {
       endpoint:
         customEndpoint ||
         "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-      model: customModel || "gemini-2.0-flash",
+      model: customModel || "gemini-3.8-flash",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${geminiKey}`,

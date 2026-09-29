@@ -1,5 +1,20 @@
 import "./lib/error-capture";
 
+try {
+  if (typeof process !== "undefined" && typeof (process as any).loadEnvFile === "function") {
+    if (process.env) {
+      for (const k of ["GEMINI_API_KEY", "LOVABLE_API_KEY", "OPENAI_API_KEY", "AI_MODEL", "AI_ENDPOINT"]) {
+        if (process.env[k] === "") {
+          delete process.env[k];
+        }
+      }
+    }
+    (process as any).loadEnvFile();
+  }
+} catch {
+  // Ignored in non-Node or production container environments
+}
+
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 

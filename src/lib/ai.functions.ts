@@ -86,6 +86,19 @@ interface AiProviderConfig {
   headers: Record<string, string>;
 }
 
+try {
+  if (typeof process !== "undefined" && typeof (process as any).loadEnvFile === "function") {
+    if (process.env) {
+      for (const k of ["GEMINI_API_KEY", "LOVABLE_API_KEY", "OPENAI_API_KEY", "AI_MODEL", "AI_ENDPOINT"]) {
+        if (process.env[k] === "") {
+          delete process.env[k];
+        }
+      }
+    }
+    (process as any).loadEnvFile();
+  }
+} catch {}
+
 function getEnvValue(name: string): string | undefined {
   if (name.startsWith("VITE_")) {
     // Security Boundary: Never read server-side AI private credentials from client VITE_* variables
@@ -133,7 +146,7 @@ function resolveAiConfig(): AiProviderConfig {
       endpoint:
         customEndpoint ||
         "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-      model: customModel || "gemini-2.0-flash",
+      model: customModel || "gemini-3.8-flash",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${geminiKey}`,
