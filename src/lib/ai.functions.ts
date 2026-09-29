@@ -1814,28 +1814,41 @@ export const generateModulAjarServerFn = createServerFn({ method: "POST" })
     // AI-3A Persistence Contract: Persist generated draft to 'moduls' table in Supabase
     if (result.status === "success" && result.draftModul) {
       try {
-        const { data: inserted, error: insertErr } = await supabase
+        const insertPayload: Record<string, any> = {
+          user_id: userId,
+          judul: result.draftModul.judul,
+          kelas: result.draftModul.kelas,
+          kelas_id: result.draftModul.kelasId || null,
+          mapel: result.draftModul.mapel,
+          status: "Draft", // Strict Draft Invariant: never auto-publish
+          sumber_tipe: result.draftModul.sumberTipe,
+          sumber_input: result.draftModul.sumberInput,
+          sumber_url: result.draftModul.sumberUrl || null,
+          sumber_judul: result.draftModul.sumberJudul || null,
+          sumber_kutipan: result.draftModul.sumberKutipan || null,
+          ringkasan: result.draftModul.ringkasan,
+          sections: result.draftModul.sections,
+          slides: result.draftModul.slides || [],
+          is_archived: false,
+          ai_metadata: result.draftModul.aiMetadata || null,
+        };
+
+        let { data: inserted, error: insertErr } = await supabase
           .from("moduls")
-          .insert({
-            user_id: userId,
-            judul: result.draftModul.judul,
-            kelas: result.draftModul.kelas,
-            kelas_id: result.draftModul.kelasId || null,
-            mapel: result.draftModul.mapel,
-            status: "Draft", // Strict Draft Invariant: never auto-publish
-            sumber_tipe: result.draftModul.sumberTipe,
-            sumber_input: result.draftModul.sumberInput,
-            sumber_url: result.draftModul.sumberUrl || null,
-            sumber_judul: result.draftModul.sumberJudul || null,
-            sumber_kutipan: result.draftModul.sumberKutipan || null,
-            ringkasan: result.draftModul.ringkasan,
-            sections: result.draftModul.sections,
-            slides: result.draftModul.slides || [],
-            is_archived: false,
-            ai_metadata: result.draftModul.aiMetadata || null,
-          })
+          .insert(insertPayload)
           .select("*")
           .single();
+
+        if (insertErr && (insertErr.message?.includes("ai_metadata") || insertErr.code === "PGRST204")) {
+          delete insertPayload.ai_metadata;
+          const retry = await supabase
+            .from("moduls")
+            .insert(insertPayload)
+            .select("*")
+            .single();
+          inserted = retry.data;
+          insertErr = retry.error;
+        }
 
         if (insertErr) {
           console.error("[generateModulAjarServerFn] Supabase insert error:", insertErr);
@@ -1866,7 +1879,7 @@ export const generateModulAjarServerFn = createServerFn({ method: "POST" })
             createdAt: inserted.created_at,
             updatedAt: inserted.updated_at,
             isArchived: Boolean(inserted.is_archived),
-            aiMetadata: inserted.ai_metadata,
+            aiMetadata: inserted.ai_metadata || result.draftModul.aiMetadata || undefined,
           },
         };
       } catch (dbErr: any) {
@@ -2055,20 +2068,35 @@ export const saveModulDraftServerFn = createServerFn({ method: "POST" })
     }
 
     // 7. Persist to Supabase Database (status: 'Draft' strictly enforced)
-    const { data: updated, error: updateErr } = await supabase
+    const updatePayload: Record<string, any> = {
+      judul: validatedData.judul,
+      ringkasan: validatedData.ringkasan,
+      sections: validatedData.sections,
+      status: "Draft", // Strict Draft Invariant: saving edits NEVER changes to 'Terbit'
+      ai_metadata: updatedAiMetadata,
+      updated_at: nowIso,
+    };
+
+    let { data: updated, error: updateErr } = await supabase
       .from("moduls")
-      .update({
-        judul: validatedData.judul,
-        ringkasan: validatedData.ringkasan,
-        sections: validatedData.sections,
-        status: "Draft", // Strict Draft Invariant: saving edits NEVER changes to 'Terbit'
-        ai_metadata: updatedAiMetadata,
-        updated_at: nowIso,
-      })
+      .update(updatePayload)
       .eq("id", data.modulId)
       .eq("user_id", userId)
       .select("*")
       .single();
+
+    if (updateErr && (updateErr.message?.includes("ai_metadata") || updateErr.code === "PGRST204")) {
+      delete updatePayload.ai_metadata;
+      const retry = await supabase
+        .from("moduls")
+        .update(updatePayload)
+        .eq("id", data.modulId)
+        .eq("user_id", userId)
+        .select("*")
+        .single();
+      updated = retry.data;
+      updateErr = retry.error;
+    }
 
     if (updateErr) {
       console.error("[saveModulDraftServerFn] Update error:", updateErr);
@@ -2205,17 +2233,32 @@ export const publishModulServerFn = createServerFn({ method: "POST" })
     };
 
     // 6. Persist to Supabase Database (status: 'Terbit' strictly enforced)
-    const { data: updated, error: updateErr } = await supabase
+    const publishPayload: Record<string, any> = {
+      status: "Terbit",
+      ai_metadata: updatedAiMetadata,
+      updated_at: nowIso,
+    };
+
+    let { data: updated, error: updateErr } = await supabase
       .from("moduls")
-      .update({
-        status: "Terbit",
-        ai_metadata: updatedAiMetadata,
-        updated_at: nowIso,
-      })
+      .update(publishPayload)
       .eq("id", data.modulId)
       .eq("user_id", userId)
       .select("*")
       .single();
+
+    if (updateErr && (updateErr.message?.includes("ai_metadata") || updateErr.code === "PGRST204")) {
+      delete publishPayload.ai_metadata;
+      const retry = await supabase
+        .from("moduls")
+        .update(publishPayload)
+        .eq("id", data.modulId)
+        .eq("user_id", userId)
+        .select("*")
+        .single();
+      updated = retry.data;
+      updateErr = retry.error;
+    }
 
     if (updateErr) {
       console.error("[publishModulServerFn] Update error:", updateErr);

@@ -98,11 +98,24 @@ async function currentUserId() {
 
 export async function addModul(data: Omit<Modul, "id" | "createdAt" | "updatedAt">) {
   const user_id = await currentUserId();
-  const { data: row, error } = await supabase
+  const rowData: Record<string, any> = { user_id, ...toRow(data) };
+  let { data: row, error } = await supabase
     .from("moduls")
-    .insert({ user_id, ...toRow(data) })
+    .insert(rowData)
     .select("*")
     .single();
+
+  if (error && (error.message?.includes("ai_metadata") || error.code === "PGRST204")) {
+    delete rowData.ai_metadata;
+    const retry = await supabase
+      .from("moduls")
+      .insert(rowData)
+      .select("*")
+      .single();
+    row = retry.data;
+    error = retry.error;
+  }
+
   if (error) {
     console.error("[addModul] Supabase insert error:", error);
     throw new Error(error.message || "Gagal menyimpan modul ke database.");
@@ -117,7 +130,13 @@ export async function saveModul(modul: Modul) {
   const next = { ...modul, updatedAt: new Date().toISOString() };
   store.set(previous.map((m) => (m.id === modul.id ? next : m)));
   try {
-    const { error } = await supabase.from("moduls").update(toRow(modul)).eq("id", modul.id);
+    const rowData: Record<string, any> = toRow(modul);
+    let { error } = await supabase.from("moduls").update(rowData).eq("id", modul.id);
+    if (error && (error.message?.includes("ai_metadata") || error.code === "PGRST204")) {
+      delete rowData.ai_metadata;
+      const retry = await supabase.from("moduls").update(rowData).eq("id", modul.id);
+      error = retry.error;
+    }
     if (error) {
       console.error("[saveModul] Supabase update error:", error);
       throw new Error(error.message || "Gagal memperbarui modul.");
