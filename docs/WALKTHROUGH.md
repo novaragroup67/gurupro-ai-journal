@@ -25,20 +25,22 @@ Dokumen ini menyajikan rincian lengkap mengenai seluruh arsitektur, kontrak kano
 | **AI-4E** | *Teacher Question Review / Edit / Save* (Antarmuka Peninjauan Draf Guru Terverifikasi, Penyuntingan Pilihan Ganda 4 Opsi Distinct & Kunci A-D, Penyuntingan Esai Rubrik >= 10 Chars, Preservasi Provenance AI & Temuan AI-4D, Pelacakan `teacherEdited` Tingkat Soal & Paket, Strict Draft Invariant, Concurrency Protection `expectedUpdatedAt`, Mesin Status Dirty/Saving/Saved/Error, Isolasi Keamanan Siswa `toStudentSafeQuestion`) | **SELESAI** | Lulus Verifikasi (26/26 Tests) |
 | **AI-4F-A** | *Question Bank Publish Foundation* (Kontrak Kanonikal Kelayakan Publikasi Server-Side, Transisi Atomik Status Draft ke Terbit, Penegakan Otorisasi Guru Terverifikasi & Kepemilikan Tenant, Invarian Anti-Reject AI-4D, Integritas Grounding & Anti-Dangling, Proteksi Double-Publish & Arsip, Preservasi Provenance Audit `publishedAt` & `publishedBy`, Segregasi Kunci Jawaban `StudentSafeQuestion`) | **SELESAI** | Lulus Verifikasi (23/23 Tests) |
 | **AI-4F-A.1** | *Environment, Schema & Publish Integrity Stabilization* (Rekonsiliasi Drift Skema Supabase, Perbaikan Tipe ID Snapshot TEXT PK, Two-Tier Snapshot Storage L1+L2, Eliminasi Silent Delete Metadata, Penutupan Bypass Klien Publikasi, Trigger Database Guard Transisi Terbit, Perbaikan TS Store & Route, 10 Cek Dedicated) | **SELESAI** | Lulus Verifikasi (10/10 Tests) |
-| **GEN-0** | *Generation Planning Foundation* (Fondasi Perencanaan Bersama Ilustrasi & PPT AI, Kontrak Kanonikal Outline, 5-Langkah Siklus Hidup, 7 Preset Gaya Ilustrasi, 6 Preset Gaya PPT, Gerbang Persetujuan Guru, Kebijakan Pembatalan Otomatis, Spesifikasi Otorisasi, UI Panel Modul Editor Tab 4 & 5, Invarian Non-Generasi & Nol Biaya) | **SELESAI** | **LULUS VERIFIKASI (36/36 TESTS, 36/36 SUITES 100% PASS)** |
-| **Tahap Berikutnya** | VIS-1: AI Illustration Generation / PPT-1: AI PPT Generation | **MENUNGGU** | Berhenti Sesuai Perintah Khusus (Strict Stop — Non-Generation Invariant) |
+| **GEN-0** | *Generation Planning Foundation* (Fondasi Perencanaan Bersama Ilustrasi & PPT AI, Kontrak Kanonikal Outline, 5-Langkah Siklus Hidup, 7 Preset Gaya Ilustrasi, 6 Preset Gaya PPT, Gerbang Persetujuan Guru, Kebijakan Pembatalan Otomatis, Spesifikasi Otorisasi, UI Panel Modul Editor Tab 4 & 5, Invarian Non-Generasi & Nol Biaya) | **SELESAI** | Lulus Verifikasi (36/36 Tests) |
+| **VIS-1A** | *Illustration Generation Contract & Request Builder* (Kontrak Kanonikal Provider-Independent, Parameter Generasi, Text-in-Image Policy Tanpa Invented Text, Prompt Assembler Deterministik & Sanitasi Injeksi, Gerbang Validasi Ulang Persetujuan Server-Side, Migrasi DB `illustration_generation_requests`, Server Function TanStack Start, UI Inspeksi Pre-Generation, Invarian Non-Generasi) | **SELESAI** | **LULUS VERIFIKASI (32/32 TESTS, 37/37 SUITES 100% PASS)** |
+| **Tahap Berikutnya** | VIS-1B: Real AI Image Generation Execution / PPT-1: AI PPT Generation | **MENUNGGU** | Berhenti Sesuai Perintah Khusus (Strict Stop — Non-Generation Invariant) |
 
 > [!IMPORTANT]
-> **Status Kelulusan Tahap GEN-0**:
-> **`GEN-0 GENERATION PLANNING FOUNDATION COMPLETE — ALL 36 TEST SUITES PASSING (0 REGRESSIONS)`**
+> **Status Kelulusan Tahap VIS-1A**:
+> **`VIS-1A ILLUSTRATION GENERATION CONTRACT & REQUEST BUILDER COMPLETE — ALL 37 TEST SUITES PASSING (0 REGRESSIONS)`**
 > 
-> Tahap fondasi perencanaan generasi ilustrasi dan presentasi (PPT) telah diselesaikan dan terverifikasi secara penuh:
-> 1. Kontrak kanonikal dan validasi outline ilustrasi & slide PPT deterministik tanpa panggilan API berbiaya.
-> 2. Sistem katalog gaya visual bersama (7 preset ilustrasi + 6 preset presentasi) dengan validasi kecocokan target.
-> 3. Mesin status persetujuan guru (Approval Gate) dengan kebijakan pembatalan otomatis (*auto-revocation*) saat terjadi edit outline atau pergantian gaya.
-> 4. Penerbitan spesifikasi otorisasi generasi terstruktur (siap pakai untuk VIS-1 dan PPT-1) dengan proteksi anti-stale version.
-> 5. Panel UI interaktif 5-langkah terintegrasi pada Tab 4 (Ilustrasi AI) dan Tab 5 (PPT Otomatis) di `modul-editor.tsx` dengan tetap mempertahankan fitur generator mockup cepat serta unduh PDF/Word/PPT.
-> 6. Seluruh 36 test suites sistem (termasuk 36 skenario baru pada `generation-planning-foundation.test.mjs`) lulus 100%, dan kompilasi build produksi Vite/Nitro berhasil tanpa galat.
+> Tahap persiapan permintaan generasi ilustrasi AI telah diselesaikan dan terverifikasi secara penuh:
+> 1. Kontrak kanonikal independen-penyedia (`IllustrationGenerationParameters`, `IllustrationTextPolicy`, `AssembledIllustrationPrompt`, `IllustrationGenerationRequest`, `IllustrationGenerationResult`).
+> 2. Penegakan ketat kebijakan teks gambar: model dilarang membuat teks karangan sendiri (`allowModelInventedText: false`) dan hanya merender label teks wajib dari outline.
+> 3. Perakit prompt deterministik dan pertahanan anti-injeksi: sanitasi kata kunci pembelokan instruksi (`ignore previous instructions`, `SYSTEM:`) dan tag skrip.
+> 4. Validasi ulang persetujuan sisi server: menolak rencana tidak disetujui, rencana berstatus kedaluwarsa (`approvedVersion !== currentVersion`), outline/gaya yang diubah pasca-persetujuan, rencana presentasi, atau guru non-pemilik.
+> 5. Tabel database `public.illustration_generation_requests` lengkap dengan kebijakan keamanan tingkat baris (RLS).
+> 6. Server functions TanStack Start (`prepareIllustrationGenerationRequestServerFn`, `getIllustrationGenerationRequestServerFn`) terintegrasi pada store klien dan UI panel Langkah 5.
+> 7. Seluruh 37 test suites sistem (termasuk 32 skenario baru pada `illustration-generation-contract.test.mjs`) lulus 100%, kompilasi build produksi bersih tanpa galat, dan **tidak ada pemanggilan API generator gambar eksternal**.
 
 ---
 

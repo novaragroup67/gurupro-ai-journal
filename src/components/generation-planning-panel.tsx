@@ -56,6 +56,7 @@ import {
   PRESENTATION_STYLES_CATALOG,
   GenerationSpecification,
 } from "@/lib/ai/generation-planning-contract";
+import type { IllustrationGenerationRequest } from "@/lib/ai/illustration-generation-contract";
 import { useGenerationPlan } from "@/lib/generation-planning-store";
 
 // ==============================================================================
@@ -79,6 +80,8 @@ export function IllustrationPlanningPanel({
     loading,
     saving,
     approving,
+    preparedRequest,
+    preparingRequest,
     availableStyles,
     initPlan,
     saveOutlineEdits,
@@ -86,6 +89,7 @@ export function IllustrationPlanningPanel({
     approvePlan,
     revokeApproval,
     fetchSpecification,
+    prepareIllustrationRequest,
   } = useGenerationPlan({
     moduleId,
     targetType: "illustration",
@@ -96,6 +100,7 @@ export function IllustrationPlanningPanel({
   const [formOutline, setFormOutline] = useState<IllustrationOutline | null>(null);
   const [specification, setSpecification] = useState<GenerationSpecification | null>(null);
   const [showSpecPreview, setShowSpecPreview] = useState(false);
+  const [showReqPreview, setShowReqPreview] = useState(false);
 
   // Sync form state when plan changes
   useEffect(() => {
@@ -596,31 +601,117 @@ export function IllustrationPlanningPanel({
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowSpecPreview(!showSpecPreview)}
-                      className="text-xs gap-1.5"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                      {showSpecPreview ? "Tutup Inspeksi JSON" : "Inspeksi Spesifikasi Lengkap (JSON)"}
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowSpecPreview(!showSpecPreview)}
+                        className="text-xs gap-1.5"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        {showSpecPreview ? "Tutup Inspeksi Spek" : "Inspeksi Spesifikasi (JSON)"}
+                      </Button>
+
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => prepareIllustrationRequest()}
+                        disabled={preparingRequest}
+                        className="text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        {preparingRequest ? "Menyiapkan Permintaan..." : "Siapkan Permintaan Generasi (VIS-1A)"}
+                      </Button>
+                    </div>
 
                     <div className="flex items-center gap-2">
                       <Button
                         disabled
                         variant="secondary"
                         className="opacity-70 cursor-not-allowed text-xs gap-1.5"
-                        title="Fitur generasi gambar AI langsung (VIS-1) belum diaktifkan pada tahap GEN-0."
+                        title="Fitur generasi gambar AI langsung (VIS-1B) belum diaktifkan pada tahap VIS-1A."
                       >
                         <Zap className="h-3.5 w-3.5 text-amber-500" />
                         Generate Gambar Nyata
                         <Badge variant="outline" className="ml-1 text-[10px] bg-amber-50 text-amber-700 border-amber-200">
-                          VIS-1 Segera Hadir
+                          VIS-1B Segera Hadir
                         </Badge>
                       </Button>
                     </div>
                   </div>
+
+                  {preparedRequest ? (
+                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-50/10 p-4 grid gap-2.5 text-xs">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                          <span className="font-semibold text-emerald-800">
+                            Permintaan Generasi Gambar Siap (VIS-1A Canonical Request)
+                          </span>
+                        </div>
+                        <Badge variant="outline" className="border-emerald-300 text-emerald-700 text-[10px]">
+                          Provider-Agnostic
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
+                        <div className="p-2 rounded bg-background/80 border">
+                          <span className="text-muted-foreground block text-[10px]">ID Permintaan:</span>
+                          <span className="font-bold text-foreground">{preparedRequest.requestId}</span>
+                        </div>
+                        <div className="p-2 rounded bg-background/80 border">
+                          <span className="text-muted-foreground block text-[10px]">Rasio & Resolusi:</span>
+                          <span className="font-bold text-foreground">
+                            {preparedRequest.generationParameters.aspectRatio} ({preparedRequest.generationParameters.width}x{preparedRequest.generationParameters.height})
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-2.5 rounded bg-background/80 border space-y-1">
+                        <span className="text-muted-foreground block text-[10px] font-semibold">Kebijakan Teks Visual (Text Policy):</span>
+                        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                          <Badge variant="secondary" className="text-[10px]">
+                            Model Invented Text: Dilarang (Strict)
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px]">
+                            Strategi: {preparedRequest.textPolicy.textRenderStrategy}
+                          </Badge>
+                          {preparedRequest.textPolicy.mustAppear.length > 0 ? (
+                            <span className="text-muted-foreground text-[10px]">
+                              Label Wajib: <strong>{preparedRequest.textPolicy.mustAppear.join(", ")}</strong>
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-[10px]">Tanpa Label Teks (Visual Bersih)</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="p-2.5 rounded bg-background/80 border space-y-1">
+                        <span className="text-muted-foreground block text-[10px] font-semibold">Prompt Terakit Final (Deterministic Assembled):</span>
+                        <p className="font-mono text-[10px] text-foreground/90 whitespace-pre-wrap max-h-32 overflow-y-auto p-1.5 rounded bg-muted/30">
+                          {preparedRequest.assembledPrompt.fullPrompt}
+                        </p>
+                      </div>
+
+                      <div className="flex justify-start">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowReqPreview(!showReqPreview)}
+                          className="text-[11px] h-7 px-2 text-emerald-800 hover:text-emerald-900 hover:bg-emerald-100/50 gap-1"
+                        >
+                          <Eye className="h-3 w-3" />
+                          {showReqPreview ? "Sembunyikan Raw Request JSON" : "Lihat Raw Request JSON"}
+                        </Button>
+                      </div>
+
+                      {showReqPreview ? (
+                        <pre className="mt-1 p-3 rounded-lg bg-slate-950 text-slate-100 text-[10px] font-mono overflow-x-auto max-h-60 border">
+                          {JSON.stringify(preparedRequest, null, 2)}
+                        </pre>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   {showSpecPreview ? (
                     <pre className="mt-2 p-3 rounded-lg bg-slate-950 text-slate-100 text-[10px] font-mono overflow-x-auto max-h-60 border">

@@ -46,6 +46,13 @@ import {
   revokeApprovalServerFn,
   getGenerationSpecificationServerFn,
 } from "./generation-planning.functions";
+import {
+  prepareIllustrationGenerationRequestServerFn,
+} from "./illustration-generation.functions";
+import type {
+  IllustrationGenerationRequest,
+  IllustrationGenerationParameters,
+} from "./ai/illustration-generation-contract";
 
 export interface UseGenerationPlanOptions {
   moduleId: string;
@@ -65,6 +72,8 @@ export function useGenerationPlan({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [preparedRequest, setPreparedRequest] = useState<IllustrationGenerationRequest | null>(null);
+  const [preparingRequest, setPreparingRequest] = useState(false);
   const [availableStyles] = useState<GenerationStyle[]>(
     targetType === "illustration" ? ILLUSTRATION_STYLES_CATALOG : PRESENTATION_STYLES_CATALOG,
   );
@@ -299,12 +308,41 @@ export function useGenerationPlan({
     return null;
   }, [plan]);
 
+  const prepareIllustrationRequest = useCallback(
+    async (overrideParams?: Partial<IllustrationGenerationParameters>) => {
+      if (!plan || plan.targetType !== "illustration") return null;
+      setPreparingRequest(true);
+      try {
+        const res = (await prepareIllustrationGenerationRequestServerFn({
+          data: {
+            planId: plan.id,
+            parameters: overrideParams,
+          },
+        })) as any;
+        if (res.status === "success" && res.request) {
+          setPreparedRequest(res.request);
+          toast.success("Permintaan generasi ilustrasi (VIS-1A) berhasil divalidasi dan disiapkan!");
+          return res.request;
+        }
+      } catch (err: any) {
+        console.error("[prepareIllustrationRequest] Error:", err);
+        toast.error(err.message || "Gagal menyiapkan permintaan generasi ilustrasi.");
+      } finally {
+        setPreparingRequest(false);
+      }
+      return null;
+    },
+    [plan]
+  );
+
   return {
     plan,
     versions,
     loading,
     saving,
     approving,
+    preparedRequest,
+    preparingRequest,
     availableStyles,
     isApproved: Boolean(plan && plan.status === "approved" && plan.approvedVersion === plan.currentVersion),
     initPlan,
@@ -318,5 +356,6 @@ export function useGenerationPlan({
     reorderSlides,
     updateSlide,
     fetchSpecification,
+    prepareIllustrationRequest,
   };
 }

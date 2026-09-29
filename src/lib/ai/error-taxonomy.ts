@@ -33,6 +33,15 @@ export const AI_ERROR_CODES = {
   QUESTION_COUNT_MISMATCH: "QUESTION_COUNT_MISMATCH",
   QUESTION_QUALITY_VALIDATION_FAILED: "QUESTION_QUALITY_VALIDATION_FAILED",
   QUESTION_QUALITY_UNCERTAIN: "QUESTION_QUALITY_UNCERTAIN",
+  PLAN_NOT_FOUND: "PLAN_NOT_FOUND",
+  PLAN_NOT_APPROVED: "PLAN_NOT_APPROVED",
+  STALE_APPROVAL: "STALE_APPROVAL",
+  INVALID_OUTLINE: "INVALID_OUTLINE",
+  INVALID_STYLE: "INVALID_STYLE",
+  INVALID_PARAMETERS: "INVALID_PARAMETERS",
+  MISSING_GROUNDING: "MISSING_GROUNDING",
+  PROVIDER_UNAVAILABLE: "PROVIDER_UNAVAILABLE",
+  GENERATION_FAILED: "GENERATION_FAILED",
 } as const;
 
 export type AiErrorCode = (typeof AI_ERROR_CODES)[keyof typeof AI_ERROR_CODES];
@@ -68,6 +77,15 @@ const USER_MESSAGES: Record<AiErrorCode, string> = {
   QUESTION_COUNT_MISMATCH: "Jumlah butir soal yang dihasilkan AI tidak sesuai dengan target yang diminta.",
   QUESTION_QUALITY_VALIDATION_FAILED: "Paket butir soal gagal memenuhi standar mutu semantik, ketepatan kunci, atau grounding materi sumber.",
   QUESTION_QUALITY_UNCERTAIN: "Sistem validasi tidak dapat memastikan kebenaran kunci jawaban berdasarkan materi sumber yang tersedia.",
+  PLAN_NOT_FOUND: "Rencana generasi materi ajar tidak ditemukan.",
+  PLAN_NOT_APPROVED: "Rencana generasi belum disetujui oleh guru. Harap setujui rencana terlebih dahulu.",
+  STALE_APPROVAL: "Persetujuan rencana generasi telah usang karena outline atau gaya visual telah diubah setelah persetujuan.",
+  INVALID_OUTLINE: "Struktur outline generasi materi tidak valid atau tidak memenuhi skema kanonikal.",
+  INVALID_STYLE: "Gaya visual yang dipilih tidak terdaftar dalam katalog atau tidak sesuai dengan target generasi.",
+  INVALID_PARAMETERS: "Parameter generasi gambar (resolusi, rasio aspek, atau jumlah gambar) tidak valid.",
+  MISSING_GROUNDING: "Konteks atau bukti materi rujukan tidak ditemukan untuk menyusun permintaan generasi.",
+  PROVIDER_UNAVAILABLE: "Layanan penyedia AI gambar saat ini tidak tersedia atau dalam pemeliharaan.",
+  GENERATION_FAILED: "Proses pembuatan generasi visual gagal dijalankan.",
 };
 
 export class AiServiceError extends Error {
@@ -95,7 +113,16 @@ export class AiServiceError extends Error {
         this.statusCode = 403;
         this.isRetryable = false;
         break;
+      case "PLAN_NOT_FOUND":
+        this.statusCode = 404;
+        this.isRetryable = false;
+        break;
+      case "STALE_APPROVAL":
+        this.statusCode = 409;
+        this.isRetryable = false;
+        break;
       case "INVALID_REQUEST":
+      case "INVALID_PARAMETERS":
       case "SOURCE_VALIDATION_ERROR":
       case "SOURCE_EMPTY":
       case "SOURCE_TOO_LARGE":
@@ -123,6 +150,10 @@ export class AiServiceError extends Error {
       case "QUESTION_COUNT_MISMATCH":
       case "QUESTION_QUALITY_VALIDATION_FAILED":
       case "QUESTION_QUALITY_UNCERTAIN":
+      case "PLAN_NOT_APPROVED":
+      case "INVALID_OUTLINE":
+      case "INVALID_STYLE":
+      case "MISSING_GROUNDING":
         this.statusCode = 422;
         this.isRetryable = false;
         break;
@@ -134,6 +165,11 @@ export class AiServiceError extends Error {
         this.statusCode = 504;
         this.isRetryable = true;
         break;
+      case "PROVIDER_UNAVAILABLE":
+        this.statusCode = 503;
+        this.isRetryable = true;
+        break;
+      case "GENERATION_FAILED":
       case "AI_PROVIDER_ERROR":
       default:
         this.statusCode = 502;
