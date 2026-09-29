@@ -1,6 +1,6 @@
-# Walkthrough Kemajuan Sistem AI GuruPro (AI-0 s/d AI-4F-A.1)
+# Walkthrough Kemajuan Sistem AI GuruPro (AI-0 s/d GEN-0)
 
-Dokumen ini menyajikan rincian lengkap mengenai seluruh arsitektur, kontrak kanonikal, keamanan kunci jawaban, pipeline pembuatan konteks grounding, mesin generasi butir soal, gerbang kendali mutu semantik berbasis AI, alur tinjauan/penyuntingan guru, fondasi publikasi bank soal, dan **stabilisasi integritas skema & publikasi (AI-4F-A.1)** pada sistem AI GuruPro.
+Dokumen ini menyajikan rincian lengkap mengenai seluruh arsitektur, kontrak kanonikal, keamanan kunci jawaban, pipeline pembuatan konteks grounding, mesin generasi butir soal, gerbang kendali mutu semantik berbasis AI, alur tinjauan/penyuntingan guru, fondasi publikasi bank soal, stabilisasi integritas skema (AI-4F-A.1), dan **fondasi perencanaan generasi (GEN-0 — Generation Planning Foundation)** pada sistem AI GuruPro.
 
 ---
 
@@ -24,144 +24,142 @@ Dokumen ini menyajikan rincian lengkap mengenai seluruh arsitektur, kontrak kano
 | **AI-4D** | *Question Quality Validation* (Gerbang Kendali Mutu Semantik 3-Lapis: Hard Rules Deterministik, Evaluator Semantik LLM, Decision Engine Non-Numerik PASS/REVISE/REJECT, Bounded 1-Shot Correction Retry, Preservasi Nilai Eksak, Deteksi Duplikasi Jaccard, Invarian Persistensi Draf, Pemisahan Kunci Jawaban Siswa) | **SELESAI** | Lulus Verifikasi (30/30 Tests) |
 | **AI-4E** | *Teacher Question Review / Edit / Save* (Antarmuka Peninjauan Draf Guru Terverifikasi, Penyuntingan Pilihan Ganda 4 Opsi Distinct & Kunci A-D, Penyuntingan Esai Rubrik >= 10 Chars, Preservasi Provenance AI & Temuan AI-4D, Pelacakan `teacherEdited` Tingkat Soal & Paket, Strict Draft Invariant, Concurrency Protection `expectedUpdatedAt`, Mesin Status Dirty/Saving/Saved/Error, Isolasi Keamanan Siswa `toStudentSafeQuestion`) | **SELESAI** | Lulus Verifikasi (26/26 Tests) |
 | **AI-4F-A** | *Question Bank Publish Foundation* (Kontrak Kanonikal Kelayakan Publikasi Server-Side, Transisi Atomik Status Draft ke Terbit, Penegakan Otorisasi Guru Terverifikasi & Kepemilikan Tenant, Invarian Anti-Reject AI-4D, Integritas Grounding & Anti-Dangling, Proteksi Double-Publish & Arsip, Preservasi Provenance Audit `publishedAt` & `publishedBy`, Segregasi Kunci Jawaban `StudentSafeQuestion`) | **SELESAI** | Lulus Verifikasi (23/23 Tests) |
-| **AI-4F-A.1** | *Environment, Schema & Publish Integrity Stabilization* (Rekonsiliasi Drift Skema Supabase, Perbaikan Tipe ID Snapshot TEXT PK, Two-Tier Snapshot Storage L1+L2, Eliminasi Silent Delete Metadata, Penutupan Bypass Klien Publikasi, Trigger Database Guard Transisi Terbit, Perbaikan TS Store & Route, 10 Cek Dedicated) | **SELESAI** | **LULUS VERIFIKASI (10/10 TESTS, 35/35 SUITES 100% PASS)** |
-| **Tahap Berikutnya** | AI-4F-B: Teacher Question Bank UI Redesign | **MENUNGGU** | Berhenti Sesuai Perintah Khusus (Strict Stop) |
+| **AI-4F-A.1** | *Environment, Schema & Publish Integrity Stabilization* (Rekonsiliasi Drift Skema Supabase, Perbaikan Tipe ID Snapshot TEXT PK, Two-Tier Snapshot Storage L1+L2, Eliminasi Silent Delete Metadata, Penutupan Bypass Klien Publikasi, Trigger Database Guard Transisi Terbit, Perbaikan TS Store & Route, 10 Cek Dedicated) | **SELESAI** | Lulus Verifikasi (10/10 Tests) |
+| **GEN-0** | *Generation Planning Foundation* (Fondasi Perencanaan Bersama Ilustrasi & PPT AI, Kontrak Kanonikal Outline, 5-Langkah Siklus Hidup, 7 Preset Gaya Ilustrasi, 6 Preset Gaya PPT, Gerbang Persetujuan Guru, Kebijakan Pembatalan Otomatis, Spesifikasi Otorisasi, UI Panel Modul Editor Tab 4 & 5, Invarian Non-Generasi & Nol Biaya) | **SELESAI** | **LULUS VERIFIKASI (36/36 TESTS, 36/36 SUITES 100% PASS)** |
+| **Tahap Berikutnya** | VIS-1: AI Illustration Generation / PPT-1: AI PPT Generation | **MENUNGGU** | Berhenti Sesuai Perintah Khusus (Strict Stop — Non-Generation Invariant) |
 
 > [!IMPORTANT]
-> **Status Kelulusan Tahap AI-4F-A.1**:
-> **`AI-4F-A.1 STABILIZATION COMPLETE — ALL 35 TEST SUITES PASSING (0 REGRESSIONS)`**
+> **Status Kelulusan Tahap GEN-0**:
+> **`GEN-0 GENERATION PLANNING FOUNDATION COMPLETE — ALL 36 TEST SUITES PASSING (0 REGRESSIONS)`**
 > 
-> Tahap stabilisasi lingkungan, skema database, persistensi snapshot, dan integritas publikasi telah diselesaikan dan terverifikasi secara penuh:
-> 1. Ingesti snapshot materi kini tersimpan deterministik pada L1 (Memory) dan L2 (Supabase `ai_source_snapshots`), bertahan melintasi restart server.
-> 2. Seluruh fallback diam (*silent deletion*) `delete payload.ai_metadata` telah dihapus total; kegagalan skema kini gagal tertutup (*fail-closed*) secara eksplisit dengan galat `PERSISTENCE_ERROR`.
-> 3. Alur publikasi sisi klien via `updatePaket({ status: "Terbit" })` diblokir total, dialihkan ke satu-satunya jalur otoritatif server `publishQuestionPackageServerFn` dan dikunci oleh trigger database `guard_paket_soal_publish_transition()`.
-> 4. Seluruh 35 test suites sistem (termasuk 10 cek baru pada `publish-integrity-stabilization.test.mjs`) lulus 100%, dan kompilasi build produksi Vite/Nitro berhasil tanpa galat.
+> Tahap fondasi perencanaan generasi ilustrasi dan presentasi (PPT) telah diselesaikan dan terverifikasi secara penuh:
+> 1. Kontrak kanonikal dan validasi outline ilustrasi & slide PPT deterministik tanpa panggilan API berbiaya.
+> 2. Sistem katalog gaya visual bersama (7 preset ilustrasi + 6 preset presentasi) dengan validasi kecocokan target.
+> 3. Mesin status persetujuan guru (Approval Gate) dengan kebijakan pembatalan otomatis (*auto-revocation*) saat terjadi edit outline atau pergantian gaya.
+> 4. Penerbitan spesifikasi otorisasi generasi terstruktur (siap pakai untuk VIS-1 dan PPT-1) dengan proteksi anti-stale version.
+> 5. Panel UI interaktif 5-langkah terintegrasi pada Tab 4 (Ilustrasi AI) dan Tab 5 (PPT Otomatis) di `modul-editor.tsx` dengan tetap mempertahankan fitur generator mockup cepat serta unduh PDF/Word/PPT.
+> 6. Seluruh 36 test suites sistem (termasuk 36 skenario baru pada `generation-planning-foundation.test.mjs`) lulus 100%, dan kompilasi build produksi Vite/Nitro berhasil tanpa galat.
 
 ---
 
-## 2. Perubahan dan Stabilisasi Utama (AI-4F-A.1)
+## 2. Rincian Implementasi GEN-0 (Generation Planning Foundation)
 
 ```mermaid
 flowchart TD
-    subgraph Client["Aplikasi GuruPro (Browser)"]
-        UI["Tombol 'Terbitkan' (soal.tsx)"]
-        Store["soal-store.ts / publishPaket()"]
-        DirectUpdate["updatePaket({ status: 'Terbit' })"]
-    end
-
-    subgraph Server["Server Function & Invariants"]
-        ServerFn["publishQuestionPackageServerFn()"]
-        AuthCheck["Auth & Verified Guru Check"]
-        QualityCheck["AI-4D Non-Reject Check"]
-        CanonicalCheck["Canonical Schema & Evidence Check"]
-        AuditMeta["Attach publishedAt & publishedBy"]
-    end
-
-    subgraph Database["Supabase Cloud"]
-        Trigger["Trigger: guard_paket_soal_publish_transition()"]
-        PaketTable[("public.paket_soal\n(ai_metadata JSONB)")]
-        SnapshotTable[("public.ai_source_snapshots\n(id TEXT PRIMARY KEY)")]
-    end
-
-    UI -->|Async Await + Toast| Store
-    Store -->|Delegasi Otoritatif| ServerFn
-    DirectUpdate -.->|BLOCKED BY CODE| DirectUpdate
-    ServerFn --> AuthCheck --> QualityCheck --> CanonicalCheck --> AuditMeta --> Trigger --> PaketTable
-    DirectUpdate -.->|BLOCKED BY TRIGGER| Trigger
+    Modul["Modul Ajar (Grounded)"] -->|Grounded Extraction| Step1["[Langkah 1] Draf Outline Awal (v1)"]
+    Step1 --> Step2["[Langkah 2] Tinjau & Edit Guru (v2, v3...)"]
+    Step2 --> Step3["[Langkah 3] Pilih Gaya Visual (7 Presets / 6 Presets)"]
+    Step3 --> Step4{"[Langkah 4] Gerbang Persetujuan Guru"}
+    Step4 -->|Ditolak/Belum Siap| Step2
+    Step4 -->|Disetujui Guru| Step5["[Langkah 5] Spesifikasi Otorisasi Generasi"]
+    Step5 --> Locked["Siap untuk Eksekusi Generasi (VIS-1 / PPT-1)"]
+    
+    Step2 -.->|Edit Outline Pasca-Setuju| Revoke["Persetujuan Dicabut Otomatis"] --> Step4
+    Step3 -.->|Ganti Gaya Pasca-Setuju| Revoke
 ```
 
-### 2.1 Rekonsiliasi Drift Skema Supabase
-1. **Perbaikan Tipe Kolom ID Snapshot**:
-   - Berkas `supabase/migrations/20260926150000_ai_foundation_and_grounding.sql` sebelumnya mendefinisikan kolom `id UUID`. Karena kode kanonikal menghasilkan ID berbasis string berformat `src_[hash24]`, kolom diselaraskan menjadi `id TEXT PRIMARY KEY`.
-2. **Migrasi Stabilisasi Baru**:
-   - Dibuat `supabase/migrations/20260929100000_ai_publish_and_schema_stabilization.sql` yang secara idempoten:
-     - Membuat tabel `public.ai_source_snapshots` lengkap dengan RLS dan indeks multi-tenant `user_id`.
-     - Menambahkan kolom `ai_metadata JSONB DEFAULT NULL` pada `public.moduls` dan `public.paket_soal` dengan indeks GIN.
-     - Membuat fungsi trigger PostgreSQL `guard_paket_soal_publish_transition()` dan mendaftarkannya pada tabel `public.paket_soal`.
-
-### 2.2 Two-Tier Source Snapshot Storage (L1 + L2)
-- **Implementasi**: Disempurnakan pada `src/lib/ai/source-ingestion.ts`, `src/lib/ai/retriever.ts`, dan `src/lib/sumber.functions.ts`.
-- **Alur Kerja**:
-  - `ingestSource`: Menyimpan ke L1 memory cache dan melakukan persistensi ke tabel `ai_source_snapshots` di Supabase.
-  - `getPersistedSourceSnapshot`: Memeriksa L1 cache; jika terjadi restart server atau cache eviction, secara otomatis mengambil snapshot dari Supabase dan memulihkannya kembali ke memori L1.
-  - `listTeacherSourcesServerFn`: Mengambil snapshot dari L1 + L2, memastikan daftar "Materi Tersimpan" tetap utuh dan tersedia setelah server restart.
-  - **Isolasi Multi-Tenant**: Pemeriksaan kepemilikan `userId` ditegakkan secara ketat pada pemanggilan L1 maupun L2.
-
-### 2.3 Penghapusan Silent Metadata Fallbacks
-- Dihapus seluruh blok fallback yang diam-diam membuang metadata:
-  - `src/lib/ai.functions.ts`: Dihapus pada `generateModulAjarServerFn`, `saveModulDraftServerFn`, dan `publishModulServerFn`.
-  - `src/lib/ai/question-generator.ts`: Dihapus pada `generateGroundedQuestions`.
-  - `src/lib/modul-store.ts`: Dihapus pada `saveModul`.
-- **Invarian**: Jika terjadi kendala persistensi pada database, sistem segera melempar galat `AiServiceError(AI_ERROR_CODES.PERSISTENCE_ERROR, ...)` secara eksplisit dan tidak pernah menghapus metadata provenance.
-
-### 2.4 Penutupan Bypass Publikasi Klien
-- **`src/lib/soal-store.ts`**:
-  - Fungsi `updatePaket(id, patch)` memvalidasi bahwa `patch.status !== "Terbit"`. Jika klien mencoba melakukan update langsung ke status `'Terbit'`, galat dilempar seketika.
-  - Fungsi `publishPaket(id)` secara penuh mengimpor dan mendelegasikan alur ke server function `publishQuestionPackageServerFn({ data: { paketId: id } })`.
-- **`src/routes/soal.tsx`**:
-  - Tombol "Terbitkan" kini memanggil `await publishPaket(paket.id)` dalam blok `try/catch`.
-  - Kesalahan validasi atau otorisasi dari server ditampilkan dengan tepat melalui `toast.error(err.message)`, menggantikan perilaku lama yang menampilkan *success toast* palsu secara tanpa syarat.
-
-### 2.5 Perbaikan Tipe & Kompatibilitas TypeScript
-- Memperbaiki tipe `kelasId?: string | undefined` pada `src/lib/modul-types.ts` dan tipe opsional pada `src/lib/soal-types.ts` untuk mematuhi konfigurasi compiler `exactOptionalPropertyTypes: true`.
-- Menangani pengecekan *indexed access* pada `draftSoal[i]` di `src/routes/soal.tsx`.
-- Menghapus kurung kurawal penutup liar pada `src/lib/modul-store.ts`.
+### 2.1 Berkas Baru & Modifikasi
+1. **`src/lib/ai/generation-planning-contract.ts`**: Kontrak kanonikal Zod (`IllustrationOutline`, `PresentationOutline`, `GenerationStyle`, `GenerationPlan`, `GenerationPlanVersion`, `GenerationSpecification`), 7 preset gaya ilustrasi, 6 preset gaya presentasi, validasi kontinuitas urutan slide 1..N.
+2. **`src/lib/ai/generation-planning-service.ts`**: Ekstraksi outline ter-grounding dari Modul Ajar tanpa API berbiaya, manipulasi slide (add, remove, reorder, update), siklus hidup versi (v1 -> v2), gerbang persetujuan dan pencabutan otomatis.
+3. **`supabase/migrations/20260929110000_generation_planning_foundation.sql`**: Tabel `generation_styles`, `generation_plans`, `generation_plan_versions` lengkap dengan RLS isolasi guru dan indeks unik.
+4. **`src/lib/generation-planning.functions.ts`**: TanStack Start server functions aman (`createGenerationPlanServerFn`, `getGenerationPlanServerFn`, `updateGenerationPlanServerFn`, `selectPlanStyleServerFn`, `approveGenerationPlanServerFn`, `revokeApprovalServerFn`, `listAvailableStylesServerFn`, `getGenerationSpecificationServerFn`).
+5. **`src/lib/generation-planning-store.ts`**: Client React hook `useGenerationPlan` reaktif.
+6. **`src/components/generation-planning-panel.tsx`**: Komponen UI interaktif `IllustrationPlanningPanel` dan `PresentationPlanningPanel`.
+7. **`src/components/modul-editor.tsx`**: Pemasangan panel perencanaan di Tab 4 (Ilustrasi) dan Tab 5 (PPT) dengan fitur lama tetap berfungsi.
+8. **`tests/ai/generation-planning-foundation.test.mjs`**: 36 skenario pengujian komprehensif.
+9. **`docs/GEN-0-GENERATION-PLANNING-FOUNDATION.md`**: Dokumentasi teknis & arsitektur lengkap.
 
 ---
 
 ## 3. Hasil Pengujian & Verifikasi
 
-### 3.1 Suite Pengujian Stabilisasi Khusus (`publish-integrity-stabilization.test.mjs`)
-Dijalankan melalui `npx tsx tests/ai/publish-integrity-stabilization.test.mjs`:
+### 3.1 Suite Pengujian Khusus GEN-0 (`generation-planning-foundation.test.mjs`)
+Dijalankan melalui `npx tsx tests/ai/generation-planning-foundation.test.mjs`:
 
 ```text
 ================================================================================
-  GURUPRO TEST SUITE: AI-4F-A.1 PUBLISH & SCHEMA INTEGRITY STABILIZATION        
+  GURUPRO TEST SUITE: GEN-0 GENERATION PLANNING FOUNDATION                      
 ================================================================================
 
---- Section 1: Two-Tier Snapshot Persistence (L1 Memory + L2 DB) ---
-  • Snapshot ingested is retrieved from memory and persists to simulated L2 ... ✓ PASS
-  • Snapshot survives L1 cache eviction by fetching from L2 Supabase table ... ✓ PASS
-  • Cross-tenant snapshot access is strictly denied (User B cannot read User A's snapshot) ... ✓ PASS
+--- Section 1: Illustration Outline Contract Validation ---
+  • Valid illustration outline passes validation ... ✓ PASS
+  • Rejects illustration outline with empty or short title ... ✓ PASS
+  • Rejects illustration outline with missing mainSubject ... ✓ PASS
+  • Rejects illustration outline with short objective (< 5 chars) ... ✓ PASS
 
---- Section 2: Strict ai_metadata Preservation ---
-  • ai_metadata schema error causes loud PERSISTENCE_ERROR instead of silent drop ... ✓ PASS
+--- Section 2: Presentation Outline & Slide Contract Validation ---
+  • Valid presentation outline passes validation ... ✓ PASS
+  • Rejects presentation outline with 0 slides ... ✓ PASS
+  • Rejects presentation outline with non-continuous slide numbers ... ✓ PASS
+  • Rejects slide with empty key points ... ✓ PASS
 
---- Section 3: Client-Side Publish Bypass Elimination ---
-  • Direct updatePaket with status: 'Terbit' throws authoritative publication error ... ✓ PASS
-  • Database publish guard rejects direct update of status to 'Terbit' outside server function ... ✓ PASS
+--- Section 3: Slide Manipulation Operations ---
+  • addSlideToPresentationOutline appends slide with sequential order ... ✓ PASS
+  • removeSlideFromPresentationOutline removes slide and reindexes remaining slides ... ✓ PASS
+  • removeSlideFromPresentationOutline fails when trying to remove the only slide ... ✓ PASS
+  • reorderSlidesInPresentationOutline reorders slides and enforces continuous 1..N order ... ✓ PASS
+  • reorderSlidesInPresentationOutline rejects mismatched slide IDs ... ✓ PASS
+  • updateSlideInPresentationOutline updates properties of target slide ... ✓ PASS
 
---- Section 4: Authoritative Publish Eligibility & Quality Guards ---
-  • AI-4D REJECT question package cannot be published (throws QUESTION_QUALITY_VALIDATION_FAILED) ... ✓ PASS
-  • Valid Draft package by verified owner Guru passes eligibility ... ✓ PASS
+--- Section 4: Style System & Presets Invariants ---
+  • Illustration style catalog contains exactly 7 predefined presets ... ✓ PASS
+  • Presentation style catalog contains exactly 6 predefined presets ... ✓ PASS
+  • getStyleById retrieves style or returns undefined for unknown ID ... ✓ PASS
 
---- Section 5: Legacy Compatibility & Student Safety ---
-  • Legacy packages without ai_metadata can be published if structurally valid ... ✓ PASS
-  • StudentSafeQuestion projection strictly strips answers, rubrics, and internal evidence ... ✓ PASS
+--- Section 5: Grounded Initial Plan Generation ---
+  • generateInitialIllustrationOutline grounds on specific section and modul metadata ... ✓ PASS
+  • generateInitialPresentationOutline generates grounded slide sequence for whole modul ... ✓ PASS
+  • createInitialPlan initializes valid plan with initial version 1 and ready status ... ✓ PASS
+  • createInitialPlan rejects invalid outline ... ✓ PASS
+
+--- Section 6: Version Lifecycle & Immutable Snapshots ---
+  • applyOutlineEdits increments version from v1 to v2 with immutable snapshot ... ✓ PASS
+  • applyOutlineEdits rejects non-owner teacher ... ✓ PASS
+
+--- Section 7: Approval Gate & State Machine ---
+  • applyPlanApproval transitions plan to approved and locks approvedVersion ... ✓ PASS
+  • applyPlanApproval fails if style is not selected or invalid ... ✓ PASS
+  • applyPlanApproval fails if caller is not the owner teacher ... ✓ PASS
+  • applyPlanApproval fails if caller is student ... ✓ PASS
+  • applyPlanApprovalRevocation unlocks approved plan back to ready ... ✓ PASS
+
+--- Section 8: Automatic Approval Invalidation Policy ---
+  • Editing outline on approved plan automatically revokes approval (status -> ready) ... ✓ PASS
+  • Changing visual style on approved plan automatically revokes approval ... ✓ PASS
+  • Selecting invalid style ID or mismatched target type is rejected ... ✓ PASS
+
+--- Section 9: Generation Authorization & Consumable Specification ---
+  • createGenerationSpecification succeeds for fully approved current plan ... ✓ PASS
+  • createGenerationSpecification creates valid 16:9 presentation spec ... ✓ PASS
+  • createGenerationSpecification fails if plan is not in approved status ... ✓ PASS
+  • createGenerationSpecification fails if approvedVersion is stale (stale approval invariant) ... ✓ PASS
+
+--- Section 10: Non-Generation & Cost-Control Invariant ---
+  • Planning, editing, and authorization execute strictly without external image/PPT APIs ... ✓ PASS
 
 ================================================================================
-  AI-4F-A.1 STABILIZATION TEST SUMMARY: 10 passed, 0 failed
+  GEN-0 TEST SUMMARY: 36 PASSED, 0 FAILED
 ================================================================================
 ```
 
 ### 3.2 Eksekusi Penuh Seluruh Suite Pengujian Sistem (`npm test`)
-Seluruh 35 test suites sistem dieksekusi secara otomatis dan lulus 100%:
+Seluruh 36 test suites sistem dieksekusi secara otomatis dan lulus 100%:
 - Keamanan & Remediasi: `security.test.mjs`, `remediation.test.mjs` (LULUS)
 - Peran & Otorisasi: `auth-role.test.mjs`, `dashboard-roles.test.mjs`, `admin-operations.test.mjs` (LULUS)
 - Domain Inti: `kelas-membership.test.mjs`, `mapel-kelas-sync.test.mjs`, `tahun-ajaran-context.test.mjs`, `penugasan.test.mjs`, `kkm-remedial.test.mjs`, `submission.test.mjs`, `penilaian.test.mjs`, `rekap-nilai.test.mjs`, `persistence-integrity.test.mjs`, `export-archive.test.mjs`, `core-system-gate.test.mjs` (LULUS)
 - AI Grounding & Fondasi: `ai-foundation.test.mjs`, `ai-retrieval-validation.test.mjs`, `ai-final-gate.test.mjs` (LULUS)
 - Pipeline Modul Ajar AI: `modul-generation-contract.test.mjs`, `modul-grounding-context.test.mjs`, `modul-ai-generation.test.mjs`, `modul-quality-validation.test.mjs`, `modul-ui-flow.test.mjs`, `modul-teacher-review.test.mjs`, `modul-publish-workflow.test.mjs`, `modul-e2e-quality-gate.test.mjs` (LULUS)
-- Pipeline Paket Soal AI: `question-contract.test.mjs`, `question-grounding-context.test.mjs`, `question-generation.test.mjs` (28/28 LULUS), `question-quality-validation.test.mjs` (30/30 LULUS), `question-teacher-review.test.mjs` (26/26 LULUS), `question-bank-publishing.test.mjs` (23/23 LULUS)
-- Stabilisasi AI-4F-A.1: `publish-integrity-stabilization.test.mjs` (10/10 LULUS)
+- Pipeline Paket Soal AI: `question-contract.test.mjs`, `question-grounding-context.test.mjs`, `question-generation.test.mjs`, `question-quality-validation.test.mjs`, `question-teacher-review.test.mjs`, `question-bank-publishing.test.mjs`, `publish-integrity-stabilization.test.mjs` (LULUS)
+- **Fondasi Perencanaan Generasi GEN-0: `generation-planning-foundation.test.mjs` (36/36 LULUS)**
 
 ### 3.3 Kompilasi Build Produksi (`npx vite build`)
-- Berhasil mengompilasi bundel klien dan SSR TanStack Start/Nitro tanpa galat dalam durasi 823ms.
-- Seluruh 16 berkas perubahan telah ter-commit rapi pada git cabang `main` (`b9656ec`) dan tersinkronisasi ke *secondary workspace*.
+- Berhasil mengompilasi bundel klien dan SSR TanStack Start/Nitro tanpa galat dalam durasi 729ms.
 
 ---
 
 ## 4. Batasan & Kepatuhan Prosedural
 
 Sesuai instruksi khusus:
-- Pekerjaan dibatasi secara ketat hanya pada **AI-4F-A.1 — Environment, Schema & Publish Integrity Stabilization**.
-- **AI-4F-B (Redesain UI Bank Soal) TIDAK DIIMPLEMENTASIKAN** pada tahap ini dan menunggu instruksi selanjutnya dari pengguna.
+- Pekerjaan dibatasi secara ketat hanya pada **GEN-0 — Generation Planning Foundation**.
+- **Generasi gambar AI nyata (VIS-1) dan generasi berkas PPTX nyata (PPT-1) TIDAK DIIMPLEMENTASIKAN** pada tahap ini.
+- Sistem berhenti di sini untuk peninjauan dan persetujuan pengguna sebelum melangkah ke tahap selanjutnya.

@@ -54,6 +54,7 @@ import { validateTeacherDraftEdit } from "@/lib/ai/modul-contract";
 import { supabase } from "@/integrations/supabase/client";
 import { isRecoverableAuthError, withAuthRetry } from "@/integrations/supabase/auth-token";
 import { uid } from "@/lib/cloud-store";
+import { IllustrationPlanningPanel, PresentationPlanningPanel } from "@/components/generation-planning-panel";
 
 const INSTRUKSI_MODUL = [
   "Buat bahasa lebih sederhana",
@@ -1209,11 +1210,18 @@ export function ModulEditor({
         </TabsContent>
 
         {/* TAB 4: ILUSTRASI AI */}
-        <TabsContent value="ilustrasi" className="mt-4 grid gap-4">
+        <TabsContent value="ilustrasi" className="mt-4 grid gap-6">
+          {/* GEN-0: Shared Planning & Approval Layer */}
+          <IllustrationPlanningPanel
+            moduleId={modul.id}
+            moduleTitle={modul.judul}
+          />
+
+          {/* Quick Mockup & Export Tools (Existing Feature Preserved) */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="font-display text-base text-navy">
-                Ilustrasi Modul dengan AI
+                Generator Cepat & Pratinjau Ilustrasi Sederhana
               </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 pt-0">
@@ -1307,10 +1315,19 @@ export function ModulEditor({
         </TabsContent>
 
         {/* TAB 5: PPT OTOMATIS */}
-        <TabsContent value="ppt" className="mt-4 grid gap-4">
+        <TabsContent value="ppt" className="mt-4 grid gap-6">
+          {/* GEN-0: Shared Planning & Approval Layer */}
+          <PresentationPlanningPanel
+            moduleId={modul.id}
+            moduleTitle={modul.judul}
+          />
+
+          {/* Quick Slides & Export Tools (Existing Feature Preserved) */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="font-display text-base text-navy">Buat PPT Otomatis</CardTitle>
+              <CardTitle className="font-display text-base text-navy">
+                Generator Cepat & Pratinjau Slide Sederhana
+              </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 pt-0">
               <p className="text-sm text-muted-foreground">
