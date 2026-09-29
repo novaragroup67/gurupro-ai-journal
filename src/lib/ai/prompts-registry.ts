@@ -63,7 +63,7 @@ Tugas Anda: Susun Modul Ajar lengkap dalam format JSON yang valid sesuai skema k
   },
   "asesmen": {"kriteria": string[], "teknik": string, "instrumen": string},
   "catatanKeterbatasan"?: string,
-  "evidenceRefs": [{"sourceId": string, "chunkId"?: string, "sourceTitle"?: string, "snippet"?: string, "status": "SUPPORTED" | "INFERRED" | "NOT_FOUND"}]
+  "evidenceRefs": [{"evidenceId"?: string, "sourceId": string, "chunkId"?: string, "sourceTitle"?: string, "snippet"?: string, "status": "SUPPORTED" | "INFERRED" | "NOT_FOUND"}]
 }`,
   },
 

@@ -287,6 +287,7 @@ export type ModulGroundingContext = z.infer<typeof ModulGroundingContextSchema>;
 export const GroundingStatusSchema = z.enum(["SUPPORTED", "INFERRED", "NOT_FOUND"]);
 
 export const GroundingEvidenceRefSchema = z.object({
+  evidenceId: z.string().optional(),
   sourceId: z.string().min(1),
   chunkId: z.string().optional(),
   sourceTitle: z.string().optional(),
@@ -618,28 +619,52 @@ export function validateGroundedModulAjarOutput(output: unknown): GroundedModulA
   const evidenceStatusMap = new Map<string, GroundingStatus>();
 
   for (const ref of data.evidenceRefs) {
+    if (ref.evidenceId) {
+      validEvidenceIds.add(ref.evidenceId);
+      evidenceStatusMap.set(ref.evidenceId, ref.status);
+    }
     if (ref.chunkId) {
       validEvidenceIds.add(ref.chunkId);
       evidenceStatusMap.set(ref.chunkId, ref.status);
     }
     if (ref.sourceId) {
       validEvidenceIds.add(ref.sourceId);
-      if (!ref.chunkId) {
+      if (!ref.chunkId && !ref.evidenceId) {
         evidenceStatusMap.set(ref.sourceId, ref.status);
       }
     }
   }
 
+  const isEvidenceKnown = (eid: string): boolean => {
+    if (validEvidenceIds.has(eid)) return true;
+    for (const validId of validEvidenceIds) {
+      if (eid.startsWith("ev_") && (eid.includes(validId) || validId.includes(eid))) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const getStatusForEvidence = (eid: string): GroundingStatus | undefined => {
+    if (evidenceStatusMap.has(eid)) return evidenceStatusMap.get(eid);
+    for (const [validId, status] of evidenceStatusMap.entries()) {
+      if (eid.startsWith("ev_") && (eid.includes(validId) || validId.includes(eid))) {
+        return status;
+      }
+    }
+    return undefined;
+  };
+
   // Verify objectives grounding & reference integrity
   for (const obj of data.tujuanPembelajaran) {
     for (const eid of obj.evidenceIds) {
-      if (!validEvidenceIds.has(eid)) {
+      if (!isEvidenceKnown(eid)) {
         throw new AiServiceError(
           AI_ERROR_CODES.GROUNDING_FAILED,
           `Referensi bukti "${eid}" pada tujuan pembelajaran "${obj.id}" tidak ditemukan dalam daftar evidenceRefs.`,
         );
       }
-      const refStatus = evidenceStatusMap.get(eid);
+      const refStatus = getStatusForEvidence(eid);
       if (refStatus === "NOT_FOUND" && obj.status === "SUPPORTED") {
         throw new AiServiceError(
           AI_ERROR_CODES.GROUNDING_FAILED,
@@ -652,13 +677,13 @@ export function validateGroundedModulAjarOutput(output: unknown): GroundedModulA
   // Verify sections grounding & reference integrity
   for (const sec of data.sections) {
     for (const eid of sec.evidenceIds) {
-      if (!validEvidenceIds.has(eid)) {
+      if (!isEvidenceKnown(eid)) {
         throw new AiServiceError(
           AI_ERROR_CODES.GROUNDING_FAILED,
           `Referensi bukti "${eid}" pada bab "${sec.judul}" tidak ditemukan dalam daftar evidenceRefs.`,
         );
       }
-      const refStatus = evidenceStatusMap.get(eid);
+      const refStatus = getStatusForEvidence(eid);
       if (refStatus === "NOT_FOUND" && sec.status === "SUPPORTED") {
         throw new AiServiceError(
           AI_ERROR_CODES.GROUNDING_FAILED,

@@ -135,7 +135,7 @@ export async function retrieveSourceContext(query: RetrievalQuery): Promise<Retr
     const { keywords, phrase } = extractSignificantKeywords(rawQuery);
 
     const scored = allChunks.map((chunk) => {
-      const lower = chunk.content.toLowerCase();
+      const lower = (chunk.content || (chunk as any).text || "").toLowerCase();
       const titleLower = (chunk.title || "").toLowerCase();
       let score = 0;
 
