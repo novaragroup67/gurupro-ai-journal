@@ -58,7 +58,12 @@ const files = [
   "src/integrations/supabase/client.ts",
   "src/integrations/supabase/client.server.ts",
   "src/server.ts",
-  "tests/auth/auth-role.test.mjs"
+  "tests/auth/auth-role.test.mjs",
+  "src/components/modul-generator-dialog.tsx",
+  "src/lib/ai/grounding.ts",
+  "src/lib/ai/modul-context-builder.ts",
+  "src/lib/ai/question-context-builder.ts",
+  "src/lib/ai/source-normalizer.ts"
 ];
 
 for (const file of files) {

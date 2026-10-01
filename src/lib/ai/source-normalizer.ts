@@ -52,6 +52,18 @@ export function normalizeHtmlContent(html: string): { normalized: string; title?
     title = decodeHtmlEntities(titleTagMatch[1]).trim();
   }
 
+  if (title) {
+    title = title
+      .replace(/\s*[-–—|]\s*(Wikipedia|Ensiklopedia Bebas|Kompas\.com|Detikcom|Tribunnews|CNN Indonesia|Kumparan|Merdeka).*$/gi, "")
+      .replace(/\s*[-–—|]\s*Wikipedia bahasa Indonesia, ensiklopedia bebas$/gi, "")
+      .replace(/\s*[-–—|]\s*Wikipedia, the free encyclopedia$/gi, "")
+      .replace(/\s*[-–—|]\s*official website$/gi, "")
+      .replace(/\s*[-–—|]\s*halaman utama$/gi, "")
+      .replace(/^Welcome to\s+/i, "")
+      .replace(/\s*[-–—|]\s*Home$/gi, "")
+      .trim();
+  }
+
   // Remove block tags
   for (const tag of REMOVABLE_HTML_TAGS) {
     cleaned = cleaned.replace(new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?</${tag}>`, "gi"), " ");

@@ -30,7 +30,7 @@ import {
 import { detectSourceConflicts } from "./modul-context-builder";
 import { retrieveSourceContext, type ScoredChunk } from "./retriever";
 import { getCachedSourceSnapshot } from "./source-ingestion";
-import { evaluateGroundingAgainstSource } from "./grounding";
+import { evaluateGroundingAgainstSource, cleanClaimOrTopicText } from "./grounding";
 import type { AiSourceSnapshot } from "./types";
 
 export const CANONICAL_QUESTION_CONTEXT_VERSION = "1.0.0";
@@ -142,7 +142,7 @@ export function buildQuestionDeterministicQueries(
   input: QuestionGroundingInput,
   options?: BuildQuestionContextOptions,
 ): QuestionRetrievalQueryBundle {
-  const cleanTopik = input.topik.trim();
+  const cleanTopik = cleanClaimOrTopicText(input.topik).trim() || input.topik.trim();
   const cleanMapel = input.mapel?.trim() || "";
 
   // 1. Factual Core Query: Focuses on definitions, core concepts, specifications, and parameters
@@ -351,8 +351,9 @@ export async function buildQuestionGroundingContext(
     const snapshot = loadedSnapshots[sourceIdx];
 
     // 6A. Verify core topic grounding using AI-1 grounding verification
+    const cleanedTopic = cleanClaimOrTopicText(input.topik).trim() || input.topik;
     const groundingEval = evaluateGroundingAgainstSource({
-      claim: input.topik,
+      claim: cleanedTopic,
       sourceChunks: snapshot.chunks || [],
       sourceId: snapshot.id,
       sourceTitle: snapshot.sourceTitle,

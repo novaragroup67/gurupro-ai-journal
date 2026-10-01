@@ -34,7 +34,45 @@ export const EDUCATIONAL_SYNONYMS: Record<string, string[]> = {
   otomotif: ["kendaraan", "mesin"],
   standar: ["default", "baku"],
   default: ["standar"],
+  pemrograman: ["programming", "program", "coding", "code", "software"],
+  programming: ["pemrograman", "program", "coding"],
+  bahasa: ["language"],
+  language: ["bahasa"],
+  komputer: ["computer", "computing"],
+  computer: ["komputer"],
+  perangkat: ["software", "device", "hardware"],
+  software: ["perangkat lunak", "aplikasi", "program"],
+  "perangkat lunak": ["software", "aplikasi", "program"],
+  aplikasi: ["application", "app", "software"],
+  dasar: ["basic", "basics", "fundamental", "introduction", "intro"],
+  pengenalan: ["introduction", "intro", "overview", "getting started"],
+  sejarah: ["history", "evolution", "perkembangan", "latar belakang"],
+  history: ["sejarah", "perkembangan"],
+  instalasi: ["installation", "setup", "install"],
+  variabel: ["variable", "variables"],
+  fungsi: ["function", "functions"],
+  perulangan: ["loop", "looping", "iteration"],
+  percabangan: ["branching", "conditional", "condition", "if-else"],
+  "struktur data": ["data structure", "data structures"],
+  "basis data": ["database", "data"],
+  database: ["basis data", "database"],
+  jaringan: ["network", "networking"],
+  network: ["jaringan"],
+  keamanan: ["security", "secure"],
 };
+
+export function cleanClaimOrTopicText(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/\s*[-–—|]\s*(Wikipedia|Ensiklopedia Bebas|Kompas\.com|Detikcom|Tribunnews|CNN Indonesia|Kumparan|Merdeka).*$/gi, "")
+    .replace(/\s*[-–—|]\s*Wikipedia bahasa Indonesia, ensiklopedia bebas$/gi, "")
+    .replace(/\s*[-–—|]\s*Wikipedia, the free encyclopedia$/gi, "")
+    .replace(/\s*[-–—|]\s*official website$/gi, "")
+    .replace(/\s*[-–—|]\s*halaman utama$/gi, "")
+    .replace(/^Welcome to\s+/i, "")
+    .replace(/\s*[-–—|]\s*Home$/gi, "")
+    .trim();
+}
 
 export interface GroundingCheckRequest {
   claim: string;
@@ -78,14 +116,17 @@ const COMMON_INDO_WORDS = new Set([
   "sistem", "perusahaan", "lakukan", "terdapat", "antara", "menggunakan", "memakai", "mencatat",
   "membayar", "pembagian", "perhitungan", "pencatatan", "metode", "aturan", "pengujian",
   "refleksi", "studi", "kelebihan", "keunggulan", "perbedaan", "standar", "protokol", "perutean",
-  "jurnal", "beban", "biaya", "aset", "nilai", "cara", "fungsi", "mesin", "komponen"
+  "jurnal", "beban", "biaya", "aset", "nilai", "cara", "fungsi", "mesin", "komponen",
+  "indonesia", "bahasa", "bebas", "ensiklopedia", "wikipedia", "web", "situs", "artikel",
+  "buku", "modul", "materi", "resmi", "official", "halaman", "utama", "home", "welcome"
 ]);
 
 /**
  * Extracts distinctive capitalized entities, acronyms, or proper nouns from the claim.
  */
 function extractDistinctiveEntities(claim: string): string[] {
-  const tokens = claim.match(/\b[A-Za-z0-9_-]+\b/g) || [];
+  const cleaned = cleanClaimOrTopicText(claim);
+  const tokens = cleaned.match(/\b[A-Za-z0-9_-]+\b/g) || [];
   const entities: string[] = [];
 
   for (let i = 0; i < tokens.length; i++) {
@@ -122,7 +163,7 @@ export function evaluateGroundingAgainstSource(
   req: GroundingCheckRequest,
 ): GroundingEvaluation {
   const { claim, sourceChunks } = req;
-  const cleanClaim = claim.trim().toLowerCase();
+  const cleanClaim = cleanClaimOrTopicText(claim).trim().toLowerCase();
 
   if (!cleanClaim) {
     return {

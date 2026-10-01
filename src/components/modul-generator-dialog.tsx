@@ -50,6 +50,19 @@ import {
   type TeacherSourceItem,
 } from "@/lib/sumber.functions";
 
+export function cleanTopicTitle(title: string): string {
+  if (!title) return "";
+  return title
+    .replace(/\s*[-–—|]\s*(Wikipedia|Ensiklopedia Bebas|Kompas\.com|Detikcom|Tribunnews|CNN Indonesia|Kumparan|Merdeka).*$/gi, "")
+    .replace(/\s*[-–—|]\s*Wikipedia bahasa Indonesia, ensiklopedia bebas$/gi, "")
+    .replace(/\s*[-–—|]\s*Wikipedia, the free encyclopedia$/gi, "")
+    .replace(/\s*[-–—|]\s*official website$/gi, "")
+    .replace(/\s*[-–—|]\s*halaman utama$/gi, "")
+    .replace(/^Welcome to\s+/i, "")
+    .replace(/\s*[-–—|]\s*Home$/gi, "")
+    .trim();
+}
+
 type SumberTipeWithExisting = SumberTipe | "Materi Tersimpan";
 
 const ALL_SUMBER_OPTIONS: SumberTipeWithExisting[] = [
@@ -206,7 +219,10 @@ export function ModulGeneratorDialog({
         () => analisisUrl({ data: { url: sumberInput.trim() } }),
       );
       setPreview(hasil);
-      if (!topik.trim()) setTopik(hasil.judul);
+      const cleanedTitle = cleanTopicTitle(hasil.judul);
+      if (!topik.trim()) {
+        setTopik(cleanedTitle);
+      }
       toast.success("Isi sumber berhasil dibaca dan diserap.");
       setStage("idle");
     } catch (error) {
@@ -505,12 +521,54 @@ export function ModulGeneratorDialog({
         ) : (
           <div className="grid gap-4 min-w-0">
             {errorMessage ? (
-              <div className="flex gap-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive min-w-0">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium">Proses Generasi Draf Belum Berhasil</p>
-                  <p className="mt-0.5 text-xs break-words">{errorMessage}</p>
+              <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive min-w-0">
+                <div className="flex gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">Proses Generasi Draf Belum Berhasil</p>
+                    <p className="mt-0.5 text-xs break-words">{errorMessage}</p>
+                  </div>
                 </div>
+
+                {(errorMessage.includes("tidak ditemukan atau tidak didukung") ||
+                  errorMessage.includes("INSUFFICIENT_EVIDENCE") ||
+                  errorMessage.includes("bukti yang cukup")) && (
+                  <div className="mt-2.5 pt-2 border-t border-destructive/20 text-xs">
+                    <p className="font-semibold text-destructive">Solusi Cepat Penyelarasan Materi:</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {preview?.judul && cleanTopicTitle(preview.judul) !== topik.trim() && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs bg-background text-foreground hover:bg-muted"
+                          onClick={() => {
+                            setTopik(cleanTopicTitle(preview.judul));
+                            setErrorMessage("");
+                            setStage("idle");
+                          }}
+                        >
+                          Gunakan Topik Sumber: &ldquo;{cleanTopicTitle(preview.judul).slice(0, 30)}{cleanTopicTitle(preview.judul).length > 30 ? "…" : ""}&rdquo;
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                          setSumberTipe("Teks");
+                          setSumberInput("");
+                          setPreview(null);
+                          setErrorMessage("");
+                          setStage("idle");
+                        }}
+                      >
+                        Ganti Sumber: Tempel Teks Materi
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : null}
 
@@ -720,7 +778,18 @@ export function ModulGeneratorDialog({
 
             <div className="grid gap-4 sm:grid-cols-3 min-w-0 pt-2 border-t">
               <div className="grid gap-2 sm:col-span-3 min-w-0">
-                <Label htmlFor="topik">Topik / Materi Pokok Pembelajaran</Label>
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <Label htmlFor="topik">Topik / Materi Pokok Pembelajaran</Label>
+                  {preview?.judul && cleanTopicTitle(preview.judul) !== topik.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setTopik(cleanTopicTitle(preview.judul))}
+                      className="text-xs text-primary hover:underline flex items-center gap-1 font-medium"
+                    >
+                      <span>Saran dari sumber: &ldquo;{cleanTopicTitle(preview.judul).slice(0, 30)}{cleanTopicTitle(preview.judul).length > 30 ? "…" : ""}&rdquo; (Gunakan)</span>
+                    </button>
+                  )}
+                </div>
                 <Input
                   id="topik"
                   value={topik}

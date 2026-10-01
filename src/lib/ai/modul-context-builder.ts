@@ -32,7 +32,7 @@ import {
 } from "./modul-contract";
 import { retrieveSourceContext, type ScoredChunk } from "./retriever";
 import { getCachedSourceSnapshot } from "./source-ingestion";
-import { evaluateGroundingAgainstSource } from "./grounding";
+import { evaluateGroundingAgainstSource, cleanClaimOrTopicText, EDUCATIONAL_SYNONYMS } from "./grounding";
 import type { AiSourceSnapshot } from "./types";
 
 export interface BuildContextOptions {
@@ -61,7 +61,7 @@ export function buildDeterministicQueries(
   input: ModulGenerationInput,
   options?: BuildContextOptions,
 ): RetrievalQueryBundle {
-  const cleanTopik = input.topik.trim();
+  const cleanTopik = cleanClaimOrTopicText(input.topik).trim() || input.topik.trim();
   const cleanMapel = input.mapel?.trim() || "";
 
   // Query A: Core Topic
@@ -197,7 +197,13 @@ function evaluateSectionCoverage(
         return false;
       }
       const lower = `${item.sectionTitle || ""} ${item.content}`.toLowerCase();
-      const hasWord = keywords.some((kw) => lower.includes(kw.toLowerCase()));
+      const hasWord = keywords.some((kw) => {
+        const k = kw.toLowerCase();
+        if (lower.includes(k)) return true;
+        const syns = EDUCATIONAL_SYNONYMS[k];
+        if (syns && syns.some((s) => lower.includes(s.toLowerCase()))) return true;
+        return false;
+      });
       return hasWord;
     });
 
@@ -212,21 +218,25 @@ function evaluateSectionCoverage(
     };
   }
 
+  const topicKeywords = cleanClaimOrTopicText(queryBundle.topicCoreQuery)
+    .split(/\s+/)
+    .filter((w) => w.length >= 3);
+
   return {
     topicMaterial: evaluateBucket(
-      queryBundle.topicCoreQuery.split(/\s+/).filter((w) => w.length >= 3),
+      topicKeywords.length > 0 ? topicKeywords : queryBundle.topicCoreQuery.split(/\s+/).filter((w) => w.length >= 3),
       0.35,
     ),
     learningObjectives: evaluateBucket(
-      ["tujuan", "capaian", "kompetensi", "konsep", "prinsip", "dasar", "memahami", "menjelaskan"],
+      ["tujuan", "capaian", "kompetensi", "konsep", "prinsip", "dasar", "memahami", "menjelaskan", "overview", "introduction"],
       0.35,
     ),
     activitiesProcedures: evaluateBucket(
-      ["langkah", "kegiatan", "praktik", "prosedur", "konfigurasi", "instalasi", "tahapan", "metode", "simulasi"],
+      ["langkah", "kegiatan", "praktik", "prosedur", "konfigurasi", "instalasi", "tahapan", "metode", "simulasi", "setup", "tutorial"],
       0.35,
     ),
     assessmentRubric: evaluateBucket(
-      ["asesmen", "penilaian", "kriteria", "evaluasi", "rubrik", "tugas", "soal", "formatif", "sumatif"],
+      ["asesmen", "penilaian", "kriteria", "evaluasi", "rubrik", "tugas", "soal", "formatif", "sumatif", "quiz", "test"],
       0.35,
     ),
   };
@@ -354,8 +364,9 @@ export async function buildModulGroundingContext(
     const snapshot = loadedSnapshots[sourceIdx];
 
     // 5A. Check core topic match first using AI-1 grounding verification & retrieval
+    const cleanedTopic = cleanClaimOrTopicText(input.topik).trim() || input.topik;
     const groundingEval = evaluateGroundingAgainstSource({
-      claim: input.topik,
+      claim: cleanedTopic,
       sourceChunks: snapshot.chunks || [],
       sourceId: snapshot.id,
       sourceTitle: snapshot.sourceTitle,
