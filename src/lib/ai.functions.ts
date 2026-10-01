@@ -47,6 +47,7 @@ import {
 } from "./ai/question-contract";
 import { getCachedSnapshotsForUser, setCachedSourceSnapshot } from "./ai/source-ingestion";
 import { AiServiceError, AI_ERROR_CODES, isMissingColumnError } from "./ai/error-taxonomy";
+import { getServerEnv } from "./ai/ai-service";
 import type { Modul } from "./modul-types";
 
 const MODEL = "google/gemini-2.5-flash";
@@ -100,23 +101,7 @@ try {
 } catch {}
 
 function getEnvValue(name: string): string | undefined {
-  if (name.startsWith("VITE_")) {
-    // Security Boundary: Never read server-side AI private credentials from client VITE_* variables
-    return undefined;
-  }
-  const cfEnv = (globalThis as any).__CLOUDFLARE_ENV__;
-  if (cfEnv && typeof cfEnv === "object" && typeof cfEnv[name] === "string" && cfEnv[name].trim()) {
-    return cfEnv[name].trim();
-  }
-  if (
-    typeof process !== "undefined" &&
-    process.env &&
-    typeof process.env[name] === "string" &&
-    process.env[name].trim()
-  ) {
-    return process.env[name].trim();
-  }
-  return undefined;
+  return getServerEnv(name);
 }
 
 function resolveAiConfig(): AiProviderConfig {
