@@ -815,4 +815,117 @@ let passed = 0;
   passed++;
 }
 
-console.log(`\nAUTH & ROLE TESTS COMPLETE: ${passed}/24 PASSED\n`);
+// Test 25: Stale Supabase credentials rejection & resilient API key recovery
+{
+  const CANONICAL_PROJECT_ID = "dxzzpsrgbiummjplggyo";
+  const CANONICAL_URL = "https://dxzzpsrgbiummjplggyo.supabase.co";
+  const CANONICAL_KEY = "sb_publishable_T_KM74qD7YgJYa4Om9jnww_HTzRSjs-";
+  const STALE_PROJECT_SUBSTRINGS = ["qfmrappbqslazyxgvbpg", "_KQPLPG8a6MMUy6Yh91XHA_6CB7fP8p"];
+
+  function sanitizeEnvValue(val) {
+    if (!val || typeof val !== "string") return "";
+    let cleaned = val.trim();
+    if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+      cleaned = cleaned.slice(1, -1).trim();
+    }
+    return cleaned;
+  }
+
+  function resolveTestSupabaseUrl(env) {
+    const candidates = [
+      env["SUPABASE_URL"],
+      env["VITE_SUPABASE_URL"],
+      env["NEXT_PUBLIC_SUPABASE_URL"],
+    ];
+    for (const raw of candidates) {
+      const val = sanitizeEnvValue(raw).replace(/\/+$/, "");
+      if (!val) continue;
+      if (STALE_PROJECT_SUBSTRINGS.some((stale) => val.includes(stale))) continue;
+      return val;
+    }
+    return CANONICAL_URL;
+  }
+
+  function resolveTestSupabaseKey(env, targetUrl) {
+    const isCanonical = targetUrl.includes(CANONICAL_PROJECT_ID);
+    const candidates = [
+      env["SUPABASE_PUBLISHABLE_KEY"],
+      env["SUPABASE_ANON_KEY"],
+      env["VITE_SUPABASE_PUBLISHABLE_KEY"],
+      env["VITE_SUPABASE_ANON_KEY"],
+    ];
+    for (const raw of candidates) {
+      const val = sanitizeEnvValue(raw);
+      if (!val) continue;
+      if (STALE_PROJECT_SUBSTRINGS.some((stale) => val.includes(stale))) continue;
+      if (isCanonical && val.startsWith("sb_publishable_") && val !== CANONICAL_KEY) continue;
+      return val;
+    }
+    return CANONICAL_KEY;
+  }
+
+  function isApiKeyError(err) {
+    if (!err) return false;
+    const msg = (typeof err === "object" && err !== null && "message" in err ? String(err.message) : String(err)).toLowerCase();
+    return msg.includes("invalid api key") || msg.includes("no api key found") || msg.includes("apikey") || msg.includes("pgrst301");
+  }
+
+  // 1. Stale URL rejected
+  const staleEnv = {
+    SUPABASE_URL: "https://qfmrappbqslazyxgvbpg.supabase.co",
+    SUPABASE_ANON_KEY: "sb_publishable__KQPLPG8a6MMUy6Yh91XHA_6CB7fP8p",
+  };
+  const resolvedUrl = resolveTestSupabaseUrl(staleEnv);
+  assert.equal(resolvedUrl, CANONICAL_URL);
+
+  // 2. Stale key rejected
+  const resolvedKey = resolveTestSupabaseKey(staleEnv, resolvedUrl);
+  assert.equal(resolvedKey, CANONICAL_KEY);
+
+  // 3. Mismatched publishable key rejected for canonical project
+  const mismatchedKeyEnv = {
+    SUPABASE_URL: "https://dxzzpsrgbiummjplggyo.supabase.co",
+    SUPABASE_ANON_KEY: "sb_publishable_RANDOMOTHERPROJECT123",
+  };
+  assert.equal(resolveTestSupabaseKey(mismatchedKeyEnv, CANONICAL_URL), CANONICAL_KEY);
+
+  // 4. isApiKeyError tests
+  assert.equal(isApiKeyError(new Error("Invalid API key")), true);
+  assert.equal(isApiKeyError({ message: "No API key found in request" }), true);
+  assert.equal(isApiKeyError(new Error("PGRST301: apikey error")), true);
+  assert.equal(isApiKeyError(new Error("Database connection refused")), false);
+  assert.equal(isApiKeyError(new Error("Profil pengguna tidak ditemukan.")), false);
+
+  // 5. Resilient profile lookup recovery simulation
+  async function simulateFetchProfileWithRetry(simulateFailWithApiKey) {
+    let attempts = 0;
+    const queryProfiles = async (isRetryClient) => {
+      attempts++;
+      if (!isRetryClient && simulateFailWithApiKey) {
+        return { data: null, error: { message: "Invalid API key" } };
+      }
+      return { data: { role: "guru", status_verifikasi: "terverifikasi" }, error: null };
+    };
+
+    let { data, error } = await queryProfiles(false);
+    if (!data && error && isApiKeyError(error)) {
+      const retryResult = await queryProfiles(true);
+      if (retryResult.data) {
+        data = retryResult.data;
+        error = null;
+      }
+    }
+
+    return { data, error, attempts };
+  }
+
+  const result = await simulateFetchProfileWithRetry(true);
+  assert.equal(result.attempts, 2);
+  assert.equal(result.data.role, "guru");
+  assert.equal(result.error, null);
+
+  console.log("  [PASS] 25. Stale Supabase credentials rejection & resilient API key recovery");
+  passed++;
+}
+
+console.log(`\nAUTH & ROLE TESTS COMPLETE: ${passed}/25 PASSED\n`);

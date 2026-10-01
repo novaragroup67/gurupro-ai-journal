@@ -71,6 +71,27 @@ function createUserScopedSupabaseClient(
   });
 }
 
+export const CANONICAL_SUPABASE_PROJECT_ID = "dxzzpsrgbiummjplggyo";
+export const CANONICAL_SUPABASE_URL = "https://dxzzpsrgbiummjplggyo.supabase.co";
+export const CANONICAL_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_T_KM74qD7YgJYa4Om9jnww_HTzRSjs-";
+const STALE_PROJECT_SUBSTRINGS = ["qfmrappbqslazyxgvbpg", "_KQPLPG8a6MMUy6Yh91XHA_6CB7fP8p"];
+
+export function isApiKeyError(err: unknown): boolean {
+  if (!err) return false;
+  const msg = (
+    typeof err === "object" && err !== null && "message" in err
+      ? String((err as any).message)
+      : String(err)
+  ).toLowerCase();
+  return (
+    msg.includes("invalid api key") ||
+    msg.includes("no api key found") ||
+    msg.includes("apikey") ||
+    msg.includes("pgrst301") ||
+    msg.includes("jwt claim and api key mismatch")
+  );
+}
+
 export function sanitizeEnvValue(val?: string | null): string {
   if (!val || typeof val !== "string") return "";
   let cleaned = val.trim();
@@ -81,28 +102,57 @@ export function sanitizeEnvValue(val?: string | null): string {
 }
 
 export function resolveSupabaseUrl(): string {
-  const raw =
-    process.env["SUPABASE_URL"] ||
-    process.env["VITE_SUPABASE_URL"] ||
-    process.env["NEXT_PUBLIC_SUPABASE_URL"] ||
-    (typeof import.meta !== "undefined" ? import.meta.env?.["VITE_SUPABASE_URL"] : undefined) ||
-    (typeof import.meta !== "undefined" ? import.meta.env?.["NEXT_PUBLIC_SUPABASE_URL"] : undefined) ||
-    "https://dxzzpsrgbiummjplggyo.supabase.co";
-  return sanitizeEnvValue(raw).replace(/\/+$/, "");
+  const candidates = [
+    process.env["SUPABASE_URL"],
+    process.env["VITE_SUPABASE_URL"],
+    process.env["NEXT_PUBLIC_SUPABASE_URL"],
+    typeof import.meta !== "undefined" ? import.meta.env?.["VITE_SUPABASE_URL"] : undefined,
+    typeof import.meta !== "undefined" ? import.meta.env?.["NEXT_PUBLIC_SUPABASE_URL"] : undefined,
+  ];
+
+  for (const raw of candidates) {
+    const val = sanitizeEnvValue(raw).replace(/\/+$/, "");
+    if (!val) continue;
+    if (STALE_PROJECT_SUBSTRINGS.some((stale) => val.includes(stale))) {
+      console.warn(`[Supabase] Ignored stale project URL (${val}), using canonical project URL`);
+      continue;
+    }
+    return val;
+  }
+
+  return CANONICAL_SUPABASE_URL;
 }
 
 export function resolveSupabasePublishableKey(): string {
-  const raw =
-    process.env["SUPABASE_PUBLISHABLE_KEY"] ||
-    process.env["SUPABASE_ANON_KEY"] ||
-    process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
-    process.env["VITE_SUPABASE_ANON_KEY"] ||
-    process.env["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] ||
-    process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"] ||
-    (typeof import.meta !== "undefined" ? import.meta.env?.["VITE_SUPABASE_PUBLISHABLE_KEY"] : undefined) ||
-    (typeof import.meta !== "undefined" ? import.meta.env?.["VITE_SUPABASE_ANON_KEY"] : undefined) ||
-    "sb_publishable_T_KM74qD7YgJYa4Om9jnww_HTzRSjs-";
-  return sanitizeEnvValue(raw);
+  const targetUrl = resolveSupabaseUrl();
+  const isCanonicalTarget = targetUrl.includes(CANONICAL_SUPABASE_PROJECT_ID);
+
+  const candidates = [
+    process.env["SUPABASE_PUBLISHABLE_KEY"],
+    process.env["SUPABASE_ANON_KEY"],
+    process.env["VITE_SUPABASE_PUBLISHABLE_KEY"],
+    process.env["VITE_SUPABASE_ANON_KEY"],
+    process.env["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"],
+    process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"],
+    typeof import.meta !== "undefined" ? import.meta.env?.["VITE_SUPABASE_PUBLISHABLE_KEY"] : undefined,
+    typeof import.meta !== "undefined" ? import.meta.env?.["VITE_SUPABASE_ANON_KEY"] : undefined,
+  ];
+
+  for (const raw of candidates) {
+    const val = sanitizeEnvValue(raw);
+    if (!val) continue;
+    if (STALE_PROJECT_SUBSTRINGS.some((stale) => val.includes(stale))) {
+      console.warn("[Supabase] Ignored stale project publishable key, using canonical key");
+      continue;
+    }
+    if (isCanonicalTarget && val.startsWith("sb_publishable_") && val !== CANONICAL_SUPABASE_PUBLISHABLE_KEY) {
+      console.warn("[Supabase] Ignored mismatched publishable key for canonical project, using canonical key");
+      continue;
+    }
+    return val;
+  }
+
+  return CANONICAL_SUPABASE_PUBLISHABLE_KEY;
 }
 
 export const requireSupabaseAuth = createMiddleware({ type: "function" }).server(
@@ -225,59 +275,102 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
         supabase,
         userId,
         claims,
+        token,
+        supabaseUrl: SUPABASE_URL,
+        supabaseKey: SUPABASE_PUBLISHABLE_KEY,
       },
     });
   },
 );
+
+async function fetchVerifiedProfile(
+  supabase: any,
+  userId: string,
+  token?: string | null,
+): Promise<{ profile: any; dbError: any }> {
+  let profile: any = null;
+  let dbError: any = null;
+
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("role, status_verifikasi")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (error) {
+      dbError = error;
+      console.warn("[AuthMiddleware] Database query on profiles returned error:", error.message);
+    } else if (data) {
+      profile = data;
+    }
+  } catch (err: any) {
+    dbError = err;
+    console.warn("[AuthMiddleware] Exception querying profiles:", err?.message);
+  }
+
+  // Fallback 1: If profile query failed with API key error, retry with verified canonical Supabase client
+  if (!profile && dbError && isApiKeyError(dbError) && token) {
+    console.warn(
+      "[AuthMiddleware] Retrying profiles query with verified canonical Supabase client due to API key error:",
+      dbError.message,
+    );
+    try {
+      const canonicalClient = createUserScopedSupabaseClient(
+        CANONICAL_SUPABASE_URL,
+        CANONICAL_SUPABASE_PUBLISHABLE_KEY,
+        token,
+      );
+      const { data: retryData, error: retryErr } = await canonicalClient
+        .from("profiles")
+        .select("role, status_verifikasi")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (!retryErr && retryData) {
+        profile = retryData;
+        dbError = null;
+        console.log("[AuthMiddleware] Successfully loaded profile via canonical Supabase client retry.");
+      } else if (retryErr) {
+        console.warn("[AuthMiddleware] Canonical retry returned error:", retryErr.message);
+      }
+    } catch (retryEx: any) {
+      console.warn("[AuthMiddleware] Canonical retry exception:", retryEx?.message);
+    }
+  }
+
+  // Fallback 2: Admin client fallback if service role key exists
+  if (!profile && dbError) {
+    if (process.env["SUPABASE_SERVICE_ROLE_KEY"] || process.env["SERVICE_ROLE_KEY"]) {
+      try {
+        const { supabaseAdmin } = await import("./client.server");
+        const { data: adminProfile, error: adminErr } = await supabaseAdmin
+          .from("profiles")
+          .select("role, status_verifikasi")
+          .eq("id", userId)
+          .maybeSingle();
+
+        if (!adminErr && adminProfile) {
+          profile = adminProfile;
+          dbError = null;
+        }
+      } catch {
+        // Keep original dbError if admin fallback fails
+      }
+    }
+  }
+
+  return { profile, dbError };
+}
 
 export const requireGuruAuth = createMiddleware({ type: "function" })
   .middleware([requireSupabaseAuth])
   .server(async ({ next, context }) => {
     const supabase = (context as any).supabase;
     const userId = (context as any).userId;
-    const claims = (context as any).claims;
+    const token = (context as any).token;
 
-    let profile: any = null;
-    let dbError: any = null;
-
-    try {
-      // Validasi peran guru / admin di database server
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("role, status_verifikasi")
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (error) {
-        dbError = error;
-        console.warn("[AuthMiddleware] Database query on profiles returned error:", error.message);
-      } else if (data) {
-        profile = data;
-      }
-    } catch (err: any) {
-      dbError = err;
-      console.warn("[AuthMiddleware] Exception querying profiles:", err?.message);
-    }
-
-    if (!profile && dbError) {
-      if (process.env["SUPABASE_SERVICE_ROLE_KEY"] || process.env["SERVICE_ROLE_KEY"]) {
-        try {
-          const { supabaseAdmin } = await import("./client.server");
-          const { data: adminProfile, error: adminErr } = await supabaseAdmin
-            .from("profiles")
-            .select("role, status_verifikasi")
-            .eq("id", userId)
-            .maybeSingle();
-
-          if (!adminErr && adminProfile) {
-            profile = adminProfile;
-            dbError = null;
-          }
-        } catch {
-          // Keep original dbError if admin fallback fails
-        }
-      }
-    }
+    const { profile, dbError } = await fetchVerifiedProfile(supabase, userId, token);
 
     if (!profile) {
       if (dbError) {
@@ -316,45 +409,9 @@ export const requireTeacherAiAuth = createMiddleware({ type: "function" })
   .server(async ({ next, context }) => {
     const supabase = (context as any).supabase;
     const userId = (context as any).userId;
+    const token = (context as any).token;
 
-    let profile: any = null;
-    let dbError: any = null;
-
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("role, status_verifikasi")
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (error) {
-        dbError = error;
-      } else if (data) {
-        profile = data;
-      }
-    } catch (err: any) {
-      dbError = err;
-    }
-
-    if (!profile && dbError) {
-      if (process.env["SUPABASE_SERVICE_ROLE_KEY"] || process.env["SERVICE_ROLE_KEY"]) {
-        try {
-          const { supabaseAdmin } = await import("./client.server");
-          const { data: adminProfile, error: adminErr } = await supabaseAdmin
-            .from("profiles")
-            .select("role, status_verifikasi")
-            .eq("id", userId)
-            .maybeSingle();
-
-          if (!adminErr && adminProfile) {
-            profile = adminProfile;
-            dbError = null;
-          }
-        } catch {
-          // Keep original dbError if admin fallback fails
-        }
-      }
-    }
+    const { profile, dbError } = await fetchVerifiedProfile(supabase, userId, token);
 
     if (!profile) {
       if (dbError) {

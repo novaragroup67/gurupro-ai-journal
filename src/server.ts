@@ -1,15 +1,42 @@
 import "./lib/error-capture";
 
+function purgeStaleSupabaseEnv(target: Record<string, any>) {
+  if (!target) return;
+  const staleSubstrings = ["qfmrappbqslazyxgvbpg", "_KQPLPG8a6MMUy6Yh91XHA_6CB7fP8p"];
+  const keysToCheck = [
+    "SUPABASE_URL",
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "VITE_SUPABASE_URL",
+    "VITE_SUPABASE_ANON_KEY",
+    "VITE_SUPABASE_PUBLISHABLE_KEY",
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+  ];
+  for (const k of keysToCheck) {
+    if (typeof target[k] === "string" && staleSubstrings.some((stale) => target[k].includes(stale))) {
+      delete target[k];
+    }
+  }
+}
+
 try {
-  if (typeof process !== "undefined" && typeof (process as any).loadEnvFile === "function") {
+  if (typeof process !== "undefined") {
     if (process.env) {
       for (const k of ["GEMINI_API_KEY", "LOVABLE_API_KEY", "OPENAI_API_KEY", "AI_MODEL", "AI_ENDPOINT"]) {
         if (process.env[k] === "") {
           delete process.env[k];
         }
       }
+      purgeStaleSupabaseEnv(process.env);
     }
-    (process as any).loadEnvFile();
+    if (typeof (process as any).loadEnvFile === "function") {
+      (process as any).loadEnvFile();
+      if (process.env) {
+        purgeStaleSupabaseEnv(process.env);
+      }
+    }
   }
 } catch {
   // Ignored in non-Node or production container environments
@@ -67,6 +94,7 @@ export default {
         try {
           if (typeof process !== "undefined" && process.env) {
             Object.assign(process.env, env);
+            purgeStaleSupabaseEnv(process.env);
           }
         } catch {
           // ignore error in strict environments

@@ -37,21 +37,48 @@ function sanitizeEnvValue(val?: string | null): string {
   return cleaned;
 }
 
-const SUPABASE_URL = sanitizeEnvValue(
-  (typeof import.meta !== "undefined" && import.meta.env?.["VITE_SUPABASE_URL"]) ||
-  (typeof import.meta !== "undefined" && import.meta.env?.["NEXT_PUBLIC_SUPABASE_URL"]) ||
-  (typeof process !== "undefined" ? process.env?.["SUPABASE_URL"] || process.env?.["VITE_SUPABASE_URL"] : "") ||
-  "https://dxzzpsrgbiummjplggyo.supabase.co"
-).replace(/\/+$/, "");
+const CANONICAL_SUPABASE_PROJECT_ID = "dxzzpsrgbiummjplggyo";
+const CANONICAL_SUPABASE_URL = "https://dxzzpsrgbiummjplggyo.supabase.co";
+const CANONICAL_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_T_KM74qD7YgJYa4Om9jnww_HTzRSjs-";
+const STALE_PROJECT_SUBSTRINGS = ["qfmrappbqslazyxgvbpg", "_KQPLPG8a6MMUy6Yh91XHA_6CB7fP8p"];
 
-const SUPABASE_PUBLISHABLE_KEY = sanitizeEnvValue(
-  (typeof import.meta !== "undefined" && import.meta.env?.["VITE_SUPABASE_PUBLISHABLE_KEY"]) ||
-  (typeof import.meta !== "undefined" && import.meta.env?.["VITE_SUPABASE_ANON_KEY"]) ||
-  (typeof import.meta !== "undefined" && import.meta.env?.["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]) ||
-  (typeof import.meta !== "undefined" && import.meta.env?.["NEXT_PUBLIC_SUPABASE_ANON_KEY"]) ||
-  (typeof process !== "undefined" ? process.env?.["SUPABASE_PUBLISHABLE_KEY"] || process.env?.["SUPABASE_ANON_KEY"] : "") ||
-  "sb_publishable_T_KM74qD7YgJYa4Om9jnww_HTzRSjs-"
-);
+function resolveClientSupabaseUrl(): string {
+  const candidates = [
+    typeof import.meta !== "undefined" ? import.meta.env?.["VITE_SUPABASE_URL"] : undefined,
+    typeof import.meta !== "undefined" ? import.meta.env?.["NEXT_PUBLIC_SUPABASE_URL"] : undefined,
+    typeof process !== "undefined" ? process.env?.["SUPABASE_URL"] || process.env?.["VITE_SUPABASE_URL"] : undefined,
+  ];
+  for (const c of candidates) {
+    const sanitized = sanitizeEnvValue(c).replace(/\/+$/, "");
+    if (!sanitized) continue;
+    if (STALE_PROJECT_SUBSTRINGS.some((stale) => sanitized.includes(stale))) continue;
+    return sanitized;
+  }
+  return CANONICAL_SUPABASE_URL;
+}
+
+function resolveClientSupabaseKey(): string {
+  const url = resolveClientSupabaseUrl();
+  const isCanonical = url.includes(CANONICAL_SUPABASE_PROJECT_ID);
+  const candidates = [
+    typeof import.meta !== "undefined" ? import.meta.env?.["VITE_SUPABASE_PUBLISHABLE_KEY"] : undefined,
+    typeof import.meta !== "undefined" ? import.meta.env?.["VITE_SUPABASE_ANON_KEY"] : undefined,
+    typeof import.meta !== "undefined" ? import.meta.env?.["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] : undefined,
+    typeof import.meta !== "undefined" ? import.meta.env?.["NEXT_PUBLIC_SUPABASE_ANON_KEY"] : undefined,
+    typeof process !== "undefined" ? process.env?.["SUPABASE_PUBLISHABLE_KEY"] || process.env?.["SUPABASE_ANON_KEY"] : undefined,
+  ];
+  for (const c of candidates) {
+    const sanitized = sanitizeEnvValue(c);
+    if (!sanitized) continue;
+    if (STALE_PROJECT_SUBSTRINGS.some((stale) => sanitized.includes(stale))) continue;
+    if (isCanonical && sanitized.startsWith("sb_publishable_") && sanitized !== CANONICAL_SUPABASE_PUBLISHABLE_KEY) continue;
+    return sanitized;
+  }
+  return CANONICAL_SUPABASE_PUBLISHABLE_KEY;
+}
+
+export const SUPABASE_URL = resolveClientSupabaseUrl();
+export const SUPABASE_PUBLISHABLE_KEY = resolveClientSupabaseKey();
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   global: {

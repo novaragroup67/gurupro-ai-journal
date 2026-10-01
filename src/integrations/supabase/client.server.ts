@@ -41,13 +41,26 @@ function sanitizeEnvValue(val?: string | null): string {
   return cleaned;
 }
 
+const CANONICAL_SUPABASE_URL = "https://dxzzpsrgbiummjplggyo.supabase.co";
+const STALE_PROJECT_SUBSTRINGS = ["qfmrappbqslazyxgvbpg", "_KQPLPG8a6MMUy6Yh91XHA_6CB7fP8p"];
+
+function resolveAdminSupabaseUrl(): string {
+  const candidates = [
+    process.env["SUPABASE_URL"],
+    process.env["VITE_SUPABASE_URL"],
+    process.env["NEXT_PUBLIC_SUPABASE_URL"],
+  ];
+  for (const c of candidates) {
+    const sanitized = sanitizeEnvValue(c).replace(/\/+$/, "");
+    if (!sanitized) continue;
+    if (STALE_PROJECT_SUBSTRINGS.some((stale) => sanitized.includes(stale))) continue;
+    return sanitized;
+  }
+  return CANONICAL_SUPABASE_URL;
+}
+
 function createSupabaseAdminClient() {
-  const SUPABASE_URL = sanitizeEnvValue(
-    process.env["SUPABASE_URL"] ||
-    process.env["VITE_SUPABASE_URL"] ||
-    process.env["NEXT_PUBLIC_SUPABASE_URL"] ||
-    "https://dxzzpsrgbiummjplggyo.supabase.co"
-  ).replace(/\/+$/, "");
+  const SUPABASE_URL = resolveAdminSupabaseUrl();
 
   const SUPABASE_SERVICE_ROLE_KEY = sanitizeEnvValue(
     process.env["SUPABASE_SERVICE_ROLE_KEY"] ||

@@ -53,7 +53,12 @@ const files = [
   "src/lib/ai/presentation-generator.ts",
   "tests/ai/presentation-content-generation.test.mjs",
   "tests/ai/live-presentation-content-test.mjs",
-  "docs/PPT-1B-REAL-AI-PRESENTATION-CONTENT-GENERATION.md"
+  "docs/PPT-1B-REAL-AI-PRESENTATION-CONTENT-GENERATION.md",
+  "src/integrations/supabase/auth-middleware.ts",
+  "src/integrations/supabase/client.ts",
+  "src/integrations/supabase/client.server.ts",
+  "src/server.ts",
+  "tests/auth/auth-role.test.mjs"
 ];
 
 for (const file of files) {
