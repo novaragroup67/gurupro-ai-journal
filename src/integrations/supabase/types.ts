@@ -170,6 +170,7 @@ export type Database = {
           sumber_url: string | null
           updated_at: string
           user_id: string
+          ai_metadata?: Json | null
         }
         Insert: {
           archived_at?: string | null
@@ -192,6 +193,7 @@ export type Database = {
           sumber_url?: string | null
           updated_at?: string
           user_id: string
+          ai_metadata?: Json | null
         }
         Update: {
           archived_at?: string | null
@@ -214,6 +216,7 @@ export type Database = {
           sumber_url?: string | null
           updated_at?: string
           user_id?: string
+          ai_metadata?: Json | null
         }
         Relationships: [
           {
@@ -240,6 +243,7 @@ export type Database = {
           topik: string
           updated_at: string
           user_id: string
+          ai_metadata?: Json | null
         }
         Insert: {
           archived_at?: string | null
@@ -253,6 +257,7 @@ export type Database = {
           soal?: Json
           status?: string
           topik?: string
+          ai_metadata?: Json | null
           updated_at?: string
           user_id: string
         }
@@ -270,6 +275,7 @@ export type Database = {
           topik?: string
           updated_at?: string
           user_id?: string
+          ai_metadata?: Json | null
         }
         Relationships: [
           {

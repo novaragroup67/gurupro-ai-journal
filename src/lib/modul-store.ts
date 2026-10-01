@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { createCloudStore, uid } from "./cloud-store";
 import { buatIlustrasi } from "./modul-ai";
+import { isMissingColumnError } from "./ai/error-taxonomy";
 import type { Modul, ModulSection, ModulStatus, Slide, SumberTipe } from "./modul-types";
 
 type Row = {
@@ -99,11 +100,24 @@ async function currentUserId() {
 export async function addModul(data: Omit<Modul, "id" | "createdAt" | "updatedAt">) {
   const user_id = await currentUserId();
   const rowData = { user_id, ...toRow(data) };
-  const { data: row, error } = await supabase
+  let { data: row, error } = await supabase
     .from("moduls")
     .insert(rowData as never)
     .select("*")
     .single();
+
+  if (error && isMissingColumnError(error, "ai_metadata")) {
+    console.warn("[addModul] 'ai_metadata' column missing in moduls table, retrying insert without it...");
+    const fallbackRow = { ...rowData };
+    delete (fallbackRow as any).ai_metadata;
+    const retryRes = await supabase
+      .from("moduls")
+      .insert(fallbackRow as never)
+      .select("*")
+      .single();
+    row = retryRes.data;
+    error = retryRes.error;
+  }
 
   if (error) {
     console.error("[addModul] Supabase insert error:", error);
@@ -120,10 +134,22 @@ export async function saveModul(modul: Modul) {
   store.set(previous.map((m) => (m.id === modul.id ? next : m)));
   try {
     const rowData = toRow(modul);
-    const { error } = await supabase
+    let { error } = await supabase
       .from("moduls")
       .update(rowData as never)
       .eq("id", modul.id);
+
+    if (error && isMissingColumnError(error, "ai_metadata")) {
+      console.warn("[saveModul] 'ai_metadata' column missing in moduls table, retrying update without it...");
+      const fallbackRow = { ...rowData };
+      delete (fallbackRow as any).ai_metadata;
+      const retryRes = await supabase
+        .from("moduls")
+        .update(fallbackRow as never)
+        .eq("id", modul.id);
+      error = retryRes.error;
+    }
+
     if (error) {
       console.error("[saveModul] Supabase update error:", error);
       throw new Error(error.message || "Gagal memperbarui modul.");

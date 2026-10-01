@@ -23,7 +23,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { AI_ERROR_CODES, AiServiceError, normalizeAiError } from "./error-taxonomy";
+import { AI_ERROR_CODES, AiServiceError, normalizeAiError, isMissingColumnError } from "./error-taxonomy";
 import {
   type CanonicalQuestion,
   type CanonicalQuestionPackage,
@@ -660,11 +660,24 @@ export async function generateGroundedQuestions(
         ai_metadata: aiMetadata as never,
       };
 
-      const { data: inserted, error: insertErr } = await supabase
+      let { data: inserted, error: insertErr } = await supabase
         .from("paket_soal")
         .insert(packagePayload)
         .select("*")
         .single();
+
+      if (insertErr && isMissingColumnError(insertErr, "ai_metadata")) {
+        console.warn("[generateGroundedQuestions] 'ai_metadata' column missing in paket_soal table, retrying insert without it...");
+        const fallbackPayload = { ...packagePayload };
+        delete fallbackPayload.ai_metadata;
+        const retryRes = await supabase
+          .from("paket_soal")
+          .insert(fallbackPayload)
+          .select("*")
+          .single();
+        inserted = retryRes.data;
+        insertErr = retryRes.error;
+      }
 
       if (insertErr) {
         console.error("[generateGroundedQuestions] Database insert error:", insertErr);

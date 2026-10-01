@@ -63,7 +63,12 @@ const files = [
   "src/lib/ai/grounding.ts",
   "src/lib/ai/modul-context-builder.ts",
   "src/lib/ai/question-context-builder.ts",
-  "src/lib/ai/source-normalizer.ts"
+  "src/lib/ai/source-normalizer.ts",
+  "src/integrations/supabase/types.ts",
+  "src/lib/ai.functions.ts",
+  "src/lib/ai/question-generator.ts",
+  "src/lib/modul-store.ts",
+  "src/lib/soal-store.ts"
 ];
 
 for (const file of files) {

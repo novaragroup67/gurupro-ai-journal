@@ -46,7 +46,7 @@ import {
   type StudentSafeQuestion,
 } from "./ai/question-contract";
 import { getCachedSnapshotsForUser, setCachedSourceSnapshot } from "./ai/source-ingestion";
-import { AiServiceError, AI_ERROR_CODES } from "./ai/error-taxonomy";
+import { AiServiceError, AI_ERROR_CODES, isMissingColumnError } from "./ai/error-taxonomy";
 import type { Modul } from "./modul-types";
 
 const MODEL = "google/gemini-2.5-flash";
@@ -1495,7 +1495,7 @@ export const saveQuestionDraftServerFn = createServerFn({ method: "POST" })
     // 7. Atomic Persistence to Supabase (Strict Draft Invariant: status remains 'Draft')
     const finalSoalArray = questionsWithTracking.map(toExistingSoal);
 
-    const { data: updated, error: updateErr } = await supabase
+    let { data: updated, error: updateErr } = await supabase
       .from("paket_soal")
       .update({
         judul: validatedPackage.judul,
@@ -1509,6 +1509,25 @@ export const saveQuestionDraftServerFn = createServerFn({ method: "POST" })
       .eq("user_id", userId)
       .select("*")
       .single();
+
+    if (updateErr && isMissingColumnError(updateErr, "ai_metadata")) {
+      console.warn("[saveQuestionDraftServerFn] 'ai_metadata' column missing in paket_soal table, retrying update without it...");
+      const retryRes = await supabase
+        .from("paket_soal")
+        .update({
+          judul: validatedPackage.judul,
+          topik: validatedPackage.topik,
+          soal: finalSoalArray as never,
+          status: "Draft",
+          updated_at: nowIso,
+        })
+        .eq("id", data.paketId)
+        .eq("user_id", userId)
+        .select("*")
+        .single();
+      updated = retryRes.data;
+      updateErr = retryRes.error;
+    }
 
     if (updateErr) {
       console.error("[saveQuestionDraftServerFn] Update error:", updateErr);
@@ -1667,7 +1686,7 @@ export const publishQuestionPackageServerFn = createServerFn({ method: "POST" })
     };
 
     // 6. Atomic Persistence to Supabase (status: 'Terbit' strictly enforced)
-    const { data: updated, error: updateErr } = await supabase
+    let { data: updated, error: updateErr } = await supabase
       .from("paket_soal")
       .update({
         status: "Terbit",
@@ -1678,6 +1697,22 @@ export const publishQuestionPackageServerFn = createServerFn({ method: "POST" })
       .eq("user_id", userId)
       .select("*")
       .single();
+
+    if (updateErr && isMissingColumnError(updateErr, "ai_metadata")) {
+      console.warn("[publishQuestionPackageServerFn] 'ai_metadata' column missing in paket_soal table, retrying update without it...");
+      const retryRes = await supabase
+        .from("paket_soal")
+        .update({
+          status: "Terbit",
+          updated_at: nowIso,
+        })
+        .eq("id", data.paketId)
+        .eq("user_id", userId)
+        .select("*")
+        .single();
+      updated = retryRes.data;
+      updateErr = retryRes.error;
+    }
 
     if (updateErr) {
       console.error("[publishQuestionPackageServerFn] Update error:", updateErr);
@@ -1833,11 +1868,24 @@ export const generateModulAjarServerFn = createServerFn({ method: "POST" })
           ai_metadata: result.draftModul.aiMetadata || null,
         };
 
-        const { data: inserted, error: insertErr } = await supabase
+        let { data: inserted, error: insertErr } = await supabase
           .from("moduls")
           .insert(insertPayload)
           .select("*")
           .single();
+
+        if (insertErr && isMissingColumnError(insertErr, "ai_metadata")) {
+          console.warn("[generateModulAjarServerFn] 'ai_metadata' column missing in moduls table, retrying insert without it...");
+          const fallbackPayload = { ...insertPayload };
+          delete fallbackPayload.ai_metadata;
+          const retryRes = await supabase
+            .from("moduls")
+            .insert(fallbackPayload)
+            .select("*")
+            .single();
+          inserted = retryRes.data;
+          insertErr = retryRes.error;
+        }
 
         if (insertErr) {
           console.error("[generateModulAjarServerFn] Supabase insert error:", insertErr);
@@ -2066,13 +2114,28 @@ export const saveModulDraftServerFn = createServerFn({ method: "POST" })
       updated_at: nowIso,
     };
 
-    const { data: updated, error: updateErr } = await supabase
+    let { data: updated, error: updateErr } = await supabase
       .from("moduls")
       .update(updatePayload)
       .eq("id", data.modulId)
       .eq("user_id", userId)
       .select("*")
       .single();
+
+    if (updateErr && isMissingColumnError(updateErr, "ai_metadata")) {
+      console.warn("[saveModulDraftServerFn] 'ai_metadata' column missing in moduls table, retrying update without it...");
+      const fallbackPayload = { ...updatePayload };
+      delete fallbackPayload.ai_metadata;
+      const retryRes = await supabase
+        .from("moduls")
+        .update(fallbackPayload)
+        .eq("id", data.modulId)
+        .eq("user_id", userId)
+        .select("*")
+        .single();
+      updated = retryRes.data;
+      updateErr = retryRes.error;
+    }
 
     if (updateErr) {
       console.error("[saveModulDraftServerFn] Update error:", updateErr);
@@ -2215,13 +2278,28 @@ export const publishModulServerFn = createServerFn({ method: "POST" })
       updated_at: nowIso,
     };
 
-    const { data: updated, error: updateErr } = await supabase
+    let { data: updated, error: updateErr } = await supabase
       .from("moduls")
       .update(publishPayload)
       .eq("id", data.modulId)
       .eq("user_id", userId)
       .select("*")
       .single();
+
+    if (updateErr && isMissingColumnError(updateErr, "ai_metadata")) {
+      console.warn("[publishModulServerFn] 'ai_metadata' column missing in moduls table, retrying update without it...");
+      const fallbackPayload = { ...publishPayload };
+      delete fallbackPayload.ai_metadata;
+      const retryRes = await supabase
+        .from("moduls")
+        .update(fallbackPayload)
+        .eq("id", data.modulId)
+        .eq("user_id", userId)
+        .select("*")
+        .single();
+      updated = retryRes.data;
+      updateErr = retryRes.error;
+    }
 
     if (updateErr) {
       console.error("[publishModulServerFn] Update error:", updateErr);

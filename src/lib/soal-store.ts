@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { createCloudStore, uid } from "./cloud-store";
+import { isMissingColumnError } from "./ai/error-taxonomy";
 import type { PaketSoal, Soal, SoalStatus } from "./soal-types";
 
 type Row = {
@@ -82,11 +83,26 @@ async function currentUserId() {
 
 export async function addPaket(data: Omit<PaketSoal, "id" | "createdAt">) {
   const user_id = await currentUserId();
-  const { data: row, error } = await supabase
+  const rowData = { user_id, ...toRow(data) };
+  let { data: row, error } = await supabase
     .from("paket_soal")
-    .insert({ user_id, ...toRow(data) } as never)
+    .insert(rowData as never)
     .select("*")
     .single();
+
+  if (error && isMissingColumnError(error, "ai_metadata")) {
+    console.warn("[addPaket] 'ai_metadata' column missing in paket_soal table, retrying insert without it...");
+    const fallbackRow = { ...rowData };
+    delete (fallbackRow as any).ai_metadata;
+    const retryRes = await supabase
+      .from("paket_soal")
+      .insert(fallbackRow as never)
+      .select("*")
+      .single();
+    row = retryRes.data;
+    error = retryRes.error;
+  }
+
   if (error) {
     console.error("[addPaket] Supabase insert error:", error);
     throw new Error(error.message || "Gagal menyimpan paket soal ke database.");
@@ -105,10 +121,23 @@ export async function updatePaket(id: string, patch: Partial<PaketSoal>) {
   const previous = store.get();
   store.set(previous.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   try {
-    const { error } = await supabase
+    const rowData = toRow(patch);
+    let { error } = await supabase
       .from("paket_soal")
-      .update(toRow(patch) as never)
+      .update(rowData as never)
       .eq("id", id);
+
+    if (error && isMissingColumnError(error, "ai_metadata")) {
+      console.warn("[updatePaket] 'ai_metadata' column missing in paket_soal table, retrying update without it...");
+      const fallbackRow = { ...rowData };
+      delete (fallbackRow as any).ai_metadata;
+      const retryRes = await supabase
+        .from("paket_soal")
+        .update(fallbackRow as never)
+        .eq("id", id);
+      error = retryRes.error;
+    }
+
     if (error) throw error;
   } catch (err) {
     store.set(previous);

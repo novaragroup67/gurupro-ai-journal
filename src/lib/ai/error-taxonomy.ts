@@ -257,3 +257,22 @@ export function normalizeAiError(err: unknown): AiServiceError {
 
   return new AiServiceError(AI_ERROR_CODES.AI_PROVIDER_ERROR, undefined, sanitizedMsg);
 }
+
+/**
+ * Detects if a Supabase PostgREST error was caused by a missing database column
+ * (e.g. unapplied migration or schema cache lag such as PGRST204 or PostgreSQL 42703).
+ */
+export function isMissingColumnError(err: unknown, columnName = "ai_metadata"): boolean {
+  if (!err) return false;
+  const anyErr = err as Record<string, unknown>;
+  const msg = String(anyErr.message || anyErr.details || "").toLowerCase();
+  const code = String(anyErr.code || "");
+  const target = columnName.toLowerCase();
+  return (
+    msg.includes(target) ||
+    msg.includes(`'${target}'`) ||
+    msg.includes(`"${target}"`) ||
+    (code === "PGRST204" && msg.includes("schema cache")) ||
+    (code === "42703" && msg.includes("does not exist"))
+  );
+}
