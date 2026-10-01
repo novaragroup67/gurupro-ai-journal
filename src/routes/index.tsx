@@ -118,10 +118,11 @@ import { LandingPage } from "./landing";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "GuruPro — Guru Fokus Mengajar, GuruPro Urus Adminnya" },
+      { title: "GuruPro — Guru Fokus Mengajar, GuruPro Urus Adminnya." },
       {
         name: "description",
-        content: "Platform pembelajaran dan administrasi GuruPro.",
+        content:
+          "GuruPro membantu guru SMA/SMK membuat, mengelola, dan menjalankan kebutuhan pembelajaran dan administrasi pembelajaran dalam satu sistem.",
       },
     ],
   }),

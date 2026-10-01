@@ -75,7 +75,9 @@ const files = [
   "src/routes/dashboard.tsx",
   "src/routes/index.tsx",
   "src/routes/landing.tsx",
-  "src/routes/login.tsx"
+  "src/routes/login.tsx",
+  "tests/ui/landing-page.test.mjs",
+  "docs/LANDING-1-PUBLIC-LANDING-PAGE.md"
 ];
 
 for (const file of files) {
