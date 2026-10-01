@@ -39,6 +39,21 @@ import {
   SlidersHorizontal,
   ChevronDown,
   ChevronUp,
+  Database,
+  Link2,
+  Unlink,
+  Copy,
+  Check,
+  Archive,
+  ExternalLink,
+  FileCheck2,
+  ThumbsUp,
+  ThumbsDown,
+  Clock,
+  AlertTriangle,
+  Info,
+  ListChecks,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,6 +64,16 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   IllustrationOutline,
   PresentationOutline,
   PresentationSlide,
@@ -57,7 +82,17 @@ import {
   GenerationSpecification,
 } from "@/lib/ai/generation-planning-contract";
 import type { IllustrationGenerationRequest } from "@/lib/ai/illustration-generation-contract";
+import type {
+  PresentationGenerationRequest,
+  PresentationGenerationParameters,
+  PresentationAspectRatio,
+  PresentationContentDensity,
+  PresentationContentPackage,
+  PresentationSlideContent,
+} from "@/lib/ai/presentation-generation-contract";
 import { useGenerationPlan } from "@/lib/generation-planning-store";
+import { useIllustrationAssetStore } from "@/lib/illustration-asset-store";
+import { toast } from "sonner";
 
 // ==============================================================================
 // 1. ILLUSTRATION PLANNING PANEL
@@ -67,12 +102,16 @@ export interface IllustrationPlanningPanelProps {
   moduleId: string;
   sectionId?: string;
   moduleTitle?: string;
+  sections?: Array<{ id: string; judul: string; ilustrasi?: string }>;
+  onSectionUpdated?: (sectionId: string, illustrationUrl?: string) => void;
 }
 
 export function IllustrationPlanningPanel({
   moduleId,
   sectionId,
   moduleTitle,
+  sections = [],
+  onSectionUpdated,
 }: IllustrationPlanningPanelProps) {
   const {
     plan,
@@ -82,6 +121,8 @@ export function IllustrationPlanningPanel({
     approving,
     preparedRequest,
     preparingRequest,
+    generating,
+    generationResult,
     availableStyles,
     initPlan,
     saveOutlineEdits,
@@ -90,6 +131,7 @@ export function IllustrationPlanningPanel({
     revokeApproval,
     fetchSpecification,
     prepareIllustrationRequest,
+    generateIllustration,
   } = useGenerationPlan({
     moduleId,
     targetType: "illustration",
@@ -108,6 +150,83 @@ export function IllustrationPlanningPanel({
       setFormOutline(plan.outline as IllustrationOutline);
     }
   }, [plan]);
+
+  // VIS-1C & VIS-1D Asset & Review Store
+  const {
+    assets: moduleAssets,
+    loadAssets,
+    loadReviewableAssets,
+    reviewItems,
+    selectedAssetId,
+    selectedReviewable,
+    selectAssetForReview,
+    persistAsset,
+    attachAsset,
+    detachAsset,
+    transitionLifecycle,
+    saveReview,
+    approveForUse,
+    rejectAsset,
+    keepForLater,
+    savingReview,
+    persisting: persistingAsset,
+    attaching: attachingAsset,
+    evaluationsByAssetId,
+    evaluatingAssetId,
+    evaluateQuality,
+    loadQualityEvaluation,
+  } = useIllustrationAssetStore(moduleId);
+
+  const [selectedTargetSection, setSelectedTargetSection] = useState<string>(sectionId || "");
+  const [copiedHash, setCopiedHash] = useState(false);
+  const [showAssetHistory, setShowAssetHistory] = useState(false);
+  const [showCompareOutline, setShowCompareOutline] = useState(true);
+  const [teacherNotesInput, setTeacherNotesInput] = useState("");
+  const [confirmReplaceOpen, setConfirmReplaceOpen] = useState(false);
+  const [confirmArchiveOpen, setConfirmArchiveOpen] = useState(false);
+  const [targetSectionToAttach, setTargetSectionToAttach] = useState<string | null>(null);
+  const [targetAssetToArchive, setTargetAssetToArchive] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (moduleId) {
+      void loadAssets(moduleId);
+      void loadReviewableAssets(moduleId, plan?.id);
+    }
+  }, [moduleId, plan?.id, loadAssets, loadReviewableAssets]);
+
+  // Sync teacher notes input when selected review changes
+  useEffect(() => {
+    if (selectedReviewable?.review?.teacherNotes) {
+      setTeacherNotesInput(selectedReviewable.review.teacherNotes);
+    } else {
+      setTeacherNotesInput("");
+    }
+  }, [selectedReviewable?.asset.id, selectedReviewable?.review?.teacherNotes]);
+
+  const currentAsset =
+    (selectedReviewable?.asset) ||
+    moduleAssets.find((a) => a.generationId === generationResult?.generationId) ||
+    (moduleAssets.length > 0 ? moduleAssets[0] : null);
+
+  const currentReview =
+    (selectedReviewable?.review) ||
+    (currentAsset ? reviewItems.find((r) => r.asset.id === currentAsset.id)?.review : null);
+
+  const currentQualityEvaluation = currentAsset ? evaluationsByAssetId[currentAsset.id] : null;
+
+  useEffect(() => {
+    if (currentAsset?.id && !evaluationsByAssetId[currentAsset.id]) {
+      void loadQualityEvaluation(currentAsset.id);
+    }
+  }, [currentAsset?.id, loadQualityEvaluation, evaluationsByAssetId]);
+
+  const isEligibleForUse = Boolean(
+    currentAsset &&
+    currentAsset.lifecycleStatus !== "soft_deleted" &&
+    currentReview?.reviewStatus === "approved_for_use" &&
+    currentQualityEvaluation?.decision === "PASS" &&
+    currentQualityEvaluation?.deterministicChecks?.passed
+  );
 
   // Load specification when approved
   useEffect(() => {
@@ -626,16 +745,21 @@ export function IllustrationPlanningPanel({
 
                     <div className="flex items-center gap-2">
                       <Button
-                        disabled
-                        variant="secondary"
-                        className="opacity-70 cursor-not-allowed text-xs gap-1.5"
-                        title="Fitur generasi gambar AI langsung (VIS-1B) belum diaktifkan pada tahap VIS-1A."
+                        onClick={() => generateIllustration()}
+                        disabled={!isApproved || !preparedRequest || generating}
+                        className="text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm"
                       >
-                        <Zap className="h-3.5 w-3.5 text-amber-500" />
-                        Generate Gambar Nyata
-                        <Badge variant="outline" className="ml-1 text-[10px] bg-amber-50 text-amber-700 border-amber-200">
-                          VIS-1B Segera Hadir
-                        </Badge>
+                        {generating ? (
+                          <>
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            Menghasilkan Gambar AI...
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="h-3.5 w-3.5 text-amber-300" />
+                            Generate Gambar Nyata (VIS-1B)
+                          </>
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -713,6 +837,889 @@ export function IllustrationPlanningPanel({
                     </div>
                   ) : null}
 
+                  {/* GENERATION RESULT ARTIFACT DISPLAY (VIS-1B) */}
+                  {generationResult ? (
+                    <div
+                      className={`rounded-xl border p-4 grid gap-3 transition-all ${
+                        generationResult.status === "succeeded"
+                          ? "border-emerald-500/40 bg-emerald-50/15"
+                          : "border-destructive/40 bg-destructive/5"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {generationResult.status === "succeeded" ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                          ) : (
+                            <AlertCircle className="h-4 w-4 text-destructive" />
+                          )}
+                          <h5 className="font-semibold text-xs">
+                            {generationResult.status === "succeeded"
+                              ? "Hasil Generasi Ilustrasi AI Nyata (Real Image Output)"
+                              : "Generasi Gambar Gagal (Provider Error)"}
+                          </h5>
+                        </div>
+                        <Badge
+                          variant={generationResult.status === "succeeded" ? "default" : "destructive"}
+                          className="text-[10px]"
+                        >
+                          {generationResult.status.toUpperCase()}
+                        </Badge>
+                      </div>
+
+                      {generationResult.status === "succeeded" && generationResult.assetReference ? (
+                        <div className="space-y-3">
+                          <div className="rounded-lg overflow-hidden border bg-background flex items-center justify-center p-2">
+                            <img
+                              src={generationResult.assetReference}
+                              alt={plan?.outline && "title" in plan.outline ? plan.outline.title : "Hasil Ilustrasi AI"}
+                              className="max-h-96 w-auto object-contain rounded-md shadow-sm"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono">
+                            <div className="p-2 rounded bg-background border">
+                              <span className="text-muted-foreground block text-[10px]">Provider:</span>
+                              <span className="font-bold uppercase text-foreground">{generationResult.provider || "OpenAI"}</span>
+                            </div>
+                            <div className="p-2 rounded bg-background border">
+                              <span className="text-muted-foreground block text-[10px]">Model:</span>
+                              <span className="font-bold text-foreground">{generationResult.model || "gpt-image-1-mini"}</span>
+                            </div>
+                            <div className="p-2 rounded bg-background border">
+                              <span className="text-muted-foreground block text-[10px]">Dimensi:</span>
+                              <span className="font-bold text-foreground">
+                                {generationResult.width}x{generationResult.height}
+                              </span>
+                            </div>
+                            <div className="p-2 rounded bg-background border">
+                              <span className="text-muted-foreground block text-[10px]">Format:</span>
+                              <span className="font-bold text-foreground">{generationResult.mimeType || "image/png"}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-1">
+                            <p className="text-[11px] text-muted-foreground">
+                              Gambar telah diverifikasi (binary raster non-mock) dan siap digunakan pada materi modul.
+                            </p>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => generateIllustration(true)}
+                              disabled={generating}
+                              className="text-xs gap-1.5"
+                            >
+                              <RefreshCw className={`h-3 w-3 ${generating ? "animate-spin" : ""}`} />
+                              Generate Ulang
+                            </Button>
+                          </div>
+
+                          {/* VIS-1D: TEACHER REVIEW & ASSET MANAGEMENT */}
+                          <div className="rounded-xl border border-primary/30 bg-primary/5 p-3.5 space-y-3.5 mt-2">
+                            {/* Header with Semantic Separation */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-primary/20 pb-2.5">
+                              <div className="flex items-center gap-2">
+                                <FileCheck2 className="h-4 w-4 text-primary" />
+                                <div>
+                                  <h6 className="font-semibold text-xs text-foreground">
+                                    Tinjauan Guru & Manajemen Aset (VIS-1D)
+                                  </h6>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    Guru memegang kendali penuh atas evaluasi, persetujuan, penautan, dan pengarsipan ilustrasi.
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {/* Semantic Review Status Badge */}
+                                {currentReview ? (
+                                  <Badge
+                                    className={
+                                      currentReview.reviewStatus === "approved_for_use"
+                                        ? "bg-emerald-600 text-white text-[10px]"
+                                        : currentReview.reviewStatus === "rejected"
+                                        ? "bg-rose-600 text-white text-[10px]"
+                                        : currentReview.reviewStatus === "reviewed"
+                                        ? "bg-blue-600 text-white text-[10px]"
+                                        : "bg-amber-500 text-white text-[10px]"
+                                    }
+                                  >
+                                    {currentReview.reviewStatus === "approved_for_use"
+                                      ? "DISETUJUI GURU"
+                                      : currentReview.reviewStatus === "rejected"
+                                      ? "DITOLAK GURU"
+                                      : currentReview.reviewStatus === "reviewed"
+                                      ? "SEDANG DITINJAU"
+                                      : "MENUNGGU TINJAUAN"}
+                                  </Badge>
+                                ) : null}
+
+                                {/* Semantic Lifecycle Status Badge */}
+                                {currentAsset ? (
+                                  <Badge
+                                    variant={
+                                      currentAsset.lifecycleStatus === "attached"
+                                        ? "default"
+                                        : currentAsset.lifecycleStatus === "superseded"
+                                        ? "outline"
+                                        : "secondary"
+                                    }
+                                    className="text-[10px]"
+                                  >
+                                    {currentAsset.lifecycleStatus === "attached"
+                                      ? "TERPAUT DI MODUL"
+                                      : currentAsset.lifecycleStatus === "superseded"
+                                      ? "DIGANTIKAN (ARSIP)"
+                                      : currentAsset.lifecycleStatus === "archived"
+                                      ? "DIARSIPKAN"
+                                      : "STAGED (TERSEDIA)"}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                                    Belum Tersimpan
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Multiple Output / Alternative Variasi Selector (VIS-1D) */}
+                            {reviewItems.length > 1 ? (
+                              <div className="p-2 rounded-lg bg-background border space-y-1.5">
+                                <span className="text-[10px] font-semibold text-muted-foreground block">
+                                  Pilih Variasi Hasil Generasi untuk Ditinjau ({reviewItems.length} Variasi Tersedia):
+                                </span>
+                                <div className="flex flex-wrap gap-2">
+                                  {reviewItems.map((item, idx) => {
+                                    const isSelected = item.asset.id === currentAsset?.id;
+                                    return (
+                                      <div
+                                        key={item.asset.id}
+                                        onClick={() => selectAssetForReview(item.asset.id)}
+                                        className={`cursor-pointer rounded-md border p-1.5 flex items-center gap-2 text-xs transition-all ${
+                                          isSelected
+                                            ? "border-primary bg-primary/10 shadow-sm ring-1 ring-primary"
+                                            : "border-border/60 hover:bg-muted/40"
+                                        }`}
+                                      >
+                                        <img
+                                          src={item.asset.publicUrl}
+                                          alt={`Variasi ${idx + 1}`}
+                                          className="h-8 w-8 object-cover rounded shrink-0"
+                                        />
+                                        <div className="text-[10px] leading-tight">
+                                          <p className="font-semibold text-foreground">Variasi #{idx + 1}</p>
+                                          <p className="text-muted-foreground">
+                                            {item.review.reviewStatus === "approved_for_use"
+                                              ? "Disetujui"
+                                              : item.review.reviewStatus === "rejected"
+                                              ? "Ditolak"
+                                              : "Pending"}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {/* Persistence Action if not yet persisted */}
+                            {!currentAsset ? (
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2.5 rounded-lg bg-background border">
+                                <div className="space-y-0.5">
+                                  <p className="text-xs font-medium text-foreground">
+                                    Simpan gambar ke penyimpanan permanen
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    Menghitung checksum SHA-256 dan mengamankan rekaman jejak pedagogis ke database.
+                                  </p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  onClick={async () => {
+                                    if (generationResult?.generationId) {
+                                      const ast = await persistAsset(
+                                        generationResult.generationId,
+                                        selectedTargetSection || undefined
+                                      );
+                                      if (ast && onSectionUpdated && ast.attachedSectionId) {
+                                        onSectionUpdated(ast.attachedSectionId, ast.publicUrl);
+                                      }
+                                      if (ast && moduleId) {
+                                        await loadReviewableAssets(moduleId, plan?.id);
+                                      }
+                                    }
+                                  }}
+                                  disabled={persistingAsset}
+                                  className="text-xs gap-1.5 shrink-0 bg-primary"
+                                >
+                                  <Database className="h-3.5 w-3.5" />
+                                  {persistingAsset ? "Menyimpan Aset..." : "Simpan Aset Permanen (VIS-1C)"}
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="space-y-3 text-xs">
+                                {/* Integrity & Storage Metadata */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono">
+                                  <div className="p-2 rounded bg-background border flex items-center justify-between">
+                                    <div>
+                                      <span className="text-[10px] text-muted-foreground block">Hash SHA-256 (Integritas):</span>
+                                      <span className="font-bold text-foreground">
+                                        {currentAsset.sha256Hash.slice(0, 16)}...
+                                      </span>
+                                    </div>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-6 w-6"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(currentAsset.sha256Hash);
+                                        setCopiedHash(true);
+                                        setTimeout(() => setCopiedHash(false), 2000);
+                                        toast.success("Hash SHA-256 disalin ke clipboard.");
+                                      }}
+                                      title="Salin Hash SHA-256"
+                                    >
+                                      {copiedHash ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                    </Button>
+                                  </div>
+                                  <div className="p-2 rounded bg-background border">
+                                    <span className="text-[10px] text-muted-foreground block">Storage Path & Driver:</span>
+                                    <span className="font-bold text-foreground truncate block">
+                                      {currentAsset.storageProvider} ({currentAsset.storagePath})
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* VIS-1E: AI ILLUSTRATION QUALITY GATE & VALIDATION */}
+                                <div className="rounded-lg border border-indigo-500/30 bg-indigo-50/10 p-3 space-y-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-500/20 pb-2">
+                                    <div className="flex items-center gap-2">
+                                      <ShieldCheck className="h-4 w-4 text-indigo-600" />
+                                      <div>
+                                        <h6 className="font-semibold text-xs text-foreground">
+                                          Pemeriksaan Kualitas AI (VIS-1E Quality Gate)
+                                        </h6>
+                                        <p className="text-[10px] text-muted-foreground">
+                                          Validasi 3-lapis: teknis deterministik, keselarasan outline & gaya, dan akurasi pedagogis.
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      {/* Quality Decision Badge */}
+                                      {currentQualityEvaluation ? (
+                                        <Badge
+                                          className={
+                                            currentQualityEvaluation.decision === "PASS"
+                                              ? "bg-emerald-600 text-white text-[10px]"
+                                              : currentQualityEvaluation.decision === "NEEDS_REVISION"
+                                              ? "bg-amber-600 text-white text-[10px]"
+                                              : currentQualityEvaluation.decision === "REJECT"
+                                              ? "bg-rose-600 text-white text-[10px]"
+                                              : "bg-slate-600 text-white text-[10px]"
+                                          }
+                                        >
+                                          {currentQualityEvaluation.decision === "PASS"
+                                            ? "LULUS (PASS)"
+                                            : currentQualityEvaluation.decision === "NEEDS_REVISION"
+                                            ? "PERLU REVISI"
+                                            : currentQualityEvaluation.decision === "REJECT"
+                                            ? "DITOLAK (REJECT)"
+                                            : "EVALUASI GAGAL"}
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                                          Belum Dievaluasi
+                                        </Badge>
+                                      )}
+
+                                      {/* Composite Usability Eligibility Badge */}
+                                      {isEligibleForUse ? (
+                                        <Badge className="bg-emerald-700 text-white text-[10px] gap-1">
+                                          <CheckCircle2 className="h-2.5 w-2.5" />
+                                          SIAP DIGUNAKAN
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="text-slate-500 border-slate-300 text-[10px]">
+                                          Belum Memenuhi Syarat Kelayakan
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Technical Checks Summary (Layer 1) */}
+                                  {currentQualityEvaluation?.deterministicChecks ? (
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono">
+                                      <div className="p-2 rounded bg-background border">
+                                        <span className="text-muted-foreground block text-[10px]">Format MIME:</span>
+                                        <span className="font-semibold text-foreground">
+                                          {currentQualityEvaluation.deterministicChecks.mimeType}{" "}
+                                          {currentQualityEvaluation.deterministicChecks.mimeTypeValid ? "✓" : "✗"}
+                                        </span>
+                                      </div>
+                                      <div className="p-2 rounded bg-background border">
+                                        <span className="text-muted-foreground block text-[10px]">Dimensi (256-4096):</span>
+                                        <span className="font-semibold text-foreground">
+                                          {currentQualityEvaluation.deterministicChecks.width}x{currentQualityEvaluation.deterministicChecks.height}{" "}
+                                          {currentQualityEvaluation.deterministicChecks.dimensionsValid ? "✓" : "✗"}
+                                        </span>
+                                      </div>
+                                      <div className="p-2 rounded bg-background border">
+                                        <span className="text-muted-foreground block text-[10px]">Aspek Rasio:</span>
+                                        <span className="font-semibold text-foreground">
+                                          {currentQualityEvaluation.deterministicChecks.aspectRatio}{" "}
+                                          {currentQualityEvaluation.deterministicChecks.aspectRatioValid ? "✓" : "✗"}
+                                        </span>
+                                      </div>
+                                      <div className="p-2 rounded bg-background border">
+                                        <span className="text-muted-foreground block text-[10px]">Hash SHA-256:</span>
+                                        <span className="font-semibold text-foreground">
+                                          {currentQualityEvaluation.deterministicChecks.hashMatches ? "Cocok ✓" : "Beda ✗"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ) : null}
+
+                                  {/* Findings List */}
+                                  {currentQualityEvaluation?.findings && currentQualityEvaluation.findings.length > 0 ? (
+                                    <div className="rounded-lg border bg-background p-2.5 space-y-1.5 text-xs">
+                                      <span className="font-semibold text-foreground block text-[11px]">
+                                        Temuan Evaluasi Mutu ({currentQualityEvaluation.findings.length}):
+                                      </span>
+                                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                                        {currentQualityEvaluation.findings.map((f, idx) => (
+                                          <div
+                                            key={idx}
+                                            className={`p-2 rounded text-[11px] border flex flex-col gap-0.5 ${
+                                              f.severity === "critical"
+                                                ? "bg-rose-50 border-rose-200 text-rose-900"
+                                                : f.severity === "warning"
+                                                ? "bg-amber-50 border-amber-200 text-amber-900"
+                                                : "bg-slate-50 border-slate-200 text-slate-900"
+                                            }`}
+                                          >
+                                            <div className="flex items-center justify-between">
+                                              <span className="font-bold text-[10px] uppercase">
+                                                [{f.category}] {f.code}
+                                              </span>
+                                              <Badge
+                                                variant="outline"
+                                                className={`text-[9px] uppercase ${
+                                                  f.severity === "critical"
+                                                    ? "border-rose-400 text-rose-700 bg-white"
+                                                    : f.severity === "warning"
+                                                    ? "border-amber-400 text-amber-700 bg-white"
+                                                    : "border-slate-400 text-slate-700 bg-white"
+                                                }`}
+                                              >
+                                                {f.severity}
+                                              </Badge>
+                                            </div>
+                                            <p className="mt-0.5">{f.description}</p>
+                                            {f.recommendation ? (
+                                              <p className="text-[10px] opacity-80 italic mt-0.5">Saran: {f.recommendation}</p>
+                                            ) : null}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ) : currentQualityEvaluation ? (
+                                    <div className="p-2.5 rounded-lg bg-emerald-50/40 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+                                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                                      <span>Tidak ditemukan masalah mutu kritis atau peringatan. Ilustrasi selaras dengan spesifikasi outline dan gaya.</span>
+                                    </div>
+                                  ) : null}
+
+                                  {/* Explicit Action Button */}
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                                    <p className="text-[10px] text-muted-foreground italic">
+                                      Evaluasi kualitas AI tidak menggantikan keputusan guru dan tidak memicu regenerasi otomatis.
+                                    </p>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => evaluateQuality(currentAsset.id, true)}
+                                      disabled={evaluatingAssetId === currentAsset.id}
+                                      className="text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shrink-0"
+                                    >
+                                      {evaluatingAssetId === currentAsset.id ? (
+                                        <>
+                                          <RefreshCw className="h-3 w-3 animate-spin" />
+                                          Mengevaluasi Kualitas AI...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <ShieldCheck className="h-3.5 w-3.5" />
+                                          {currentQualityEvaluation ? "Evaluasi Ulang Kualitas AI" : "Evaluasi Kualitas AI"}
+                                        </>
+                                      )}
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                {/* IMMUTABLE OUTLINE COMPARISON CARD (VIS-1D) */}
+                                {selectedReviewable?.approvedOutline ? (
+                                  <div className="rounded-lg border bg-background p-3 space-y-2.5">
+                                    <div className="flex items-center justify-between border-b pb-1.5">
+                                      <div className="flex items-center gap-1.5">
+                                        <ListChecks className="h-3.5 w-3.5 text-primary" />
+                                        <span className="font-semibold text-xs text-foreground">
+                                          Perbandingan Spesifikasi Outline yang Disetujui (Immutable Snapshot)
+                                        </span>
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setShowCompareOutline(!showCompareOutline)}
+                                        className="h-6 px-1.5 text-[10px] text-muted-foreground"
+                                      >
+                                        {showCompareOutline ? "Sembunyikan" : "Tampilkan Rincian"}
+                                      </Button>
+                                    </div>
+
+                                    {showCompareOutline ? (
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] pt-1">
+                                        <div className="p-2 rounded bg-muted/20 border space-y-1">
+                                          <span className="text-muted-foreground text-[10px] block font-medium">Tujuan Edukatif & Subjek:</span>
+                                          <p className="font-medium text-foreground">
+                                            <strong>Subjek:</strong> {selectedReviewable.approvedOutline.mainSubject}
+                                          </p>
+                                          <p className="text-muted-foreground text-[10px]">
+                                            <strong>Tujuan:</strong> {selectedReviewable.approvedOutline.objective}
+                                          </p>
+                                          <p className="text-muted-foreground text-[10px]">
+                                            <strong>Fokus:</strong> {selectedReviewable.approvedOutline.educationalFocus}
+                                          </p>
+                                        </div>
+
+                                        <div className="p-2 rounded bg-muted/20 border space-y-1">
+                                          <span className="text-muted-foreground text-[10px] block font-medium">Arahan Visual & Komposisi:</span>
+                                          <p className="text-foreground text-[10px]">
+                                            <strong>Komposisi:</strong> {selectedReviewable.approvedOutline.composition}
+                                          </p>
+                                          <p className="text-muted-foreground text-[10px]">
+                                            <strong>Latar:</strong> {selectedReviewable.approvedOutline.environment}
+                                          </p>
+                                          <p className="text-muted-foreground text-[10px]">
+                                            <strong>Gaya:</strong> {selectedReviewable.approvedStyle?.name} (v{selectedReviewable.approvedStyle?.version})
+                                          </p>
+                                        </div>
+
+                                        {selectedReviewable.approvedStyle?.visualRules?.length > 0 ? (
+                                          <div className="col-span-1 md:col-span-2 p-2 rounded bg-muted/15 border">
+                                            <span className="text-muted-foreground text-[10px] block font-medium mb-1">
+                                              Aturan Visual Gaya yang Disetujui:
+                                            </span>
+                                            <div className="flex flex-wrap gap-1">
+                                              {selectedReviewable.approvedStyle.visualRules.map((rule, idx) => (
+                                                <Badge key={idx} variant="outline" className="text-[9px] bg-background">
+                                                  {rule}
+                                                </Badge>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+
+                                {/* TEACHER REVIEW NOTES & FEEDBACK */}
+                                <div className="p-3 rounded-lg bg-background border space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                                      <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                                      Catatan Tinjauan Guru (Opsional):
+                                    </Label>
+                                    <span className="text-[10px] text-muted-foreground">
+                                      Tersimpan permanen untuk riwayat audit
+                                    </span>
+                                  </div>
+                                  <Textarea
+                                    value={teacherNotesInput}
+                                    onChange={(e) => setTeacherNotesInput(e.target.value)}
+                                    placeholder="Contoh: Komposisi visual sudah sangat jelas dan relevan dengan materi siklus air Fase D..."
+                                    rows={2}
+                                    className="text-xs resize-none"
+                                  />
+                                  <p className="text-[10px] text-muted-foreground italic">
+                                    Catatan guru adalah metadata pedagogis dan tidak dikirimkan ke model AI ataupun memicu generasi otomatis.
+                                  </p>
+                                </div>
+
+                                {/* TEACHER DECISION ACTIONS (VIS-1D) */}
+                                <div className="p-3 rounded-lg bg-background border space-y-2.5">
+                                  <span className="text-xs font-semibold text-foreground block">
+                                    Keputusan Guru Terhadap Aset Ini:
+                                  </span>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                      size="sm"
+                                      onClick={() => approveForUse(currentAsset.id, teacherNotesInput)}
+                                      disabled={savingReview}
+                                      className="text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                    >
+                                      <ThumbsUp className="h-3.5 w-3.5" />
+                                      Setujui untuk Digunakan
+                                    </Button>
+
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => keepForLater(currentAsset.id, teacherNotesInput)}
+                                      disabled={savingReview}
+                                      className="text-xs gap-1.5 border-blue-300 text-blue-800 hover:bg-blue-50"
+                                    >
+                                      <Clock className="h-3.5 w-3.5" />
+                                      Simpan untuk Nanti
+                                    </Button>
+
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => rejectAsset(currentAsset.id, teacherNotesInput, "regenerate")}
+                                      disabled={savingReview}
+                                      className="text-xs gap-1.5 border-rose-300 text-rose-800 hover:bg-rose-50"
+                                    >
+                                      <ThumbsDown className="h-3.5 w-3.5" />
+                                      Tolak / Jangan Gunakan
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                {/* SECTION ATTACHMENT & REPLACEMENT ACTIONS */}
+                                <div className="p-3 rounded-lg bg-background border space-y-2.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                      <Link2 className="h-3.5 w-3.5 text-primary" />
+                                      Tautan ke Bab Modul Ajar:
+                                    </span>
+                                    {currentAsset.lifecycleStatus === "attached" && currentAsset.attachedSectionId ? (
+                                      <Badge variant="outline" className="border-emerald-500 text-emerald-700 bg-emerald-50 text-[10px] gap-1">
+                                        <CheckCircle2 className="h-3 w-3" />
+                                        Terpaut di:{" "}
+                                        {sections.find((s) => s.id === currentAsset.attachedSectionId)?.judul ||
+                                          currentAsset.attachedSectionId}
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="secondary" className="text-[10px]">
+                                        Belum Ditautkan
+                                      </Badge>
+                                    )}
+                                  </div>
+
+                                  <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                                    <select
+                                      value={selectedTargetSection}
+                                      onChange={(e) => setSelectedTargetSection(e.target.value)}
+                                      className="w-full h-8 text-xs rounded-md border border-input bg-background px-2.5 py-1 text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                    >
+                                      <option value="">-- Pilih Bab Modul Ajar Target --</option>
+                                      {sections.map((sec, idx) => (
+                                        <option key={sec.id} value={sec.id}>
+                                          Bab {idx + 1}: {sec.judul} {sec.ilustrasi ? "(Sudah ada gambar aktif)" : ""}
+                                        </option>
+                                      ))}
+                                    </select>
+
+                                    <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto">
+                                      <Button
+                                        size="sm"
+                                        disabled={!selectedTargetSection || attachingAsset}
+                                        onClick={async () => {
+                                          if (!selectedTargetSection) return;
+                                          const sec = sections.find((s) => s.id === selectedTargetSection);
+                                          // If section already has an illustration, open confirmation modal
+                                          if (sec && sec.ilustrasi && sec.ilustrasi !== currentAsset.publicUrl) {
+                                            setTargetSectionToAttach(selectedTargetSection);
+                                            setConfirmReplaceOpen(true);
+                                          } else {
+                                            const updated = await attachAsset(
+                                              currentAsset.id,
+                                              moduleId,
+                                              selectedTargetSection
+                                            );
+                                            if (updated && onSectionUpdated) {
+                                              onSectionUpdated(selectedTargetSection, updated.publicUrl);
+                                            }
+                                          }
+                                        }}
+                                        className="text-xs h-8 gap-1 bg-emerald-600 hover:bg-emerald-700 text-white flex-1 sm:flex-initial"
+                                      >
+                                        <Link2 className="h-3 w-3" />
+                                        {attachingAsset ? "Menautkan..." : "Tautkan ke Bab"}
+                                      </Button>
+
+                                      {currentAsset.lifecycleStatus === "attached" ? (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          disabled={attachingAsset}
+                                          onClick={async () => {
+                                            const secId = currentAsset.attachedSectionId;
+                                            const ok = await detachAsset(currentAsset.id, moduleId);
+                                            if (ok && secId && onSectionUpdated) {
+                                              onSectionUpdated(secId, undefined);
+                                            }
+                                          }}
+                                          className="text-xs h-8 gap-1 text-muted-foreground hover:text-destructive"
+                                          title="Lepas tautan dari bab ini"
+                                        >
+                                          <Unlink className="h-3 w-3" />
+                                          Lepas
+                                        </Button>
+                                      ) : null}
+
+                                      {currentAsset.lifecycleStatus !== "archived" ? (
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => {
+                                            if (currentAsset.lifecycleStatus === "attached") {
+                                              setTargetAssetToArchive(currentAsset.id);
+                                              setConfirmArchiveOpen(true);
+                                            } else {
+                                              transitionLifecycle(currentAsset.id, "archived", moduleId);
+                                            }
+                                          }}
+                                          className="text-xs h-8 gap-1 text-muted-foreground hover:text-destructive"
+                                          title="Arsipkan aset ini"
+                                        >
+                                          <Archive className="h-3 w-3" />
+                                          Arsipkan
+                                        </Button>
+                                      ) : null}
+                                    </div>
+                                  </div>
+
+                                  <p className="text-[10px] text-muted-foreground italic">
+                                    Invarian Non-Destruktif: Mengganti ilustrasi bab akan secara otomatis menandai ilustrasi sebelumnya sebagai <strong>superseded</strong> tanpa menghapus data atau rekam jejaknya.
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Collapsible Module Asset History */}
+                            {moduleAssets.length > 0 ? (
+                              <div className="pt-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setShowAssetHistory(!showAssetHistory)}
+                                  className="text-[11px] h-7 px-2 text-primary hover:text-primary/90 hover:bg-primary/10 gap-1 w-full justify-between"
+                                >
+                                  <span className="flex items-center gap-1.5">
+                                    <Archive className="h-3 w-3" />
+                                    Riwayat Aset Ilustrasi Modul Ini ({moduleAssets.length} Aset Tersimpan)
+                                  </span>
+                                  {showAssetHistory ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                </Button>
+
+                                {showAssetHistory ? (
+                                  <div className="mt-2 space-y-2 max-h-56 overflow-y-auto pr-1">
+                                    {moduleAssets.map((ast) => {
+                                      const astReview = reviewItems.find((r) => r.asset.id === ast.id)?.review;
+                                      return (
+                                        <div
+                                          key={ast.id}
+                                          className="p-2 rounded-lg bg-background border flex items-center justify-between gap-2 text-xs"
+                                        >
+                                          <div
+                                            className="flex items-center gap-2 min-w-0 cursor-pointer"
+                                            onClick={() => selectAssetForReview(ast.id)}
+                                          >
+                                            <img
+                                              src={ast.publicUrl}
+                                              alt={ast.pedagogicalMetadata?.title || "Thumbnail"}
+                                              className="h-10 w-10 object-cover rounded border shrink-0"
+                                            />
+                                            <div className="min-w-0">
+                                              <p className="font-semibold truncate text-[11px]">
+                                                {ast.pedagogicalMetadata?.title || "Ilustrasi Aset"}
+                                              </p>
+                                              <p className="text-[10px] text-muted-foreground font-mono truncate">
+                                                SHA-256: {ast.sha256Hash.slice(0, 12)}...
+                                              </p>
+                                              {ast.attachedSectionId ? (
+                                                <p className="text-[10px] text-emerald-600">
+                                                  Bab: {sections.find((s) => s.id === ast.attachedSectionId)?.judul || ast.attachedSectionId}
+                                                </p>
+                                              ) : null}
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-1.5 shrink-0">
+                                            {astReview ? (
+                                              <Badge
+                                                variant="outline"
+                                                className={`text-[8px] ${
+                                                  astReview.reviewStatus === "approved_for_use"
+                                                    ? "border-emerald-400 text-emerald-700 bg-emerald-50"
+                                                    : astReview.reviewStatus === "rejected"
+                                                    ? "border-rose-400 text-rose-700 bg-rose-50"
+                                                    : "border-amber-400 text-amber-700 bg-amber-50"
+                                                }`}
+                                              >
+                                                {astReview.reviewStatus === "approved_for_use"
+                                                  ? "DISETUJUI"
+                                                  : astReview.reviewStatus === "rejected"
+                                                  ? "DITOLAK"
+                                                  : "PENDING"}
+                                              </Badge>
+                                            ) : null}
+
+                                            <Badge
+                                              variant={
+                                                ast.lifecycleStatus === "attached"
+                                                  ? "default"
+                                                  : ast.lifecycleStatus === "superseded"
+                                                  ? "outline"
+                                                  : "secondary"
+                                              }
+                                              className="text-[9px]"
+                                            >
+                                              {ast.lifecycleStatus.toUpperCase()}
+                                            </Badge>
+                                            {ast.lifecycleStatus !== "archived" ? (
+                                              <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                                onClick={() => transitionLifecycle(ast.id, "archived", moduleId)}
+                                                title="Arsipkan Aset"
+                                              >
+                                                <Archive className="h-3 w-3" />
+                                              </Button>
+                                            ) : null}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          {/* CONFIRMATION DIALOG: REPLACE ACTIVE ILLUSTRATION */}
+                          <AlertDialog open={confirmReplaceOpen} onOpenChange={setConfirmReplaceOpen}>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle className="flex items-center gap-2">
+                                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                                  Ganti Ilustrasi Aktif Bab Ini?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription className="text-xs space-y-2">
+                                  <p>
+                                    Bab yang Anda pilih sudah memiliki ilustrasi aktif sebelumnya.
+                                  </p>
+                                  <p className="p-2 rounded bg-muted/30 font-medium text-foreground">
+                                    Ilustrasi sebelumnya akan secara otomatis berstatus <strong>superseded</strong> dan tetap tersimpan aman di riwayat modul. Tidak ada gambar atau data rekam jejak yang akan terhapus.
+                                  </p>
+                                  <p>
+                                    Apakah Anda yakin ingin mengganti ilustrasi aktif bab tersebut dengan aset ini?
+                                  </p>
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel onClick={() => setTargetSectionToAttach(null)}>
+                                  Batal
+                                </AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={async () => {
+                                    if (targetSectionToAttach && currentAsset) {
+                                      const updated = await attachAsset(
+                                        currentAsset.id,
+                                        moduleId,
+                                        targetSectionToAttach
+                                      );
+                                      if (updated && onSectionUpdated) {
+                                        onSectionUpdated(targetSectionToAttach, updated.publicUrl);
+                                      }
+                                      setTargetSectionToAttach(null);
+                                    }
+                                  }}
+                                  className="bg-primary"
+                                >
+                                  Lanjutkan & Ganti Ilustrasi
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+
+                          {/* CONFIRMATION DIALOG: ARCHIVE ATTACHED ILLUSTRATION */}
+                          <AlertDialog open={confirmArchiveOpen} onOpenChange={setConfirmArchiveOpen}>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle className="flex items-center gap-2">
+                                  <AlertTriangle className="h-4 w-4 text-rose-500" />
+                                  Arsipkan Ilustrasi yang Sedang Terpaut?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription className="text-xs space-y-2">
+                                  <p>
+                                    Aset ilustrasi ini sedang aktif terpaut di bab modul ajar.
+                                  </p>
+                                  <p className="p-2 rounded bg-rose-50 border border-rose-200 text-rose-800">
+                                    Mengarsipkan aset ini akan secara otomatis melepas tautannya dari bab modul ajar terkait.
+                                  </p>
+                                  <p>
+                                    Aset ini akan tetap tersimpan di arsip dan dapat ditinjau kembali di kemudian hari.
+                                  </p>
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel onClick={() => setTargetAssetToArchive(null)}>
+                                  Batal
+                                </AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={async () => {
+                                    if (targetAssetToArchive) {
+                                      const ast = moduleAssets.find((a) => a.id === targetAssetToArchive);
+                                      const secId = ast?.attachedSectionId;
+                                      await transitionLifecycle(targetAssetToArchive, "archived", moduleId);
+                                      if (secId && onSectionUpdated) {
+                                        onSectionUpdated(secId, undefined);
+                                      }
+                                      setTargetAssetToArchive(null);
+                                    }
+                                  }}
+                                  className="bg-destructive hover:bg-destructive/90"
+                                >
+                                  Arsipkan & Lepas Tautan
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      ) : null}
+
+                      {generationResult.status === "failed" ? (
+                        <div className="space-y-2.5">
+                          <Alert variant="destructive" className="py-2.5">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertTitle className="text-xs font-semibold">
+                              {generationResult.error?.code || "GENERATION_FAILED"}
+                            </AlertTitle>
+                            <AlertDescription className="text-xs mt-1">
+                              {generationResult.error?.message || "Provider tidak dapat menghasilkan gambar untuk permintaan ini."}
+                            </AlertDescription>
+                          </Alert>
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Kebijakan Non-Fallback: Sistem tidak akan menampilkan gambar tiruan atau mock SVG.</span>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => generateIllustration(true)}
+                              disabled={generating}
+                              className="gap-1.5 text-xs"
+                            >
+                              <RefreshCw className={`h-3.5 w-3.5 ${generating ? "animate-spin" : ""}`} />
+                              Coba Lagi
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   {showSpecPreview ? (
                     <pre className="mt-2 p-3 rounded-lg bg-slate-950 text-slate-100 text-[10px] font-mono overflow-x-auto max-h-60 border">
                       {JSON.stringify(specification, null, 2)}
@@ -763,6 +1770,11 @@ export function PresentationPlanningPanel({
     loading,
     saving,
     approving,
+    preparedPresentationRequest,
+    preparingPresentationRequest,
+    generatedPresentationContent,
+    generatingPresentationContent,
+    presentationGenerationError,
     availableStyles,
     initPlan,
     saveOutlineEdits,
@@ -771,9 +1783,13 @@ export function PresentationPlanningPanel({
     revokeApproval,
     addSlide,
     removeSlide,
+    duplicateSlide,
     reorderSlides,
     updateSlide,
     fetchSpecification,
+    preparePresentationRequest,
+    generatePresentationContent,
+    resetPresentationContent,
   } = useGenerationPlan({
     moduleId,
     targetType: "presentation",
@@ -782,7 +1798,40 @@ export function PresentationPlanningPanel({
   const [formOutline, setFormOutline] = useState<PresentationOutline | null>(null);
   const [specification, setSpecification] = useState<GenerationSpecification | null>(null);
   const [showSpecPreview, setShowSpecPreview] = useState(false);
+  const [showBlueprintPreview, setShowBlueprintPreview] = useState(false);
+  const [showContentJsonPreview, setShowContentJsonPreview] = useState(false);
+  const [selectedContentSlideOrder, setSelectedContentSlideOrder] = useState<number>(1);
   const [activeSlideIndex, setActiveSlideIndex] = useState<number>(0);
+
+  // PPT-1A presentation parameters
+  const [aspectRatio, setAspectRatio] = useState<PresentationAspectRatio>("16:9");
+  const [contentDensity, setContentDensity] = useState<PresentationContentDensity>("balanced");
+  const [language, setLanguage] = useState<"id" | "en">("id");
+  const [includeSpeakerNotes, setIncludeSpeakerNotes] = useState<boolean>(true);
+  const [footerPolicy, setFooterPolicy] = useState<"standard" | "minimal" | "none">("standard");
+
+  const handleDuplicateSlide = (slideId: string) => {
+    if (!formOutline) return;
+    const slideIndex = formOutline.slides.findIndex((s) => s.id === slideId);
+    if (slideIndex === -1) return;
+    const sourceSlide = formOutline.slides[slideIndex];
+    const newSlide: PresentationSlide = {
+      ...sourceSlide,
+      id: `slide_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      slideTitle: `${sourceSlide.slideTitle} (Salinan)`,
+      slideOrder: slideIndex + 2,
+    };
+    const nextSlides = [...formOutline.slides];
+    nextSlides.splice(slideIndex + 1, 0, newSlide);
+    const reindexed = nextSlides.map((s, idx) => ({ ...s, slideOrder: idx + 1 }));
+    setFormOutline({
+      ...formOutline,
+      intendedSlideCount: reindexed.length,
+      slides: reindexed,
+    });
+    setActiveSlideIndex(slideIndex + 1);
+    toast.success(`Slide "${sourceSlide.slideTitle}" berhasil diduplikasi.`);
+  };
 
   useEffect(() => {
     if (plan && plan.outline) {
@@ -1056,6 +2105,13 @@ export function PresentationPlanningPanel({
                         <ArrowDown className="h-3 w-3" />
                       </button>
                       <button
+                        onClick={() => handleDuplicateSlide(s.id)}
+                        className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground"
+                        title="Duplikat slide"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </button>
+                      <button
                         disabled={formOutline.slides.length <= 1}
                         onClick={() => handleRemoveSlide(s.id)}
                         className="p-1 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive disabled:opacity-30"
@@ -1073,9 +2129,20 @@ export function PresentationPlanningPanel({
                 {currentSlide ? (
                   <div className="grid gap-3 p-4 rounded-xl border bg-muted/5">
                     <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="font-mono text-xs">
-                        Slide {activeSlideIndex + 1} dari {formOutline.slides.length}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="font-mono text-xs">
+                          Slide {activeSlideIndex + 1} dari {formOutline.slides.length}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDuplicateSlide(currentSlide.id)}
+                          className="h-6 px-2 text-[11px] gap-1 text-muted-foreground hover:text-foreground"
+                        >
+                          <Copy className="h-3 w-3" />
+                          Duplikat Slide
+                        </Button>
+                      </div>
                       <span className="text-[11px] text-muted-foreground">
                         ID: {currentSlide.id}
                       </span>
@@ -1335,7 +2402,7 @@ export function PresentationPlanningPanel({
             </CardContent>
           </Card>
 
-          {/* STEP 5: PPT GENERATION AUTHORIZATION & SPEC PREVIEW */}
+          {/* STEP 5: PPT GENERATION CONTRACT & SPEC PREVIEW (PPT-1A) */}
           <Card className={isApproved ? "border-primary/40 shadow-sm" : "opacity-80"}>
             <CardHeader className="py-3 px-4 bg-muted/20 border-b">
               <div className="flex items-center justify-between">
@@ -1351,17 +2418,17 @@ export function PresentationPlanningPanel({
                   </span>
                   <div>
                     <h4 className="text-sm font-semibold text-foreground">
-                      Otorisasi Generasi Presentasi AI
+                      Spesifikasi Generasi Presentasi (PPT-1A)
                     </h4>
                     <p className="text-xs text-muted-foreground">
-                      Spesifikasi kompilasi PPTX siap diterbitkan setelah persetujuan rencana valid.
+                      Kontrak generasi presentasi terstruktur dan perancangan blueprint slide.
                     </p>
                   </div>
                 </div>
                 {isApproved ? (
                   <Badge className="bg-primary text-primary-foreground text-xs gap-1">
                     <Lock className="h-3 w-3" />
-                    Siap untuk Generasi PPTX
+                    {preparedPresentationRequest ? "Spesifikasi Disiapkan (PPT-1A)" : "Rencana Disetujui"}
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="text-muted-foreground text-xs">
@@ -1372,7 +2439,8 @@ export function PresentationPlanningPanel({
             </CardHeader>
             <CardContent className="pt-4 grid gap-4">
               {isApproved && specification ? (
-                <div className="grid gap-3">
+                <div className="grid gap-4">
+                  {/* SPECIFICATION BASE SUMMARY */}
                   <div className="rounded-xl border p-4 bg-muted/10 grid gap-2 text-xs">
                     <div className="flex items-center justify-between">
                       <span className="font-mono text-muted-foreground">ID Otorisasi:</span>
@@ -1381,45 +2449,607 @@ export function PresentationPlanningPanel({
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Format Layout Target:</span>
-                      <span className="font-medium text-foreground">
-                        Widescreen 16:9 ({specification.outlineSnapshot.slides?.length || formOutline.slides.length} Slide)
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
                       <span className="text-muted-foreground">Gaya Presentasi Terpilih:</span>
                       <span className="font-medium text-foreground">
                         {specification.styleSnapshot.styleName} (v{specification.styleSnapshot.styleVersion})
                       </span>
                     </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Total Slide Disetujui:</span>
+                      <span className="font-medium text-foreground">
+                        {specification.outlineSnapshot.slides?.length || formOutline.slides.length} Slide
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowSpecPreview(!showSpecPreview)}
-                      className="text-xs gap-1.5"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                      {showSpecPreview ? "Tutup Inspeksi JSON" : "Inspeksi Spesifikasi Lengkap (JSON)"}
-                    </Button>
+                  {/* PPT-1A PRESENTATION PARAMETERS CONFIGURATION */}
+                  <div className="rounded-xl border p-4 bg-background grid gap-3 text-xs">
+                    <div className="flex items-center justify-between">
+                      <h5 className="font-semibold text-foreground flex items-center gap-1.5">
+                        <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+                        Parameter Generasi Presentasi (PPT-1A)
+                      </h5>
+                      <span className="text-[11px] text-muted-foreground">
+                        Spesifikasi Teknis Slide
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
+                      <div className="grid gap-1">
+                        <Label className="text-[11px] text-muted-foreground">Aspek Rasio Slide</Label>
+                        <select
+                          value={aspectRatio}
+                          onChange={(e) => setAspectRatio(e.target.value as PresentationAspectRatio)}
+                          className="h-8 rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                        >
+                          <option value="16:9">16:9 Widescreen (1920x1080)</option>
+                          <option value="4:3">4:3 Standard (1024x768)</option>
+                        </select>
+                      </div>
+
+                      <div className="grid gap-1">
+                        <Label className="text-[11px] text-muted-foreground">Kerapatan Konten</Label>
+                        <select
+                          value={contentDensity}
+                          onChange={(e) => setContentDensity(e.target.value as PresentationContentDensity)}
+                          className="h-8 rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                        >
+                          <option value="balanced">Seimbang (Balanced)</option>
+                          <option value="minimal">Minimalis (Ringkas & Poin)</option>
+                          <option value="detailed">Mendalam (Detailed / Rinci)</option>
+                        </select>
+                      </div>
+
+                      <div className="grid gap-1">
+                        <Label className="text-[11px] text-muted-foreground">Bahasa Materi</Label>
+                        <select
+                          value={language}
+                          onChange={(e) => setLanguage(e.target.value as "id" | "en")}
+                          className="h-8 rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                        >
+                          <option value="id">Bahasa Indonesia (id)</option>
+                          <option value="en">English (en)</option>
+                        </select>
+                      </div>
+
+                      <div className="grid gap-1">
+                        <Label className="text-[11px] text-muted-foreground">Catatan Pembicara</Label>
+                        <select
+                          value={includeSpeakerNotes ? "yes" : "no"}
+                          onChange={(e) => setIncludeSpeakerNotes(e.target.value === "yes")}
+                          className="h-8 rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                        >
+                          <option value="yes">Sertakan Catatan Pembicara</option>
+                          <option value="no">Tanpa Catatan Pembicara</option>
+                        </select>
+                      </div>
+
+                      <div className="grid gap-1">
+                        <Label className="text-[11px] text-muted-foreground">Kebijakan Footer</Label>
+                        <select
+                          value={footerPolicy}
+                          onChange={(e) => setFooterPolicy(e.target.value as "standard" | "minimal" | "none")}
+                          className="h-8 rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                        >
+                          <option value="standard">Standard (Judul & Nomor Slide)</option>
+                          <option value="minimal">Minimal (Hanya Nomor Slide)</option>
+                          <option value="none">None (Tanpa Footer)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ACTION CONTROLS */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() =>
+                          preparePresentationRequest({
+                            aspectRatio,
+                            contentDensity,
+                            language,
+                            includeSpeakerNotes,
+                            footerPolicy,
+                          })
+                        }
+                        disabled={preparingPresentationRequest}
+                        className="text-xs gap-1.5 bg-primary text-primary-foreground shadow-sm"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        {preparingPresentationRequest
+                          ? "Memvalidasi Kontrak..."
+                          : "Siapkan Spesifikasi PPT (PPT-1A)"}
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowSpecPreview(!showSpecPreview)}
+                        className="text-xs gap-1.5"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        {showSpecPreview ? "Tutup Spek Dasar" : "Inspeksi Spek Dasar (JSON)"}
+                      </Button>
+                    </div>
 
                     <div className="flex items-center gap-2">
                       <Button
+                        onClick={() => generatePresentationContent()}
+                        disabled={generatingPresentationContent || !preparedPresentationRequest}
+                        variant="default"
+                        size="sm"
+                        className="text-xs gap-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-sm"
+                      >
+                        {generatingPresentationContent ? (
+                          <>
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            Mengenerate Konten Slide (PPT-1B)...
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="h-3.5 w-3.5 text-amber-300" />
+                            {generatedPresentationContent ? "Regenerasi Konten Slide (PPT-1B)" : "Generate Konten Presentasi (PPT-1B)"}
+                          </>
+                        )}
+                      </Button>
+
+                      <Button
                         disabled
                         variant="secondary"
+                        size="sm"
                         className="opacity-70 cursor-not-allowed text-xs gap-1.5"
-                        title="Fitur kompilasi file PPTX otomatis (PPT-1) belum diaktifkan pada tahap GEN-0."
+                        title="Rendering dokumen visual PowerPoint (.pptx) fisik akan diimplementasikan pada tahap PPT-1C."
                       >
-                        <Zap className="h-3.5 w-3.5 text-amber-500" />
-                        Generate PPTX Nyata
+                        <FileCheck2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        Unduh File PPTX Nyata
                         <Badge variant="outline" className="ml-1 text-[10px] bg-amber-50 text-amber-700 border-amber-200">
-                          PPT-1 Segera Hadir
+                          PPT-1C Segera Hadir
                         </Badge>
                       </Button>
                     </div>
                   </div>
+
+                  {/* ERROR ALERT IF GENERATION FAILED */}
+                  {presentationGenerationError ? (
+                    <Alert variant="destructive" className="py-2.5">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle className="text-xs font-semibold">Generasi Konten PPT-1B Gagal</AlertTitle>
+                      <AlertDescription className="text-[11px] mt-1">
+                        {presentationGenerationError}
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
+
+                  {/* PREPARED PPT-1A REQUEST DETAILS */}
+                  {preparedPresentationRequest ? (
+                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-50/10 p-4 grid gap-3 text-xs">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                          <div>
+                            <span className="font-semibold text-emerald-800 text-xs">
+                              Kontrak Generasi Presentasi Terkonfirmasi (PPT-1A)
+                            </span>
+                            <p className="text-[11px] text-muted-foreground">
+                              Spesifikasi kanonikal siap diteruskan ke pipeline generasi konten PPT-1B.
+                            </p>
+                          </div>
+                        </div>
+                        <Badge className="bg-emerald-600 text-white text-[11px]">
+                          Status: {preparedPresentationRequest.status}
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-emerald-200/40 text-[11px]">
+                        <div>
+                          <span className="text-muted-foreground block">Request ID:</span>
+                          <span className="font-mono font-medium truncate block" title={preparedPresentationRequest.requestId}>
+                            {preparedPresentationRequest.requestId}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block">Rasio & Ukuran:</span>
+                          <span className="font-medium">
+                            {preparedPresentationRequest.parameters.aspectRatio} ({preparedPresentationRequest.parameters.slideSize.width}x{preparedPresentationRequest.parameters.slideSize.height})
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block">Total Slide Blueprint:</span>
+                          <span className="font-medium">
+                            {preparedPresentationRequest.blueprint.totalSlides} Slide
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block">Kerapatan Konten:</span>
+                          <span className="font-medium capitalize">
+                            {preparedPresentationRequest.parameters.contentDensity}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* BLUEPRINT PEDAGOGICAL BREAKDOWN */}
+                      <div className="pt-2 border-t border-emerald-200/40">
+                        <span className="text-muted-foreground text-[11px] block mb-1.5 font-medium">
+                          Struktur Pedagogis Slide (Inferred):
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {preparedPresentationRequest.blueprint.slides.map((s) => (
+                            <Badge
+                              key={s.slideId}
+                              variant="outline"
+                              className="text-[10px] bg-background border-border/80 text-foreground"
+                            >
+                              Slide {s.slideOrder}: {s.pedagogicalType.replace("_", " ")}
+                              {s.visualRequirement.requiresGeneratedIllustration ? " • 🖼️ Baru" : ""}
+                              {s.visualRequirement.type === "existing_illustration" ? " • 🎨 Aset" : ""}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowBlueprintPreview(!showBlueprintPreview)}
+                          className="text-xs h-7 gap-1"
+                        >
+                          <Eye className="h-3 w-3" />
+                          {showBlueprintPreview ? "Tutup Blueprint" : "Inspeksi Blueprint PPT-1A (JSON)"}
+                        </Button>
+                      </div>
+
+                      {showBlueprintPreview ? (
+                        <pre className="p-3 rounded-lg bg-slate-950 text-slate-100 text-[10px] font-mono overflow-x-auto max-h-60 border">
+                          {JSON.stringify(preparedPresentationRequest, null, 2)}
+                        </pre>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {/* PPT-1B VALIDATED CONTENT PACKAGE PREVIEW */}
+                  {generatedPresentationContent ? (
+                    <div className="rounded-xl border border-indigo-500/40 bg-indigo-50/15 p-4 grid gap-4 text-xs">
+                      {/* PACKAGE HEADER */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-indigo-200/50">
+                        <div className="flex items-start gap-2.5">
+                          <div className="p-2 rounded-lg bg-indigo-600 text-white shadow-sm shrink-0">
+                            <Sparkles className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm text-foreground">
+                                {generatedPresentationContent.title}
+                              </span>
+                              <Badge className="bg-indigo-600 text-white text-[10px] uppercase">
+                                PPT-1B Terverifikasi
+                              </Badge>
+                              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-[10px]">
+                                {generatedPresentationContent.validationMetadata.semanticEvaluation.decision}
+                              </Badge>
+                            </div>
+                            {generatedPresentationContent.subtitle ? (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {generatedPresentationContent.subtitle}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowContentJsonPreview(!showContentJsonPreview)}
+                            className="text-xs h-7 gap-1"
+                          >
+                            <Eye className="h-3 w-3" />
+                            {showContentJsonPreview ? "Tutup JSON" : "Inspeksi Konten Terstruktur (JSON)"}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* PACKAGE METADATA BAR */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] bg-background/80 p-2.5 rounded-lg border border-border/60">
+                        <div>
+                          <span className="text-muted-foreground block">Sasaran Audiens:</span>
+                          <span className="font-medium text-foreground">
+                            {generatedPresentationContent.targetAudience}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block">Estimasi Durasi:</span>
+                          <span className="font-medium text-foreground">
+                            {generatedPresentationContent.estimatedDurationMinutes || (generatedPresentationContent.slides.length * 3)} menit
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block">Gaya & Kerapatan:</span>
+                          <span className="font-medium text-foreground capitalize">
+                            {generatedPresentationContent.style.name} • {generatedPresentationContent.contentDensity}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block">AI Generator:</span>
+                          <span className="font-medium font-mono text-[10px] text-muted-foreground">
+                            {generatedPresentationContent.generationMetadata.provider} / {generatedPresentationContent.generationMetadata.model}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* LEARNING OBJECTIVES BANNER */}
+                      {generatedPresentationContent.primaryLearningObjectives.length > 0 ? (
+                        <div className="p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-200/50 text-[11px]">
+                          <span className="font-semibold text-emerald-800 block mb-1">
+                            Tujuan Pembelajaran Utama:
+                          </span>
+                          <ul className="list-disc list-inside space-y-0.5 text-emerald-900">
+                            {generatedPresentationContent.primaryLearningObjectives.map((obj, i) => (
+                              <li key={i}>{obj}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+
+                      {/* SLIDES PREVIEW TAB / SELECTOR */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-xs text-foreground">
+                            Pratinjau Slide ({generatedPresentationContent.slides.length} Slide):
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">
+                            Klik slide untuk meninjau detail konten
+                          </span>
+                        </div>
+
+                        {/* HORIZONTAL SLIDE SELECTOR */}
+                        <div className="flex gap-2 overflow-x-auto pb-1.5 pt-0.5">
+                          {generatedPresentationContent.slides.map((sl) => {
+                            const isSelected = sl.slideOrder === selectedContentSlideOrder;
+                            return (
+                              <button
+                                key={sl.slideId}
+                                type="button"
+                                onClick={() => setSelectedContentSlideOrder(sl.slideOrder)}
+                                className={`shrink-0 text-left p-2.5 rounded-lg border text-xs transition-all w-44 ${
+                                  isSelected
+                                    ? "bg-indigo-600 text-white border-indigo-700 shadow-sm ring-2 ring-indigo-400/40"
+                                    : "bg-background hover:bg-muted/50 border-border text-foreground"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className={`text-[10px] font-semibold px-1.5 py-0.2 rounded ${
+                                    isSelected ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                                  }`}>
+                                    Slide {sl.slideOrder}
+                                  </span>
+                                  <span className={`text-[9px] uppercase ${isSelected ? "text-indigo-100" : "text-muted-foreground"}`}>
+                                    {sl.pedagogicalType.replace("_", " ")}
+                                  </span>
+                                </div>
+                                <p className="font-medium text-[11px] truncate leading-tight">
+                                  {sl.title}
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* SELECTED SLIDE CONTENT CARD */}
+                        {(() => {
+                          const currentSlide = generatedPresentationContent.slides.find(
+                            (s) => s.slideOrder === selectedContentSlideOrder
+                          ) || generatedPresentationContent.slides[0];
+
+                          if (!currentSlide) return null;
+
+                          return (
+                            <div className="p-4 rounded-xl border border-border bg-background shadow-sm space-y-4">
+                              {/* SLIDE HEADER */}
+                              <div className="flex items-start justify-between gap-3 pb-3 border-b border-border/60">
+                                <div>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200 text-[10px]">
+                                      Slide #{currentSlide.slideOrder}
+                                    </Badge>
+                                    <Badge variant="outline" className="text-[10px] capitalize">
+                                      {currentSlide.pedagogicalType.replace("_", " ")}
+                                    </Badge>
+                                    <span className="text-[10px] text-muted-foreground font-mono">
+                                      ID: {currentSlide.slideId}
+                                    </span>
+                                  </div>
+                                  <h4 className="text-base font-bold text-foreground">
+                                    {currentSlide.title}
+                                  </h4>
+                                  {currentSlide.subtitle ? (
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {currentSlide.subtitle}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              </div>
+
+                              {/* KEY POINTS (POIN UTAMA) */}
+                              {currentSlide.keyPoints.length > 0 ? (
+                                <div className="p-2.5 rounded-lg bg-muted/40 border border-border/40 text-xs">
+                                  <span className="font-semibold text-foreground text-[11px] block mb-1">
+                                    Poin Inti Slide:
+                                  </span>
+                                  <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                                    {currentSlide.keyPoints.map((kp, kIdx) => (
+                                      <li key={kIdx} className="text-foreground/90">{kp}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ) : null}
+
+                              {/* STRUCTURED CONTENT BLOCKS */}
+                              <div className="space-y-2">
+                                <span className="font-semibold text-xs text-foreground block">
+                                  Blok Konten Terstruktur ({currentSlide.blocks.length} Blok):
+                                </span>
+                                <div className="grid gap-2.5">
+                                  {currentSlide.blocks.map((block) => (
+                                    <div
+                                      key={block.id}
+                                      className="p-3 rounded-lg border border-border/70 bg-card hover:bg-accent/5 transition-colors space-y-1.5"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <Badge variant="secondary" className="text-[9px] font-mono uppercase">
+                                          {block.blockType.replace("_", " ")}
+                                        </Badge>
+                                        {block.title ? (
+                                          <span className="font-semibold text-xs text-foreground">
+                                            {block.title}
+                                          </span>
+                                        ) : null}
+                                      </div>
+
+                                      {block.content ? (
+                                        <p className="text-xs leading-relaxed text-foreground whitespace-pre-wrap">
+                                          {block.content}
+                                        </p>
+                                      ) : null}
+
+                                      {block.items && block.items.length > 0 ? (
+                                        <ul className="list-disc list-inside space-y-0.5 text-xs text-foreground/90 pl-1">
+                                          {block.items.map((item, itemIdx) => (
+                                            <li key={itemIdx}>{item}</li>
+                                          ))}
+                                        </ul>
+                                      ) : null}
+
+                                      {/* STAT METRIC RENDERING */}
+                                      {block.blockType === "stat_metric" && block.metadata ? (
+                                        <div className="flex items-center gap-3 pt-1">
+                                          <span className="text-2xl font-black text-indigo-600">
+                                            {block.metadata.value || block.metadata.stat}
+                                          </span>
+                                          <span className="text-xs text-muted-foreground">
+                                            {block.metadata.label || block.metadata.unit}
+                                          </span>
+                                        </div>
+                                      ) : null}
+
+                                      {/* KEY VALUE RENDERING */}
+                                      {block.blockType === "key_value" && block.metadata && block.metadata.pairs ? (
+                                        <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+                                          {Object.entries(block.metadata.pairs).map(([k, v]) => (
+                                            <div key={k} className="p-1.5 rounded bg-muted/40">
+                                              <span className="font-semibold block text-muted-foreground">{k}:</span>
+                                              <span className="text-foreground">{String(v)}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : null}
+
+                                      {/* TABLE RENDERING */}
+                                      {block.blockType === "table" && block.metadata && block.metadata.headers ? (
+                                        <div className="overflow-x-auto pt-1">
+                                          <table className="w-full text-left text-[11px] border-collapse">
+                                            <thead>
+                                              <tr className="border-b bg-muted/30">
+                                                {block.metadata.headers.map((h: string, hIdx: number) => (
+                                                  <th key={hIdx} className="p-1 font-semibold">{h}</th>
+                                                ))}
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {(block.metadata.rows || []).map((row: any[], rIdx: number) => (
+                                                <tr key={rIdx} className="border-b border-border/40">
+                                                  {row.map((cell, cIdx) => (
+                                                    <td key={cIdx} className="p-1">{String(cell)}</td>
+                                                  ))}
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* VISUAL DIRECTION & SPEAKER NOTES */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                                {/* VISUAL DIRECTION */}
+                                <div className="p-3 rounded-lg bg-purple-50/40 border border-purple-200/50 space-y-1.5 text-xs">
+                                  <div className="flex items-center gap-1.5 font-semibold text-purple-900">
+                                    <Palette className="h-3.5 w-3.5 text-purple-600" />
+                                    <span>Arahan Visual Slide:</span>
+                                    <Badge variant="outline" className="ml-auto text-[9px] bg-purple-100/60 text-purple-800 border-purple-300">
+                                      {currentSlide.visualDirection.visualRequirement}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-[11px] text-purple-950/90 leading-relaxed">
+                                    {currentSlide.visualDirection.description}
+                                  </p>
+                                  <div className="pt-1 text-[10px] text-purple-800/80">
+                                    <span>Saran Tata Letak: <strong>{currentSlide.visualDirection.suggestedLayout}</strong></span>
+                                  </div>
+                                </div>
+
+                                {/* SPEAKER NOTES */}
+                                <div className="p-3 rounded-lg bg-amber-50/40 border border-amber-200/50 space-y-1.5 text-xs">
+                                  <div className="flex items-center gap-1.5 font-semibold text-amber-900">
+                                    <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
+                                    <span>Catatan Pemateri (Guru):</span>
+                                    <span className="ml-auto text-[10px] text-amber-800/80">
+                                      ~{currentSlide.speakerNotes.estimatedDurationSeconds || 90} detik
+                                    </span>
+                                  </div>
+                                  <ul className="list-disc list-inside space-y-0.5 text-[11px] text-amber-950/90 leading-relaxed">
+                                    {currentSlide.speakerNotes.talkingPoints.map((tp, tpIdx) => (
+                                      <li key={tpIdx}>{tp}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </div>
+
+                              {/* EVIDENCE REFERENCES */}
+                              {currentSlide.evidenceReferences.length > 0 ? (
+                                <div className="pt-2 border-t border-border/50 text-[11px]">
+                                  <span className="text-muted-foreground block mb-1 font-medium">
+                                    Referensi Grounding Kurikulum / Modul:
+                                  </span>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {currentSlide.evidenceReferences.map((ev, evIdx) => (
+                                      <Badge
+                                        key={evIdx}
+                                        variant="outline"
+                                        className="text-[10px] bg-background border-border/80 text-foreground"
+                                      >
+                                        🏷️ {ev.source} {ev.field ? `• ${ev.field}` : ""}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* JSON INSPECTOR */}
+                      {showContentJsonPreview ? (
+                        <pre className="p-3 rounded-lg bg-slate-950 text-slate-100 text-[10px] font-mono overflow-x-auto max-h-72 border">
+                          {JSON.stringify(generatedPresentationContent, null, 2)}
+                        </pre>
+                      ) : null}
+
+                      {/* INVARIANT REMINDER */}
+                      <Alert className="border-indigo-500/20 bg-indigo-50/20 py-2">
+                        <Info className="h-3.5 w-3.5 text-indigo-600" />
+                        <AlertDescription className="text-[11px] text-indigo-800">
+                          <strong>Invarian PPT-1B:</strong> Paket konten presentasi ini telah divalidasi kualitasnya oleh AI secara terstruktur. Dokumen visual Microsoft PowerPoint (.pptx) asli akan dirender pada tahap berikutnya (PPT-1C).
+                        </AlertDescription>
+                      </Alert>
+                    </div>
+                  ) : null}
 
                   {showSpecPreview ? (
                     <pre className="mt-2 p-3 rounded-lg bg-slate-950 text-slate-100 text-[10px] font-mono overflow-x-auto max-h-60 border">
@@ -1430,7 +3060,7 @@ export function PresentationPlanningPanel({
               ) : (
                 <div className="rounded-xl border border-dashed p-6 text-center text-xs text-muted-foreground">
                   <Lock className="mx-auto h-6 w-6 text-muted-foreground/60 mb-2" />
-                  <p className="font-medium text-foreground">Otorisasi Generasi PPTX Terkunci</p>
+                  <p className="font-medium text-foreground">Otorisasi Generasi PPT Terkunci</p>
                   <p className="mt-1">
                     Harap setujui rencana slide pada Langkah 4 terlebih dahulu agar spesifikasi otorisasi dapat diterbitkan.
                   </p>
@@ -1440,7 +3070,7 @@ export function PresentationPlanningPanel({
                     size="sm"
                     className="mt-3 cursor-not-allowed opacity-60 text-xs"
                   >
-                    Generate PPTX Nyata (Terkunci)
+                    Siapkan Spesifikasi PPT (Terkunci)
                   </Button>
                 </div>
               )}

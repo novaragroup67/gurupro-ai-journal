@@ -42,7 +42,7 @@ try {
   }
 } catch {}
 
-function getServerEnv(name: string): string | undefined {
+export function getServerEnv(name: string): string | undefined {
   if (name.startsWith("VITE_")) {
     // Security Guard: Never allow private AI secrets to be read from VITE_* variables
     return undefined;

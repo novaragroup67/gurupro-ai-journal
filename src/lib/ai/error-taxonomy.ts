@@ -42,6 +42,13 @@ export const AI_ERROR_CODES = {
   MISSING_GROUNDING: "MISSING_GROUNDING",
   PROVIDER_UNAVAILABLE: "PROVIDER_UNAVAILABLE",
   GENERATION_FAILED: "GENERATION_FAILED",
+  PRESENTATION_GENERATION_FAILED: "PRESENTATION_GENERATION_FAILED",
+  PRESENTATION_VALIDATION_FAILED: "PRESENTATION_VALIDATION_FAILED",
+  PRESENTATION_GROUNDING_FAILED: "PRESENTATION_GROUNDING_FAILED",
+  PRESENTATION_SEMANTIC_REJECTED: "PRESENTATION_SEMANTIC_REJECTED",
+  PRESENTATION_REVISION_FAILED: "PRESENTATION_REVISION_FAILED",
+  PRESENTATION_STALE_REQUEST: "PRESENTATION_STALE_REQUEST",
+  PRESENTATION_INVALID_OUTPUT: "PRESENTATION_INVALID_OUTPUT",
 } as const;
 
 export type AiErrorCode = (typeof AI_ERROR_CODES)[keyof typeof AI_ERROR_CODES];
@@ -86,6 +93,13 @@ const USER_MESSAGES: Record<AiErrorCode, string> = {
   MISSING_GROUNDING: "Konteks atau bukti materi rujukan tidak ditemukan untuk menyusun permintaan generasi.",
   PROVIDER_UNAVAILABLE: "Layanan penyedia AI gambar saat ini tidak tersedia atau dalam pemeliharaan.",
   GENERATION_FAILED: "Proses pembuatan generasi visual gagal dijalankan.",
+  PRESENTATION_GENERATION_FAILED: "Proses pembuatan konten presentasi pembelajaran AI gagal dijalankan.",
+  PRESENTATION_VALIDATION_FAILED: "Validasi deterministik struktur konten presentasi gagal.",
+  PRESENTATION_GROUNDING_FAILED: "Konten slide presentasi memuat klaim atau nilai fakta yang tidak didukung bukti materi rujukan.",
+  PRESENTATION_SEMANTIC_REJECTED: "Evaluasi mutu semantik menolak konten presentasi karena ketidaksesuaian pedagogis atau outline yang fatal.",
+  PRESENTATION_REVISION_FAILED: "Proses perbaikan konten presentasi (bounded retry) gagal menghasilkan konten yang valid.",
+  PRESENTATION_STALE_REQUEST: "Permintaan generasi presentasi telah kedaluwarsa atau tidak sesuai dengan versi aktif outline.",
+  PRESENTATION_INVALID_OUTPUT: "Respons penyedia AI untuk presentasi tidak sesuai dengan struktur JSON terstruktur kanonikal.",
 };
 
 export class AiServiceError extends Error {

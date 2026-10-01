@@ -1211,10 +1211,19 @@ export function ModulEditor({
 
         {/* TAB 4: ILUSTRASI AI */}
         <TabsContent value="ilustrasi" className="mt-4 grid gap-6">
-          {/* GEN-0: Shared Planning & Approval Layer */}
           <IllustrationPlanningPanel
             moduleId={modul.id}
             moduleTitle={modul.judul}
+            sections={modul.sections}
+            onSectionUpdated={(secId, url) => {
+              onChange({
+                ...modul,
+                sections: modul.sections.map((s) =>
+                  s.id === secId ? { ...s, ilustrasi: url } : s
+                ),
+                updatedAt: new Date().toISOString(),
+              });
+            }}
           />
 
           {/* Quick Mockup & Export Tools (Existing Feature Preserved) */}

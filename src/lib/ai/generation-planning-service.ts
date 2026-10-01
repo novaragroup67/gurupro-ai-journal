@@ -352,6 +352,46 @@ export function updateSlideInPresentationOutline(
   return validatePresentationOutline(updatedOutline);
 }
 
+export function duplicateSlideInPresentationOutline(
+  outline: PresentationOutline,
+  slideId: string,
+): PresentationOutline {
+  const index = outline.slides.findIndex((s) => s.id === slideId);
+  if (index === -1) {
+    throw new AiServiceError(AI_ERROR_CODES.INVALID_REQUEST, `Slide dengan ID '${slideId}' tidak ditemukan.`);
+  }
+
+  if (outline.slides.length >= 50) {
+    throw new AiServiceError(
+      AI_ERROR_CODES.INVALID_REQUEST,
+      "Jumlah slide maksimal 50 telah tercapai. Tidak dapat menduplikasi slide lagi.",
+    );
+  }
+
+  const sourceSlide = outline.slides[index]!;
+  const duplicatedSlide: PresentationSlide = {
+    ...JSON.parse(JSON.stringify(sourceSlide)),
+    id: `slide_${uid()}`,
+    slideTitle: `${sourceSlide.slideTitle} (Salinan)`,
+  };
+
+  const updatedSlides = [...outline.slides];
+  updatedSlides.splice(index + 1, 0, duplicatedSlide);
+
+  const reindexedSlides = updatedSlides.map((s, idx) => ({
+    ...s,
+    slideOrder: idx + 1,
+  }));
+
+  const updatedOutline: PresentationOutline = {
+    ...outline,
+    intendedSlideCount: reindexedSlides.length,
+    slides: reindexedSlides,
+  };
+
+  return validatePresentationOutline(updatedOutline);
+}
+
 // ==============================================================================
 // PLAN LIFECYCLE & VERSION MANAGEMENT
 // ==============================================================================

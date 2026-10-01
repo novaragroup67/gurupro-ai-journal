@@ -36,6 +36,7 @@ import {
   removeSlideFromPresentationOutline,
   reorderSlidesInPresentationOutline,
   updateSlideInPresentationOutline,
+  duplicateSlideInPresentationOutline,
 } from "./ai/generation-planning-service";
 import {
   createGenerationPlanServerFn,
@@ -48,11 +49,24 @@ import {
 } from "./generation-planning.functions";
 import {
   prepareIllustrationGenerationRequestServerFn,
+  generateIllustrationServerFn,
 } from "./illustration-generation.functions";
+import {
+  preparePresentationGenerationRequestServerFn,
+  getPresentationGenerationRequestServerFn,
+  generatePresentationContentServerFn,
+  getPresentationGenerationResultServerFn,
+} from "./presentation-generation.functions";
 import type {
   IllustrationGenerationRequest,
   IllustrationGenerationParameters,
+  IllustrationGenerationResult,
 } from "./ai/illustration-generation-contract";
+import type {
+  PresentationGenerationRequest,
+  PresentationGenerationParameters,
+  PresentationContentPackage,
+} from "./ai/presentation-generation-contract";
 
 export interface UseGenerationPlanOptions {
   moduleId: string;
@@ -74,6 +88,13 @@ export function useGenerationPlan({
   const [approving, setApproving] = useState(false);
   const [preparedRequest, setPreparedRequest] = useState<IllustrationGenerationRequest | null>(null);
   const [preparingRequest, setPreparingRequest] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generationResult, setGenerationResult] = useState<IllustrationGenerationResult | null>(null);
+  const [preparedPresentationRequest, setPreparedPresentationRequest] = useState<PresentationGenerationRequest | null>(null);
+  const [preparingPresentationRequest, setPreparingPresentationRequest] = useState(false);
+  const [generatedPresentationContent, setGeneratedPresentationContent] = useState<PresentationContentPackage | null>(null);
+  const [generatingPresentationContent, setGeneratingPresentationContent] = useState(false);
+  const [presentationGenerationError, setPresentationGenerationError] = useState<string | null>(null);
   const [availableStyles] = useState<GenerationStyle[]>(
     targetType === "illustration" ? ILLUSTRATION_STYLES_CATALOG : PRESENTATION_STYLES_CATALOG,
   );
@@ -293,6 +314,16 @@ export function useGenerationPlan({
     [plan, saveOutlineEdits],
   );
 
+  const duplicateSlide = useCallback(
+    async (slideId: string) => {
+      if (!plan || plan.targetType !== "presentation") return;
+      const currentOutline = plan.outline as PresentationOutline;
+      const nextOutline = duplicateSlideInPresentationOutline(currentOutline, slideId);
+      await saveOutlineEdits(nextOutline, `Menduplikasi slide ID: ${slideId}`);
+    },
+    [plan, saveOutlineEdits],
+  );
+
   const fetchSpecification = useCallback(async () => {
     if (!plan) return null;
     try {
@@ -335,6 +366,162 @@ export function useGenerationPlan({
     [plan]
   );
 
+  const generateIllustration = useCallback(
+    async (forceRetry = false) => {
+      if (!plan || plan.targetType !== "illustration") return null;
+
+      let req = preparedRequest;
+      if (!req) {
+        req = await prepareIllustrationRequest();
+      }
+      if (!req) {
+        toast.error("Permintaan generasi gambar belum siap. Silakan klik Siapkan Permintaan terlebih dahulu.");
+        return null;
+      }
+
+      setGenerating(true);
+      try {
+        const res = (await generateIllustrationServerFn({
+          data: {
+            requestId: req.requestId,
+            forceRetry,
+          },
+        })) as any;
+
+        if (res.status === "success" && res.result) {
+          setGenerationResult(res.result);
+          if (res.result.status === "succeeded") {
+            toast.success(
+              res.fromCache
+                ? "Ilustrasi dimuat dari hasil generasi sebelumnya (cache)!"
+                : "Ilustrasi nyata AI berhasil digenerate!"
+            );
+          } else {
+            toast.error(
+              res.result.error?.message || "Generasi gambar gagal dari provider AI."
+            );
+          }
+          return res.result as IllustrationGenerationResult;
+        }
+      } catch (err: any) {
+        console.error("[generateIllustration] Error:", err);
+        toast.error(err.message || "Gagal menjalankan generasi ilustrasi AI.");
+      } finally {
+        setGenerating(false);
+      }
+      return null;
+    },
+    [plan, preparedRequest, prepareIllustrationRequest]
+  );
+
+  const preparePresentationRequest = useCallback(
+    async (overrideParams?: Partial<PresentationGenerationParameters>) => {
+      if (!plan || plan.targetType !== "presentation") return null;
+      setPreparingPresentationRequest(true);
+      try {
+        const res = (await preparePresentationGenerationRequestServerFn({
+          data: {
+            planId: plan.id,
+            parameters: overrideParams,
+          },
+        })) as any;
+        if (res.status === "success" && res.request) {
+          setPreparedPresentationRequest(res.request);
+          toast.success("Spesifikasi generasi presentasi (PPT-1A) berhasil divalidasi dan disiapkan!");
+          return res.request;
+        }
+      } catch (err: any) {
+        console.error("[preparePresentationRequest] Error:", err);
+        toast.error(err.message || "Gagal menyiapkan spesifikasi presentasi.");
+      } finally {
+        setPreparingPresentationRequest(false);
+      }
+      return null;
+    },
+    [plan]
+  );
+
+  const loadPreparedPresentationRequest = useCallback(
+    async (requestId: string) => {
+      try {
+        const res = (await getPresentationGenerationRequestServerFn({
+          data: { requestId },
+        })) as any;
+        if (res.status === "success" && res.request) {
+          setPreparedPresentationRequest(res.request);
+          return res.request;
+        }
+      } catch (err: any) {
+        console.warn("[loadPreparedPresentationRequest] Error:", err);
+      }
+      return null;
+    },
+    []
+  );
+
+  const generatePresentationContent = useCallback(
+    async (requestId?: string, forceRetry = false) => {
+      let targetRequestId = requestId || preparedPresentationRequest?.requestId;
+      if (!targetRequestId) {
+        const req = await preparePresentationRequest();
+        if (!req) {
+          toast.error("Tidak dapat menjalankan generasi konten: Spesifikasi presentasi belum disiapkan.");
+          return null;
+        }
+        targetRequestId = req.requestId;
+      }
+
+      setGeneratingPresentationContent(true);
+      setPresentationGenerationError(null);
+      try {
+        const res = (await generatePresentationContentServerFn({
+          data: {
+            requestId: targetRequestId,
+            options: { forceFresh: forceRetry },
+          },
+        })) as any;
+
+        if (res.status === "success" && res.result) {
+          setGeneratedPresentationContent(res.result);
+          toast.success("Konten presentasi edukatif AI (PPT-1B) berhasil digenerate dan divalidasi!");
+          return res.result as PresentationContentPackage;
+        }
+      } catch (err: any) {
+        console.error("[generatePresentationContent] Error:", err);
+        const errMsg = err.message || "Gagal mengenerate konten presentasi AI.";
+        setPresentationGenerationError(errMsg);
+        toast.error(errMsg);
+      } finally {
+        setGeneratingPresentationContent(false);
+      }
+      return null;
+    },
+    [preparedPresentationRequest, preparePresentationRequest]
+  );
+
+  const loadPresentationContent = useCallback(
+    async (resultId: string) => {
+      try {
+        const res = (await getPresentationGenerationResultServerFn({
+          data: { resultId },
+        })) as any;
+        if (res.status === "success" && res.result) {
+          setGeneratedPresentationContent(res.result);
+          return res.result;
+        }
+      } catch (err: any) {
+        console.warn("[loadPresentationContent] Error:", err);
+      }
+      return null;
+    },
+    []
+  );
+
+  const resetPresentationContent = useCallback(() => {
+    setGeneratedPresentationContent(null);
+    setPresentationGenerationError(null);
+  }, []);
+
   return {
     plan,
     versions,
@@ -343,6 +530,13 @@ export function useGenerationPlan({
     approving,
     preparedRequest,
     preparingRequest,
+    generating,
+    generationResult,
+    preparedPresentationRequest,
+    preparingPresentationRequest,
+    generatedPresentationContent,
+    generatingPresentationContent,
+    presentationGenerationError,
     availableStyles,
     isApproved: Boolean(plan && plan.status === "approved" && plan.approvedVersion === plan.currentVersion),
     initPlan,
@@ -353,9 +547,19 @@ export function useGenerationPlan({
     revokeApproval,
     addSlide,
     removeSlide,
+    duplicateSlide,
     reorderSlides,
     updateSlide,
     fetchSpecification,
     prepareIllustrationRequest,
+    generateIllustration,
+    setGenerationResult,
+    preparePresentationRequest,
+    loadPreparedPresentationRequest,
+    setPreparedPresentationRequest,
+    generatePresentationContent,
+    loadPresentationContent,
+    resetPresentationContent,
+    setGeneratedPresentationContent,
   };
 }
