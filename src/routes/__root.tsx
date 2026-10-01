@@ -145,7 +145,8 @@ function AuthGate({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { ready, signedIn } = useAuth();
-  const publicAuth = isAuthPublicPath(pathname);
+  const isRoot = pathname === "/" || pathname === "";
+  const publicAuth = isAuthPublicPath(pathname) || (isRoot && !signedIn);
 
   useEffect(() => {
     if (!ready) return;
@@ -153,7 +154,7 @@ function AuthGate({ children }: { children: ReactNode }) {
       void navigate({ to: "/login", replace: true });
     }
     if (signedIn && (pathname === "/login" || pathname === "/daftar")) {
-      void navigate({ to: "/", replace: true });
+      void navigate({ to: "/dashboard", replace: true });
     }
   }, [ready, signedIn, publicAuth, pathname, navigate]);
 
@@ -306,7 +307,9 @@ function AppShell() {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const publicAuth = isAuthPublicPath(pathname);
+  const { signedIn } = useAuth();
+  const isRoot = pathname === "/" || pathname === "";
+  const publicAuth = isAuthPublicPath(pathname) || (isRoot && !signedIn);
 
   return (
     <QueryClientProvider client={queryClient}>

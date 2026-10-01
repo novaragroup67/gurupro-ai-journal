@@ -68,7 +68,14 @@ const files = [
   "src/lib/ai.functions.ts",
   "src/lib/ai/question-generator.ts",
   "src/lib/modul-store.ts",
-  "src/lib/soal-store.ts"
+  "src/lib/soal-store.ts",
+  "src/components/app-sidebar.tsx",
+  "src/components/auth-layout.tsx",
+  "src/routes/__root.tsx",
+  "src/routes/dashboard.tsx",
+  "src/routes/index.tsx",
+  "src/routes/landing.tsx",
+  "src/routes/login.tsx"
 ];
 
 for (const file of files) {

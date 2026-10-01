@@ -41,7 +41,7 @@ import { logout, useAuth } from "@/lib/auth-store";
 import { useState } from "react";
 
 const mainItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Kelas Saya", url: "/kelas", icon: School },
   { title: "Modul Ajar", url: "/modul-ajar", icon: BookOpen },
   { title: "Soal", url: "/soal", icon: FileQuestion },
@@ -71,6 +71,7 @@ export function AppSidebar() {
       ? mainItems
           .filter(
             (item) =>
+              item.url === "/dashboard" ||
               item.url === "/" ||
               item.url === "/modul-ajar" ||
               item.url === "/penugasan" ||
@@ -79,14 +80,18 @@ export function AppSidebar() {
           .map((item) =>
             item.url === "/penilaian" ? { ...item, title: "Nilai" } : item,
           )
-      : mainItems.filter((item) => item.url === "/");
+      : mainItems.filter((item) => item.url === "/dashboard" || item.url === "/");
 
   const visibleSecondaryItems = isTeacher
     ? secondaryItems
     : secondaryItems.filter((item) => item.url === "/profil");
 
-  const isActive = (url: string, exact?: boolean) =>
-    exact ? pathname === url : pathname === url || pathname.startsWith(url + "/");
+  const isActive = (url: string, exact?: boolean) => {
+    if (url === "/" || url === "/dashboard") {
+      return pathname === "/" || pathname === "/dashboard";
+    }
+    return exact ? pathname === url : pathname === url || pathname.startsWith(url + "/");
+  };
 
   const closeOnMobile = () => {
     if (isMobile) setOpenMobile(false);

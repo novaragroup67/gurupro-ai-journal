@@ -56,7 +56,7 @@ function LoginPage() {
       }
 
       toast.success("Berhasil masuk. Selamat datang kembali!");
-      void navigate({ to: "/", replace: true });
+      void navigate({ to: "/dashboard", replace: true });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat masuk.";
       toast.error(msg);

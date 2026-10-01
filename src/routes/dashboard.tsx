@@ -1,8 +1,15 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { DashboardSwitcher } from "./index";
 
 export const Route = createFileRoute("/dashboard")({
-  beforeLoad: () => {
-    throw redirect({ to: "/" });
-  },
-  component: () => null,
+  head: () => ({
+    meta: [
+      { title: "Dashboard — GuruPro" },
+      {
+        name: "description",
+        content: "Dashboard administrasi pembelajaran GuruPro.",
+      },
+    ],
+  }),
+  component: DashboardSwitcher,
 });

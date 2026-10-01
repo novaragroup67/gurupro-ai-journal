@@ -113,21 +113,45 @@ import {
 } from "@/lib/penugasan-store";
 import { usePaketSoal } from "@/lib/soal-store";
 import { useTahunAjaran } from "@/lib/tahun-ajaran-store";
+import { LandingPage } from "./landing";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Dashboard — GuruPro" },
+      { title: "GuruPro — Guru Fokus Mengajar, GuruPro Urus Adminnya" },
       {
         name: "description",
         content: "Platform pembelajaran dan administrasi GuruPro.",
       },
     ],
   }),
-  component: DashboardSwitcher,
+  component: IndexRouteComponent,
 });
 
-function DashboardSwitcher() {
+function IndexRouteComponent() {
+  const { ready, signedIn } = useAuth();
+
+  if (!ready) {
+    return (
+      <div className="grid min-h-[50vh] place-items-center text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span>Memuat GuruPro…</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Pengunjung (Visitor / Guest) -> Landing Page GuruPro
+  if (!signedIn) {
+    return <LandingPage />;
+  }
+
+  // Pengguna Terdaftar (Guru / Siswa / Admin) -> Dashboard
+  return <DashboardSwitcher />;
+}
+
+export function DashboardSwitcher() {
   const { profile, profileStatus, profileError, ready, refreshProfile } = useAuth();
   const [retrying, setRetrying] = useState(false);
 

@@ -1,9 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, Sparkles } from "lucide-react";
+import { useEffect } from "react";
 
 import { GuruProLogo } from "@/components/gurupro-logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/landing")({
   head: () => ({
@@ -25,13 +27,22 @@ export const Route = createFileRoute("/landing")({
   component: LandingPage,
 });
 
-function LandingPage() {
+export function LandingPage() {
+  const { signedIn, ready } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (ready && signedIn) {
+      void navigate({ to: "/", replace: true });
+    }
+  }, [ready, signedIn, navigate]);
+
   return (
     <div className="flex min-h-screen flex-col bg-background selection:bg-primary/20">
       {/* Navbar Publik */}
       <header className="sticky top-0 z-40 border-b bg-card/85 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link to="/landing" className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2">
             <GuruProLogo />
           </Link>
 
