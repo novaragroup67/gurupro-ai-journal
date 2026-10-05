@@ -34,7 +34,8 @@
     "test:recovery": "npx tsx tests/ai/ai-core-recovery.test.mjs",
     "test:uat": "npx tsx tests/uat/full-product-uat.test.mjs",
     "test:qa4": "npx tsx tests/qa4/qa4-production-readiness.test.mjs",
-    "test:golive": "npx tsx tests/golive/go-live-production.test.mjs"
+    "test:golive": "npx tsx tests/golive/go-live-production.test.mjs",
+    "test:ops": "npx tsx tests/ops/ops-production-monitoring.test.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"

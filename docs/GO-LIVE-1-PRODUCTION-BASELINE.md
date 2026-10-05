@@ -1,8 +1,8 @@
-# GuruPro — Production Baseline & Configuration Record (GO-LIVE-1)
+# GuruPro — Production Baseline & Configuration Record (GO-LIVE-1 & OPS-1)
 
 Tanggal Baseline: 5 Oktober 2026  
-Status Tahap: **GO-LIVE-1 (Production Launch & Post-Launch Operations)**  
-Referensi Gerbang QA: `QA-4 PRODUCTION READINESS COMPLETE — RELEASE APPROVED`
+Status Tahap: **OPS-1 COMPLETE — POST-LAUNCH STABILITY VERIFIED**  
+Referensi Gerbang: `QA-4 PRODUCTION READINESS COMPLETE — RELEASE APPROVED` → `GO-LIVE-1 COMPLETE` → `OPS-1 COMPLETE`
 
 ---
 
@@ -11,7 +11,7 @@ Referensi Gerbang QA: `QA-4 PRODUCTION READINESS COMPLETE — RELEASE APPROVED`
 | Parameter Baseline | Nilai Terverifikasi |
 |---|---|
 | **Git Branch** | `main` |
-| **Git Commit SHA (Baseline)** | `43a3421a439af6e1a2e31ff35c9a253e8ca30ec1` |
+| **Git Commit SHA (Baseline)** | `5c8b9820871b102e03c26d0eca210604b4b725b4` |
 | **Package Manager** | npm `11.9.0` |
 | **Node.js Runtime** | `v24.14.0` |
 | **Package Version** | `1.0.0` (`tanstack_start_ts`) |
@@ -32,10 +32,10 @@ Referensi Gerbang QA: `QA-4 PRODUCTION READINESS COMPLETE — RELEASE APPROVED`
 
 ### B. Vercel Hosting (Frontend & Serverless SSR)
 - **Domain Produksi Utama**: `https://gurupro-ai-journal.vercel.app`
+- **Health Check Endpoint**: `https://gurupro-ai-journal.vercel.app/api/health`
 - **Deployment Platform**: Vercel Serverless (Nitro v3.0.260603-beta + TanStack Start SSR)
 - **Vercel Deployment Region**: `sin1` (Singapore, latency optimized)
-- **Vercel Edge ID**: `sin1::iad1::6lh6s-1791178460726-0d99d67d83d0`
-- **Status Rute Utama**: HTTP 200 OK (`/`, `/login`, `/daftar`, `/dashboard`)
+- **Status Rute Utama**: HTTP 200 OK (`/`, `/login`, `/daftar`, `/dashboard`, `/modul-ajar`, `/soal`, `/penugasan`, `/penilaian`)
 
 ---
 
@@ -88,3 +88,17 @@ Semua kredensial rahasia disimpan secara aman pada panel environment Vercel dan 
 - **Batas Ukuran Payload Dokumen**: 10 MB untuk dokumen Base64, 2 MB untuk streaming URL eksternal.
 - **Maksimal Retry**: 2 kali percobaan berulang terisolasi sebelum failover atau kegagalan tertutup.
 - **Proteksi SSRF**: Host privat RFC1918, localhost, dan metadata cloud diblokir secara mutlak.
+
+---
+
+## 7. Status Verifikasi Operasional Pasca-Peluncuran (OPS-1)
+
+| Suite Pengujian / Gerbang Mutu | Target Cakupan | Hasil Verifikasi | Status |
+|---|---|:---:|:---:|
+| **OPS-1 Production Stabilization Suite** | Monitoring, zero-leak error, correlation ID, dual-router failover, RLS, smoke check | **26/26 PASS** | **100% LOLOS** |
+| **GO-LIVE-1 Operations Suite** | Onboarding riil, kelas, penugasan, penilaian, dual AI, PPTX | **29/29 PASS** | **100% LOLOS** |
+| **Full Product UAT Suite** | Alur lengkap Guru, Siswa, Admin, AI Modul & Soal | **51/51 PASS** | **100% LOLOS** |
+| **Full Regression (`npm test`)** | 48 sub-suite regresi termasuk PPT-1F (64/64), E2E (11/11) | **100% PASS** | **100% LOLOS** |
+| **Release Parity (`verify:release-parity`)** | 6 gerbang paritas deployment & secret scan | **6/6 GATES PASS** | **100% LOLOS** |
+| **ESLint Audit (`npm run lint`)** | Pemeriksaan tipe dan sintaksis kode | **0 errors** | **LOLOS** |
+| **Production Build (`npm run build`)** | Kompilasi Nitro SSR & TanStack Start bundle | **PASS (1.10s)** | **LOLOS** |

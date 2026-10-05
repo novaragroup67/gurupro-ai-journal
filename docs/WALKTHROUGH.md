@@ -689,6 +689,70 @@ Semua 40 kriteria penerimaan GO-LIVE-1 telah terpenuhi secara penuh tanpa degrad
 **Status Akhir**:
 **GO-LIVE-1 COMPLETE — GURUPRO LIVE & OPERATIONALLY READY**
 
+---
+
+## 12. Tahap OPS-1: Post-Launch Stabilization & Production Monitoring
+
+### Ringkasan Eksekutif
+Tahap **OPS-1** memfokuskan upaya pada stabilisasi operasional pasca-peluncuran (*post-launch stabilization*) dan observabilitas produksi berkelanjutan (*production monitoring*). Sistem GuruPro diperkuat agar seluruh anomali produksi dapat dideteksi secara dini (*detection*), didiagnosis secara presisi tanpa kebocoran kredensial (*diagnosis*), dipulihkan secara aman dan terkontrol (*controlled recovery*), serta dipastikan tetap stabil di bawah beban nyata.
+
+Alur Operasional Inti:
+```text
+Real Production Usage → Monitoring → Detection → Diagnosis → Controlled Recovery → Verification
+```
+
+### Pilar Utama Stabilisasi OPS-1
+
+1. **Layanan Pemantauan Kesehatan Produksi (`/api/health`)**:
+   - Diterapkan pada [`src/lib/production-health.ts`](file:///c:/novara%20project/gurupro-ai-journal-main/src/lib/production-health.ts) dan dicegat langsung oleh TanStack Start SSR entrypoint [`src/server.ts`](file:///c:/novara%20project/gurupro-ai-journal-main/src/server.ts).
+   - Memantau 7 sub-sistem utama: **Application**, **Database** (PostgREST latency), **Auth** (GoTrue gateway), **Storage** (`illustration-assets` & `presentation-artifacts`), **AI Dual-Router** (Gemini primary + OpenAI fallback), **Presentation** (OOXML PPTX renderer), dan **Routes** (9 rute sistem).
+   - Membedakan status secara presisi: `healthy`, `degraded` (jika sub-sistem opsional seperti AI sekunder mengalami penurunan tanpa mengorbankan platform), dan `unavailable` (jika basis data/auth inti gagal).
+   - Menghasilkan laporan terstruktur dengan nol kebocoran kredensial rahasia.
+
+2. **Korelasi Request & Observabilitas Error (Zero-Leak Policy)**:
+   - Setiap kesalahan internal dibungkus dengan pengidentifikasi unik `correlationId` (UUID v4 / prefix kanonikal) pada [`src/lib/ai/error-taxonomy.ts`](file:///c:/novara%20project/gurupro-ai-journal-main/src/lib/ai/error-taxonomy.ts).
+   - Pesan kesalahan pengguna dilindungi oleh `formatSafeUserErrorMessage()` yang menampilkan kode referensi aman: `"(Referensi: <correlation-id>)"` tanpa memaparkan nama tabel atau constraint Postgres internal.
+   - Fungsi `redactSensitiveInfo()` menyensor secara otomatis:
+     - Bearer JWT token → `[REDACTED_JWT]`
+     - Google Gemini API key → `[REDACTED_GEMINI_KEY]`
+     - OpenAI API key → `[REDACTED_OPENAI_KEY]`
+     - Password basis data → `password=[REDACTED]`
+
+3. **Stabilisasi Runtime AI & Failover Terikat (Bounded Failover)**:
+   - Dwi-Router [`DualIllustrationRouter`](file:///c:/novara%20project/gurupro-ai-journal-main/src/lib/ai/providers/dual-illustration-router.ts) memprioritaskan Google Gemini (`gemini-3.1-flash-image`) dengan cadangan OpenAI (`gpt-image-2`).
+   - Failover otomatis hanya terikat pada kesalahan transien: HTTP 429 (Rate Limit) dan 5xx (Server Error / Timeout).
+   - **Safety Fail-Closed Invariant**: Pelanggaran keselamatan (`AI_SAFETY_BLOCKED`) dilarang keras memicu failover, langsung menghentikan proses (HTTP 400) untuk mencegah pengabaian moderasi (*anti-bypass protection*).
+   - Batas biaya & kapasitas: kuota 20 req/menit, batas konkuren 2 tugas serentak per node, dan batas ukuran sumber materi 2MB (`SOURCE_TOO_LARGE` / HTTP 413).
+   - Penolakan status sukses palsu: kehabisan penyedia mengembalikan status eksplisit `PROVIDER_UNAVAILABLE` (HTTP 503).
+
+4. **Integritas PPTX & Sovereign Teacher Authority**:
+   - Dokumen OpenXML diverifikasi melalui magic bytes ZIP (`PK\x03\x04`) dan ukuran biner yang memadai.
+   - Gerbang mutu PPT-1F (`evaluatePresentationQuality`) memastikan integritas slide dan hanya mengesahkan dokumen yang disetujui guru secara sah.
+   - Dokumen korup atau manipulasi checksum SHA-256 ditolak seketika pada gerbang unduhan.
+
+5. **Isolasi Data Multi-Tenant & RLS di Skala Produksi**:
+   - Klien anonim diblokir secara mutlak dari tabel privat (`profiles`, `penugasan`, `penugasan_jawaban`).
+   - Mutasi data kelas oleh klien tak terotentikasi diblokir dengan kode error Postgres `42501`.
+
+### Hasil Uji Mutu & Verifikasi OPS-1
+
+| Suite Uji / Verifikasi | Perintah | Status | Keterangan |
+|---|---|:---:|---|
+| **OPS-1 Production Stabilization Suite** | `npm run test:ops` | **26 / 26 PASS (100%)** | Memvalidasi pemantauan kesehatan, sanitasi kredensial, korelasi request, dual-router failover, RLS, dan smoke test |
+| **GO-LIVE Production Operations Suite** | `npm run test:golive` | **29 / 29 PASS (100%)** | Alur operasional riil guru & siswa, kelas, penugasan, penilaian, dan PPTX |
+| **Full Product UAT Suite** | `npm run test:uat` | **51 / 51 PASS (100%)** | 51 perjalanan pengguna end-to-end terverifikasi |
+| **Full Regression Suite** | `npm test` | **PASS (100%)** | PPT-1F (64/64), Negative Deployment (10/10), Production E2E (11/11), AI Foundation (42/42), Retrieval (35/35), Gate (14/14) |
+| **Release Parity Audit** | `npm run verify:release-parity` | **6 / 6 GATES PASS** | Git baseline bersih, inventaris env, Supabase auth health, skema tabel aktif, proteksi rahasia klien, rute Vercel |
+| **Linter Sanitization** | `npm run lint` | **PASS (0 error)** | 0 error, 6 warning terdokumentasi (komponen dasar shadcn UI) |
+| **Production Build** | `npm run build` | **PASS (0 error, 1.10s)** | Kompilasi bundle Nitro SSR & TanStack Start optimal |
+
+### Kesimpulan Operasional Akhir
+Seluruh persyaratan stabilisasi pasca-peluncuran, observabilitas error, penanganan degradasi aman, penjaminan korelasi request, dan verifikasi gerbang produksi telah terpenuhi secara penuh.
+
+**Status Akhir**:
+`OPS-1 COMPLETE — POST-LAUNCH STABILITY VERIFIED`
+
+
 
 
 

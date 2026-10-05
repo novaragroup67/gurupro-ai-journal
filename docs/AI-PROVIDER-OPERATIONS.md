@@ -1,8 +1,9 @@
 # GuruPro — Panduan Operasional Integrasi AI Dwi-Penyedia (AI-PROVIDER-OPERATIONS)
 
-Status: **AKTIF & OPERASIONAL**  
-Versi: `1.0.0` (GO-LIVE-1)  
-Cakupan: Orkestrasi Google Gemini & OpenAI
+Status: **AKTIF, TERSTABILISASI & TERPANTAU PENUH**  
+Versi: `1.0.0` (Tahap OPS-1)  
+Cakupan: Orkestrasi Google Gemini & OpenAI  
+Health Endpoint: `https://gurupro-ai-journal.vercel.app/api/health`
 
 ---
 
@@ -51,7 +52,7 @@ Sistem menggunakan [`DualIllustrationRouter`](file:///c:/novara%20project/gurupr
 ### Strict Fail-Closed Safety Invariant
 - Jika Google Gemini atau OpenAI memicu penolakan kebijakan keselamatan (*content policy refusal* / `AI_SAFETY_BLOCKED`), permintaan **langsung dibatalkan seketika (fail-closed)**.
 - Sistem **TIDAK AKAN PERNAH** mencoba mengalihkan permintaan yang diblokir oleh kebijakan keselamatan ke penyedia sekunder.
-- Hal ini menjamin bahwa konten tidak pantas atau berbahaya tidak akan lolos melalui penyedia lain.
+- Hal ini menjamin bahwa konten tidak pantas atau berbahaya tidak akan lolos melalui penyedia lain (*anti-bypass invariant*).
 
 ---
 
@@ -62,7 +63,7 @@ Sistem menggunakan [`DualIllustrationRouter`](file:///c:/novara%20project/gurupr
 | **Concurrency Guard** | Maksimal 2 proses serentak per user | Menolak permintaan ketiga dengan pesan antrean sibuk |
 | **User Rate Limiter** | Maksimal 20 permintaan per menit per user | Memblokir lonjakan klik atau spam generasi |
 | **Payload Ingestion Limit** | Maksimal 10 MB (dokumen Base64) | Mencegah kelebihan beban memori serverless |
-| **External URL Stream Limit** | Maksimal 2 MB (artikel web) | Mencegah pengunduhan file biner besar tak sengaja |
+| **External URL Stream Limit** | Maksimal 2 MB (artikel web) | Mencegah pengunduhan file biner besar tak sengaja (`SOURCE_TOO_LARGE` / HTTP 413) |
 | **Max Retry Limit** | 2 kali percobaan berulang terisolasi | Menghindari loop tak terbatas pada error jaringan |
 | **Anti-Mock Guard** | Menolak SVG prototype atau string mock | Memastikan hanya biner nyata PNG/JPEG $\ge 512$ bytes yang disimpan |
 
@@ -71,12 +72,15 @@ Sistem menggunakan [`DualIllustrationRouter`](file:///c:/novara%20project/gurupr
 ## 4. Metadata Observabilitas & Korelasi (Correlation Tracking)
 
 Setiap panggilan generasi AI mencatat metadata terstruktur tanpa membocorkan kredensial rahasia:
-- `requestId`: UUID unik untuk melacak seluruh siklus permintaan.
+- `correlationId`: UUID unik untuk melacak seluruh siklus permintaan di log produksi.
 - `userId`: ID pengguna terotentikasi.
 - `moduleId`: ID modul ajar terkait.
 - `provider`: Penyedia yang dicoba (`gemini` / `openai`).
-- `model`: Nama model yang dieksekusi (contoh: `gemini-3.1-flash-image`).
+- `model`: Nama model yang dieksekusi (contoh: `gemini-3.1-flash-image` atau `gpt-image-2`).
 - `latencyMs`: Waktu tanggap eksekusi dalam milidetik.
 - `failoverOccurred`: Boolean penanda apakah terjadi failover ke sekunder.
 - `finalStatus`: `SUCCESS`, `SAFETY_BLOCKED`, atau `ERROR`.
 - `errorCode`: Kode taksonomi error (contoh: `AI_PROVIDER_ERROR`).
+
+Pesan kesalahan untuk pengguna diformat menggunakan `formatSafeUserErrorMessage()`:
+`"Layanan penyedia AI sedang mengalami kendala. Silakan coba kembali sesaat lagi. (Referensi: <correlation-id>)"`

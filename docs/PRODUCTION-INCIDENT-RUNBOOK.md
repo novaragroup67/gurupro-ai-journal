@@ -1,85 +1,75 @@
 # GuruPro — Buku Petunjuk Penanganan Insiden Produksi (PRODUCTION-INCIDENT-RUNBOOK)
 
-Status: **AKTIF & OPERASIONAL**  
-Versi: `1.0.0` (GO-LIVE-1)  
-Cakupan: GuruPro Platform (`https://gurupro-ai-journal.vercel.app`)
+Status: **AKTIF, TERSTABILISASI & TERPANTAU PENUH**  
+Versi: `1.0.0` (Tahap OPS-1)  
+Cakupan: GuruPro Platform (`https://gurupro-ai-journal.vercel.app`)  
+Endpoint Kesehatan: `https://gurupro-ai-journal.vercel.app/api/health`
 
 ---
 
 ## 1. Klasifikasi Tingkat Keparahan Insiden (Severity Matrix)
 
-| Tingkat | Kriteria & Dampak Bisnis | Contoh Kasus | Target Waktu Tanggap (MTTR) |
-|:---:|---|---|:---:|
-| **P0** | **Kritis / Pemadaman Total**: Kebocoran keamanan, kerusakan integritas basis data, atau seluruh aplikasi tidak dapat diakses sama sekali oleh semua pengguna. | Kegagalan otentikasi global, kebocoran kunci rahasia, PostgREST crash, RLS jebol. | **< 15 menit** |
-| **P1** | **Tinggi / Fitur Inti Macet**: Salah satu fitur utama (Modul Ajar AI, Penyerahan Tugas Siswa, Penilaian Guru, atau Ekspor PPTX) gagal beroperasi untuk seluruh pengguna tanpa alternatif. | AI provider gagal total tanpa failover, RPC submit penugasan gagal, rendering PPTX gagal permanen. | **< 45 menit** |
-| **P2** | **Sedang / Degradasi Parsial**: Fitur mengalami penurunan performa atau fitur sekunder tidak berfungsi, namun alur belajar-mengajar utama masih dapat berjalan. | Kuota Gemini habis memicu failover lambat ke OpenAI (>2s), format lampiran tertentu gagal parsing, styling minor rusak. | **< 4 jam** |
-| **P3** | **Rendah / Isu Kosmetik & Minor**: Kesalahan pengetikan, peringatan linter non-kritis, visual layout minor pada resolusi tertentu, atau permintaan fitur kecil. | Typo teks panduan, label tombol kurang pas di layar 320px, minor warning di konsol dev. | **Rilis Terjadwal** |
+| Tingkat | Kriteria & Dampak Bisnis | Contoh Kasus | Target Waktu Tanggap (MTTR) | Tindakan Segera |
+|:---:|---|---|:---:|---|
+| **P0** | **Kritis / Pemadaman Total**: Seluruh sistem mati atau kebocoran data keamanan fatal. | Basis data Postgres mati, GoTrue auth gateway gagal total, RLS tertembus. | **< 15 menit** | Lakukan investigasi infrastruktur Supabase, isolasi jaringan, periksa status endpoint `/api/health`. |
+| **P1** | **Tinggi / Fitur Inti Macet**: Fitur utama tidak dapat digunakan tanpa alternatif yang bekerja. | Kedua penyedia AI (Gemini & OpenAI) gagal serentak, RPC penyerahan tugas error, unduhan PPTX rusak. | **< 45 menit** | Periksa kuota API AI, cek pooler PostgREST, periksa apakah terjadi error struktural pada generator PPTX. |
+| **P2** | **Sedang / Degradasi Parsial**: Salah satu penyedia AI mengalami limit atau latensi tinggi, namun fallback aktif normal. | Gemini 429 beralih otomatis ke OpenAI fallback, latensi generasi naik dari 1s ke 4s. | **< 4 jam** | Pantau grafik `/api/health` untuk sub-sistem `ai: degraded`, pertimbangkan penyesuaian kuota API. |
+| **P3** | **Rendah / Isu Minor Non-Kritis**: Masalah kosmetik, label teks minor, atau anomali UI pada layar non-standar. | Typo teks panduan modul, padding tombol tidak sejajar pada perangkat 320px. | **Rilis Terjadwal** | Buat tiket perbaikan terencana, lakukan deploy rutin tanpa hotfix darurat. |
 
 ---
 
-## 2. Alur Kerja Penanganan Insiden (Incident Response Flow)
+## 2. Alur Triage Cepat Berdasarkan Correlation ID
 
-```text
-1. DETEKSI (Monitoring alert, bug report pengguna, lonjakan error log)
-      ↓
-2. REPRODUKSI (Verifikasi di lingkungan QA / script pengujian)
-      ↓
-3. KLASIFIKASI (Tentukan tingkat keparahan P0 / P1 / P2 / P3)
-      ↓
-4. PEMBATASAN / CONTAINMENT (Aktifkan fallback, batasi fitur bermasalah, atau isolasi rute)
-      ↓
-5. PERBAIKAN AKAR MASALAH (Root Cause Resolution pada modul yang tepat)
-      ↓
-6. PENGUJIAN REGRESI (Jalankan suite uji regresi lokal: npm test, npm run test:qa4)
-      ↓
-7. DEPLOYMENT TERKONTROL (Fast-forward push ke main atau rollback Vercel)
-      ↓
-8. VERIFIKASI PRODUKSI (Smoke test rute live dan verifikasi akun riil)
-      ↓
-9. DOKUMENTASI & POST-MORTEM (Catat akar masalah, perbaikan, dan aksi mitigasi di docs/)
-```
+Setiap kali pengguna melaporkan error atau konsol mencatat insiden, sistem menyertakan kode referensi unik (`correlationId`, misal: `079b070b-0753-478a-b011-181c6f312d62`).
+
+### Langkah Penelusuran Berbasis Correlation ID:
+1. **Dapatkan ID Referensi**: Salin kode dari laporan bug guru atau dari string error `(Referensi: <id>)`.
+2. **Pencarian Log Terstruktur**:
+   - Buka Vercel Deployment Logs atau konsol server.
+   - Filter pencarian dengan ID tersebut: `correlationId == "<id>"`.
+3. **Analisis Konteks Error**:
+   - Periksa field `subsystem` (contoh: `ai-core`, `pptx-renderer`, `auth`, `storage`).
+   - Periksa field `code` (contoh: `AI_RATE_LIMIT`, `SOURCE_TOO_LARGE`, `AI_SAFETY_BLOCKED`).
+   - Periksa apakah kredensial telah disanitasi secara aman (memastikan tidak ada kebocoran kunci).
 
 ---
 
-## 3. Diagnosis Cepat Berdasarkan Taksonomi Error (Quick Diagnostic Guides)
+## 3. Playbook Penanganan Berdasarkan Sub-sistem
 
-### A. `AUTH_ERROR` / Error 401 atau PGRST301
-- **Gejala**: Pengguna melihat *"Forbidden: Gagal memuat profil basis data (Invalid API key)"* atau gagal masuk.
-- **Penyebab Utama**: Kontaminasi variabel lingkungan lama atau token sesi kadaluarsa.
-- **Langkah Penanganan**:
-  1. Periksa `auth-middleware.ts` untuk memastikan `CANONICAL_SUPABASE_URL` dan `CANONICAL_SUPABASE_PUBLISHABLE_KEY` aktif.
-  2. Jalankan `npm run verify:auth` untuk memeriksa gateway Supabase Auth live.
-  3. Minta pengguna menghapus session storage/cookies lalu login ulang jika sesi lama kadaluarsa.
+### A. Sub-sistem Otentikasi (`AUTH_ERROR` / 401 / 403)
+- **Indikasi**: `/api/health` melaporkan `subsystems.auth.status: "unavailable"` atau `"degraded"`.
+- **Penyebab**: Sesi token JWT kedaluwarsa, atau variabel Supabase anon key tertimpa.
+- **Prosedur Pemulihan**:
+  1. Jalankan verifikasi live: `node scripts/verify-live-auth.mjs`.
+  2. Pastikan Vercel Production Environment Variables menggunakan project ID kanonikal `dxzzpsrgbiummjplggyo`.
+  3. Instruksikan pengguna untuk melakukan login ulang jika refresh token gagal.
 
-### B. `AI_PROVIDER_ERROR` / Error 429 atau 503
-- **Gejala**: Generasi modul atau ilustrasi gagal atau memakan waktu lebih lama dari biasanya.
-- **Penyebab Utama**: Batas kuota (rate limit) Google Gemini terlampaui.
-- **Langkah Penanganan**:
-  1. Periksa log konsol untuk pesan `[DualIllustrationRouter] Primary provider (gemini) failed with retryable error (429)`.
-  2. Pastikan failover otomatis ke OpenAI (`gpt-image-2` / `gpt-4o-mini`) terjadi tanpa intervensi manual.
-  3. Jika kedua penyedia mengalami gangguan eksternal, tampilkan pesan ramah sistem yang merekomendasikan pengguna mencoba kembali dalam 2 menit.
+### B. Sub-sistem AI Dual-Router (`AI_RATE_LIMIT` / `PROVIDER_UNAVAILABLE`)
+- **Indikasi**: `/api/health` melaporkan `subsystems.ai.status: "degraded"` (salah satu provider down) atau `"unavailable"`.
+- **Penyebab**: Batas kuota RPM (20 req/min) terlampaui atau terjadi upstream outage pada Google Gemini.
+- **Prosedur Pemulihan**:
+  1. Verifikasi router failover otomatis: pastikan OpenAI cadangan mengambil alih permintaan visual secara mulus.
+  2. Jika status berubah menjadi `AI_SAFETY_BLOCKED`, **JANGAN** lakukan intervensi paksa: ini adalah penghentian yang disengaja (*fail-closed*) karena prompt memuat konten yang melanggar kebijakan pedagogis/keamanan.
+  3. Jika kedua provider kehabisan kuota, sistem mengembalikan kode aman 503 dengan panduan agar pengguna menunggu 2 menit.
 
-### C. `GROUNDING_ERROR` / Validasi Anti-Halusinasi Gagal
-- **Gejala**: Guru menerima peringatan *"Topik tidak ditemukan atau tidak didukung secara memadai oleh materi sumber"*.
-- **Penyebab Utama**: Penolakan yang disengaja oleh sistem anti-halusinasi (*fail-closed*) karena materi sumber tidak memuat topik yang diminta guru, atau judul dokumen mengandung ekstensi boilerplate.
-- **Langkah Penanganan**:
-  1. **Bukan Bug**: Ini adalah perilaku keselamatan yang diharapkan agar modul tidak berhalusinasi.
-  2. Pandu guru untuk menggunakan tombol *"Saran dari sumber: ... (Gunakan)"* atau menempelkan teks materi yang relevan pada tab Teks.
-
-### D. `PPTX_ERROR` / Kegagalan Pembuatan Presentasi
-- **Gejala**: Guru gagal mengunduh file presentasi PPTX atau gerbang mutu PPT-1F memberikan keputusan `FAIL`.
-- **Penyebab Utama**: Struktur slide tidak memenuhi syarat kelulusan (kontras warna rendah, teks kosong, atau kerusakan ZIP OpenXML).
-- **Langkah Penanganan**:
-  1. Jalankan `npm run test:ppt1f` untuk menguji generator secara terisolasi.
-  2. Periksa apakah `renderPresentationPptx` menghasilkan biner OOXML yang valid ($\ge 50$ KB).
+### C. Sub-sistem Penyimpanan & PPTX (`PPTX_ERROR` / `HASH_MISMATCH`)
+- **Indikasi**: Pengguna gagal mengunduh berkas presentasi atau menerima `PRESENTATION_ARTIFACT_HASH_MISMATCH`.
+- **Penyebab**: Terjadi kegagalan koneksi saat transmisi biner OpenXML atau biner lokal tidak cocok dengan hash SHA-256 yang tercatat di basis data.
+- **Prosedur Pemulihan**:
+  1. Jalankan suite uji PPTX: `npx tsx tests/ops/ops-production-monitoring.test.mjs`.
+  2. Pastikan bucket `presentation-artifacts` di Supabase Storage memiliki hak akses RLS yang sah untuk guru pemilik modul.
+  3. Jika file rusak di storage, lakukan *regenerate* terkontrol melalui antarmuka modul presentasi dengan persetujuan guru yang sah (*teacher sovereign approval*).
 
 ---
 
-## 4. Prosedur Eskalasi & Kontak Tanggap Darurat
+## 4. Prosedur Rollback Darurat (Emergency Rollback)
 
-1. **Koordinator Operasional / Tech Lead**:
-   - Memutuskan status keparahan insiden (P0/P1).
-   - Menyetujui penerapan *hotfix* ke cabang `main` atau inisiasi *rollback*.
-2. **Kanal Pelaporan Pengguna**:
-   - Fitur bawaan pelaporan bug: Tombol *"Laporkan Masalah"* di dalam aplikasi yang langsung menulis ke tabel Supabase `bug_reports`.
-   - Admin dapat meninjau seluruh laporan secara langsung di `/dashboard` tab *Laporan Masalah*.
+Jika sebuah pembaruan kode menyebabkan status P0/P1 yang tidak dapat diselesaikan dalam 15 menit:
+1. **Rollback Vercel Instant**:
+   - Masuk ke Vercel Dashboard → *Deployments*.
+   - Pilih deployment stabil terakhir (misal commit `5c8b982` dari rilis GO-LIVE-1).
+   - Klik menu titik tiga (...) → *Instant Rollback*.
+   - Waktu propagasi: < 30 detik secara global.
+2. **Verifikasi Pasca-Rollback**:
+   - Akses `https://gurupro-ai-journal.vercel.app/api/health` dan pastikan status kembali `healthy`.
+   - Jalankan `npm run test:ops` untuk memastikan integritas kembali 100%.

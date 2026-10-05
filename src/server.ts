@@ -100,6 +100,19 @@ export default {
           // ignore error in strict environments
         }
       }
+      const url = new URL(request.url);
+      if (url.pathname === "/api/health" || url.pathname === "/health") {
+        const { checkProductionHealthStatus } = await import("./lib/production-health");
+        const health = await checkProductionHealthStatus();
+        return new Response(JSON.stringify(health, null, 2), {
+          status: health.status === "unavailable" ? 503 : 200,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "cache-control": "no-store, no-cache, must-revalidate",
+          },
+        });
+      }
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);

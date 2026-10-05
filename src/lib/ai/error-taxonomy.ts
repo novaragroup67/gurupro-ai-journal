@@ -155,15 +155,30 @@ export class AiServiceError extends Error {
   public readonly isRetryable: boolean;
   public readonly userMessage: string;
   public readonly details?: unknown;
+  public readonly correlationId: string;
+  public readonly timestamp: string;
+  public readonly subsystem: string;
 
-  constructor(code: AiErrorCode, customMessage?: string, details?: unknown) {
+  constructor(
+    code: AiErrorCode,
+    customMessage?: string,
+    details?: unknown,
+    options?: { correlationId?: string; subsystem?: string },
+  ) {
     const defaultMsg = USER_MESSAGES[code] || "Terjadi kesalahan pada layanan AI.";
     const message = customMessage || defaultMsg;
     super(message);
     this.name = "AiServiceError";
     this.code = code;
-    this.userMessage = message;
+    this.userMessage = USER_MESSAGES[code] || defaultMsg;
     this.details = details;
+    this.correlationId =
+      options?.correlationId ||
+      (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`);
+    this.timestamp = new Date().toISOString();
+    this.subsystem = options?.subsystem || "ai-core";
 
     switch (code) {
       case "AUTH_ERROR":
@@ -184,12 +199,23 @@ export class AiServiceError extends Error {
         this.statusCode = 409;
         this.isRetryable = false;
         break;
+      case "SOURCE_TOO_LARGE":
+        this.statusCode = 413;
+        this.isRetryable = false;
+        break;
+      case "AI_SAFETY_BLOCKED":
+        this.statusCode = 400;
+        this.isRetryable = false;
+        break;
+      case "AI_QUOTA_EXCEEDED":
+        this.statusCode = 429;
+        this.isRetryable = false;
+        break;
       case "INVALID_REQUEST":
       case "INVALID_PARAMETERS":
       case "PPTX_INVALID_CONTENT":
       case "SOURCE_VALIDATION_ERROR":
       case "SOURCE_EMPTY":
-      case "SOURCE_TOO_LARGE":
         this.statusCode = 400;
         this.isRetryable = false;
         break;
@@ -278,65 +304,101 @@ export class AiServiceError extends Error {
       name: this.name,
       code: this.code,
       message: this.message,
+      userMessage: this.userMessage,
       statusCode: this.statusCode,
       isRetryable: this.isRetryable,
+      correlationId: this.correlationId,
+      timestamp: this.timestamp,
+      subsystem: this.subsystem,
     };
   }
 }
 
 /**
- * Sanitizes any raw exception into a canonical AiServiceError
- * with zero secret leakage.
+ * Sanitizes sensitive credentials, JWTs, API keys, and passwords from strings.
  */
-export function normalizeAiError(err: unknown): AiServiceError {
+export function redactSensitiveInfo(text: unknown): string {
+  if (text == null) return "";
+  const str = typeof text === "string" ? text : String(text);
+  return str
+    .replace(/eyJ[a-zA-Z0-9_-]{5,}\.[a-zA-Z0-9_-]{5,}\.[a-zA-Z0-9_-]*/g, "[REDACTED_JWT]")
+    .replace(/AIzaSy[A-Za-z0-9_-]+/g, "[REDACTED_GEMINI_KEY]")
+    .replace(/sk-[a-zA-Z0-9_-]+/g, "[REDACTED_OPENAI_KEY]")
+    .replace(/(bearer\s+)[a-zA-Z0-9_\-\.]{8,}/gi, "$1[REDACTED]")
+    .replace(/(api[-_]?key[:=]\s*)[a-zA-Z0-9_\-\.]{8,}/gi, "$1[REDACTED]")
+    .replace(/(ai:key:)[a-zA-Z0-9_\-\.]{8,}/gi, "$1[REDACTED]")
+    .replace(/password[:=]\s*[^\s,;]+/gi, "password=[REDACTED]");
+}
+
+/**
+ * Sanitizes any raw exception into a canonical AiServiceError
+ * with zero secret leakage and correlation traceability.
+ */
+export function normalizeAiError(
+  err: unknown,
+  fallbackContext?: string,
+  correlationId?: string,
+): AiServiceError {
   if (err instanceof AiServiceError) {
     return err;
   }
 
   const rawMsg = err instanceof Error ? err.message : String(err);
   const lower = rawMsg.toLowerCase();
+  const sanitizedMsg = redactSensitiveInfo(rawMsg);
 
-  // Strip potential keys or credentials from raw error messages
-  const sanitizedMsg = rawMsg
-    .replace(/(bearer\s+)[a-zA-Z0-9_\-\.]{8,}/gi, "$1[REDACTED]")
-    .replace(/(api[-_]?key[:=]\s*)[a-zA-Z0-9_\-\.]{8,}/gi, "$1[REDACTED]")
-    .replace(/(ai:key:)[a-zA-Z0-9_\-\.]{8,}/gi, "$1[REDACTED]");
+  const opts = { correlationId, subsystem: fallbackContext || "ai-core" };
 
   if (lower.includes("timeout") || lower.includes("aborted") || lower.includes("abort")) {
-    return new AiServiceError(AI_ERROR_CODES.AI_TIMEOUT, undefined, sanitizedMsg);
+    return new AiServiceError(AI_ERROR_CODES.AI_TIMEOUT, sanitizedMsg, sanitizedMsg, opts);
+  }
+  if (lower.includes("safety") || lower.includes("kebijakan") || lower.includes("harm") || lower.includes("blocked") || lower.includes("refusal")) {
+    return new AiServiceError(AI_ERROR_CODES.AI_SAFETY_BLOCKED, sanitizedMsg, sanitizedMsg, opts);
   }
   if (lower.includes("rate limit") || lower.includes("429") || lower.includes("terlalu banyak")) {
-    return new AiServiceError(AI_ERROR_CODES.AI_RATE_LIMIT, undefined, sanitizedMsg);
+    return new AiServiceError(AI_ERROR_CODES.AI_RATE_LIMIT, sanitizedMsg, sanitizedMsg, opts);
   }
   if (lower.includes("unauthorized") || lower.includes("401") || lower.includes("api key tidak valid")) {
-    return new AiServiceError(AI_ERROR_CODES.AUTH_ERROR, undefined, sanitizedMsg);
+    return new AiServiceError(AI_ERROR_CODES.AUTH_ERROR, sanitizedMsg, sanitizedMsg, opts);
   }
   if (lower.includes("forbidden") || lower.includes("403") || lower.includes("peran guru")) {
-    return new AiServiceError(AI_ERROR_CODES.ROLE_FORBIDDEN, undefined, sanitizedMsg);
+    return new AiServiceError(AI_ERROR_CODES.ROLE_FORBIDDEN, sanitizedMsg, sanitizedMsg, opts);
   }
   if (lower.includes("ssrf") || lower.includes("internal/lokal") || lower.includes("private ip")) {
-    return new AiServiceError(AI_ERROR_CODES.SOURCE_VALIDATION_ERROR, "Tautan internal atau alamat lokal diblokir untuk keamanan.");
+    return new AiServiceError(AI_ERROR_CODES.SOURCE_VALIDATION_ERROR, "Tautan internal atau alamat lokal diblokir untuk keamanan.", sanitizedMsg, opts);
   }
   if (lower.includes("terlalu sedikit") || lower.includes("kosong")) {
-    return new AiServiceError(AI_ERROR_CODES.SOURCE_EMPTY, undefined, sanitizedMsg);
+    return new AiServiceError(AI_ERROR_CODES.SOURCE_EMPTY, sanitizedMsg, sanitizedMsg, opts);
   }
-  if (lower.includes("terlalu besar") || lower.includes("2mb")) {
-    return new AiServiceError(AI_ERROR_CODES.SOURCE_TOO_LARGE, undefined, sanitizedMsg);
+  if (lower.includes("terlalu besar") || lower.includes("2mb") || lower.includes("large")) {
+    return new AiServiceError(AI_ERROR_CODES.SOURCE_TOO_LARGE, sanitizedMsg, sanitizedMsg, opts);
   }
   if (lower.includes("tipe konten") || lower.includes("tidak didukung") || lower.includes("unsupported") || lower.includes("parse") || lower.includes("bukan teks") || lower.includes("tidak terbaca") || lower.includes("unreadable")) {
-    return new AiServiceError(AI_ERROR_CODES.SOURCE_PARSE_ERROR, undefined, sanitizedMsg);
+    return new AiServiceError(AI_ERROR_CODES.SOURCE_PARSE_ERROR, sanitizedMsg, sanitizedMsg, opts);
   }
   if (lower.includes("grounding") || lower.includes("fakta tidak ditemukan")) {
-    return new AiServiceError(AI_ERROR_CODES.AI_GROUNDING_ERROR, undefined, sanitizedMsg);
+    return new AiServiceError(AI_ERROR_CODES.AI_GROUNDING_ERROR, sanitizedMsg, sanitizedMsg, opts);
   }
   if (lower.includes("json") || lower.includes("schema tidak valid") || lower.includes("output tidak valid")) {
-    return new AiServiceError(AI_ERROR_CODES.AI_OUTPUT_INVALID, undefined, sanitizedMsg);
+    return new AiServiceError(AI_ERROR_CODES.AI_OUTPUT_INVALID, sanitizedMsg, sanitizedMsg, opts);
   }
   if (lower.includes("fetch") || lower.includes("gagal diakses") || lower.includes("domain")) {
-    return new AiServiceError(AI_ERROR_CODES.SOURCE_FETCH_ERROR, undefined, sanitizedMsg);
+    return new AiServiceError(AI_ERROR_CODES.SOURCE_FETCH_ERROR, sanitizedMsg, sanitizedMsg, opts);
   }
 
-  return new AiServiceError(AI_ERROR_CODES.AI_PROVIDER_ERROR, undefined, sanitizedMsg);
+  return new AiServiceError(AI_ERROR_CODES.AI_PROVIDER_ERROR, sanitizedMsg, sanitizedMsg, opts);
+}
+
+/**
+ * Returns a human-friendly user message with safe reference ID,
+ * preventing exposure of raw Postgres, PostgREST, or stack trace details.
+ */
+export function formatSafeUserErrorMessage(err: unknown): string {
+  if (err instanceof AiServiceError) {
+    return `${err.userMessage} (Referensi: ${err.correlationId})`;
+  }
+  const normalized = normalizeAiError(err);
+  return `${normalized.userMessage} (Referensi: ${normalized.correlationId})`;
 }
 
 /**
