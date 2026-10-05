@@ -232,27 +232,12 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
         userId = user.id;
         claims = user;
       } catch (apiErr: any) {
-        const detail = String(apiErr?.message || "");
-        console.warn("[AuthMiddleware] fetchAuthUser failed:", detail);
-        if (/expired|invalid jwt|jwt expired|bad_jwt/i.test(detail)) {
-          throw sessionExpiredError();
-        }
-
-        // If Auth gateway has a network/connectivity issue, fall back to unexpired JWT payload
-        const payload = readJwtPayload(token);
-        if (
-          payload &&
-          typeof payload.sub === "string" &&
-          payload.sub.length > 0 &&
-          !isJwtExpired(token, 0)
-        ) {
-          console.warn("[AuthMiddleware] Auth API network issue; falling back to JWT payload sub:", payload.sub);
-          userId = payload.sub;
-          claims = payload;
-        } else {
-          throw new Error("Unauthorized: Invalid token");
-        }
+        throw sessionExpiredError();
       }
+    }
+
+    if (!userId) {
+      throw sessionExpiredError();
     }
 
     const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {

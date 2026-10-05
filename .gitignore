@@ -37,3 +37,4 @@ dist-ssr
 *.ntvs*
 *.sw?
 supabase/.temp/
+scratch/

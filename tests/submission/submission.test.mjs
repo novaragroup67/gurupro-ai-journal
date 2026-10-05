@@ -141,7 +141,6 @@ function evaluateJawabanRls({
 // Simulated RPC: get_penugasan_soal_for_siswa
 function sanitizeQuestionsForStudent(rawQuestions) {
   return rawQuestions.map((q) => {
-    // eslint-disable-next-line no-unused-vars
     const { kunci, pembahasan, ...sanitized } = q;
     return sanitized;
   });

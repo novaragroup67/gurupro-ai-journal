@@ -31,7 +31,7 @@ import {
   ExternalLink,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
@@ -273,7 +273,7 @@ function StudentDashboard() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const siswaId = user?.id || profile.id;
     if (!siswaId) return;
     setLoading(true);
@@ -291,11 +291,11 @@ function StudentDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id, profile.id]);
 
   useEffect(() => {
     void loadData();
-  }, [user?.id, profile.id]);
+  }, [loadData]);
 
   const handleGabungSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

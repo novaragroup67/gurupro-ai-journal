@@ -2016,9 +2016,8 @@ function SiswaPenugasanView() {
   const [activePenugasan, setActivePenugasan] = useState<Penugasan | null>(null);
   const [filterTab, setFilterTab] = useState<"aktif" | "semua" | "closed">("aktif");
 
-  const now = new Date();
-
   const filteredItems = useMemo(() => {
+    const now = new Date();
     if (filterTab === "semua") return penugasanList;
     if (filterTab === "aktif") {
       return penugasanList.filter((p) => {
@@ -2718,7 +2717,7 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
     return () => {
       active = false;
     };
-  }, [penugasan.id, isClosed]);
+  }, [penugasan.id, isClosed, penugasan.remedialEnabled]);
 
   // Handler perubahan jawaban dengan autosave
   const handleAnswerChange = async (soalId: string, val: string) => {

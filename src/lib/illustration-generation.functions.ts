@@ -24,6 +24,8 @@ import {
   type GenerationPlan,
   type PlanAuthContext,
   createGenerationSpecification,
+  getStyleById,
+  ILLUSTRATION_STYLES_CATALOG,
 } from "./ai/generation-planning-contract";
 import {
   IllustrationGenerationParametersSchema,
@@ -32,6 +34,7 @@ import {
 } from "./ai/illustration-generation-contract";
 import {
   buildIllustrationGenerationRequest,
+  assembleIllustrationPrompt,
 } from "./ai/illustration-request-builder";
 import { assertValidImageBinary } from "./ai/image-validator";
 import { resolveIllustrationGenerationProvider } from "./ai/providers/illustration-provider-factory";
@@ -775,5 +778,393 @@ export const getIllustrationGenerationResultServerFn = createServerFn({
   .handler(async ({ data, context }) => {
     return executeGetIllustrationGenerationResult(data, context as any);
   });
+
+// ==============================================================================
+// 5. UNIFIED MODULE / SUBTOPIC ILLUSTRATIONS GENERATION SERVER FN (VIS-1F)
+// ==============================================================================
+
+const GenerateModuleIllustrationsInputSchema = z.object({
+  moduleId: z.string().min(1, "ID modul ajar wajib disertakan."),
+  sectionId: z.string().optional(),
+  forceRetry: z.boolean().optional(),
+});
+
+export async function executeGenerateModuleIllustrations(
+  data: { moduleId: string; sectionId?: string; forceRetry?: boolean },
+  context: { userId: string; profile?: any; supabase?: any }
+) {
+  const supabase = context.supabase;
+  const userId = context.userId;
+
+  // 1. Authoritative Role Guard
+  if (context.profile?.role && context.profile.role !== "guru") {
+    throw new AiServiceError(
+      AI_ERROR_CODES.ROLE_FORBIDDEN,
+      "Akses ditolak: Hanya pengguna dengan peran guru yang diizinkan melakukan operasi ini."
+    );
+  }
+
+  // 2. Fetch Modul Ajar
+  let modul: any = null;
+  try {
+    if (supabase) {
+      const { data: dbModul } = await supabase
+        .from("moduls")
+        .select("*")
+        .eq("id", data.moduleId)
+        .maybeSingle();
+      if (dbModul) modul = dbModul;
+    }
+  } catch {}
+
+  const {
+    fallbackModulesStore,
+    fallbackIllustrationAssets,
+    executePersistIllustrationAsset,
+    executeAttachIllustrationAsset,
+  } = await import("./illustration-asset.functions");
+
+  if (!modul) {
+    modul = fallbackModulesStore.get(data.moduleId) || null;
+  }
+
+  if (!modul) {
+    throw new AiServiceError(
+      AI_ERROR_CODES.INVALID_REQUEST,
+      "Modul ajar tidak ditemukan."
+    );
+  }
+
+  const modulOwnerId = modul.user_id || modul.userId;
+  if (modulOwnerId && modulOwnerId !== userId) {
+    throw new AiServiceError(
+      AI_ERROR_CODES.ROLE_FORBIDDEN,
+      "Akses ditolak: Anda bukan pemilik modul ajar ini."
+    );
+  }
+
+  // 3. Fetch Generation Plan
+  let plan: GenerationPlan | null = null;
+  try {
+    if (supabase) {
+      const { data: row } = await supabase
+        .from("generation_plans")
+        .select("*")
+        .eq("module_id", data.moduleId)
+        .eq("target_type", "illustration")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (row) plan = toPlan(row);
+    }
+  } catch {}
+
+  if (!plan) {
+    for (const p of fallbackTestPlans.values()) {
+      if (p.moduleId === data.moduleId && p.targetType === "illustration") {
+        plan = p;
+        break;
+      }
+    }
+  }
+
+  if (!plan) {
+    const { getGenerationPlanServerFn } = await import("./generation-planning.functions");
+    try {
+      const planRes = (await getGenerationPlanServerFn({
+        data: { moduleId: data.moduleId, targetType: "illustration" },
+      })) as any;
+      if (planRes?.plan) plan = planRes.plan;
+    } catch {}
+  }
+
+  if (!plan) {
+    throw new AiServiceError(
+      AI_ERROR_CODES.PLAN_NOT_FOUND,
+      "Rencana ilustrasi belum dibuat untuk modul ini."
+    );
+  }
+
+  if (plan.ownerId !== userId) {
+    throw new AiServiceError(
+      AI_ERROR_CODES.ROLE_FORBIDDEN,
+      "Akses ditolak: Anda bukan pemilik rencana ilustrasi ini."
+    );
+  }
+
+  if (plan.status !== "approved") {
+    throw new AiServiceError(
+      AI_ERROR_CODES.PLAN_NOT_APPROVED,
+      "Rencana ilustrasi belum disetujui oleh guru. Harap setujui rencana pada Langkah 4 terlebih dahulu."
+    );
+  }
+
+  if (plan.approvedVersion !== plan.currentVersion) {
+    throw new AiServiceError(
+      AI_ERROR_CODES.STALE_APPROVAL,
+      `Persetujuan rencana telah usang (versi disetujui: ${plan.approvedVersion}, versi saat ini: ${plan.currentVersion}). Harap setujui ulang rencana.`
+    );
+  }
+
+  if (!plan.style || !plan.style.styleId) {
+    throw new AiServiceError(
+      AI_ERROR_CODES.INVALID_STYLE,
+      "Gaya visual belum dipilih pada rencana generasi."
+    );
+  }
+
+  // 4. Derive Canonical Generation Specification
+  const authContext: PlanAuthContext = {
+    userId,
+    role: context.profile?.role || "guru",
+    isGuru: true,
+    verificationStatus: context.profile?.status_verifikasi || "verified",
+  };
+
+  const spec = createGenerationSpecification(plan, authContext);
+
+  // 5. Target Sections
+  let targetSections = Array.isArray(modul.sections) ? [...modul.sections] : [];
+  if (data.sectionId) {
+    targetSections = targetSections.filter((s) => s.id === data.sectionId);
+    if (targetSections.length === 0) {
+      throw new AiServiceError(
+        AI_ERROR_CODES.INVALID_REQUEST,
+        `Bab / Section dengan ID '${data.sectionId}' tidak ditemukan pada modul.`
+      );
+    }
+  }
+
+  if (targetSections.length === 0) {
+    targetSections = [
+      {
+        id: "section_main",
+        judul: modul.judul,
+        poin: [],
+        isi: modul.ringkasan || "",
+      },
+    ];
+  }
+
+  // 6. Process each section
+  const items: Array<{
+    sectionId: string;
+    sectionTitle: string;
+    status: "succeeded" | "failed";
+    asset?: any;
+    error?: { code: string; message: string };
+    fromCache?: boolean;
+  }> = [];
+
+  for (const s of targetSections) {
+    const subtopicTitle = s.judul || modul.judul;
+    const cleanSubtopic =
+      subtopicTitle.replace(/^(\d+[\.\)]|\s*Bab\s*\d+:?)\s*/i, "").trim() || subtopicTitle;
+
+    // Deduplication check: if existing active attached asset exists and not forceRetry
+    if (!data.forceRetry) {
+      let existingAsset = null;
+      for (const ast of fallbackIllustrationAssets.values()) {
+        if (
+          ast.module_id === data.moduleId &&
+          ast.attached_section_id === s.id &&
+          ast.lifecycle_status === "attached"
+        ) {
+          existingAsset = ast;
+          break;
+        }
+      }
+      if (existingAsset) {
+        items.push({
+          sectionId: s.id,
+          sectionTitle: s.judul,
+          status: "succeeded",
+          asset: existingAsset,
+          fromCache: true,
+        });
+        continue;
+      }
+    }
+
+    // Contextual section outline grounded on actual subtopic
+    const sectionOutline = {
+      ...(plan.outline as any),
+      title: `Ilustrasi: ${s.judul}`,
+      mainSubject: cleanSubtopic,
+      educationalFocus: `Memvisualisasikan materi pembelajaran sub-topik ${cleanSubtopic} untuk siswa kelas ${modul.kelas || "terkait"}.`,
+      supportingElements:
+        Array.isArray(s.poin) && s.poin.length > 0
+          ? s.poin.slice(0, 4)
+          : [`Sub-topik: ${cleanSubtopic}`],
+      importantVisualDetails: s.isi
+        ? [s.isi.slice(0, 100)]
+        : [`Visualisasi representatif ${cleanSubtopic}`],
+      sectionId: s.id,
+    };
+
+    const fullStyle = getStyleById(plan.style.styleId) || ILLUSTRATION_STYLES_CATALOG[0];
+    const assembled = assembleIllustrationPrompt(sectionOutline, fullStyle);
+    const sectionSpec = {
+      ...spec,
+      prompt: assembled.fullPrompt,
+      sectionId: s.id,
+    };
+
+    const sectionPlan: GenerationPlan = {
+      ...plan,
+      outline: sectionOutline,
+    };
+
+    let req: IllustrationGenerationRequest;
+    try {
+      req = buildIllustrationGenerationRequest({
+        spec: sectionSpec,
+        plan: sectionPlan,
+        authContext,
+        overrideParams: {
+          sectionId: s.id,
+        },
+      });
+    } catch (err: any) {
+      items.push({
+        sectionId: s.id,
+        sectionTitle: s.judul,
+        status: "failed",
+        error: {
+          code: err.code || AI_ERROR_CODES.INVALID_REQUEST,
+          message: err.message || "Gagal membangun spesifikasi permintaan ilustrasi.",
+        },
+      });
+      continue;
+    }
+
+    // Persist request row
+    const nowIso = new Date().toISOString();
+    const storedReqRow: StoredIllustrationRequestRow = {
+      id: req.requestId,
+      generation_plan_id: req.generationPlanId,
+      approved_version: req.approvedOutlineVersion,
+      style_id: req.styleId,
+      style_version: req.styleVersion,
+      request_snapshot: req,
+      status: "prepared",
+      created_by: userId,
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+    fallbackIllustrationRequests.set(req.requestId, storedReqRow);
+    try {
+      if (supabase) {
+        await supabase.from("illustration_generation_requests").insert(storedReqRow);
+      }
+    } catch {}
+
+    // Execute generation via canonical VIS-1B engine
+    const genRes = await executeGenerateIllustration(
+      { requestId: req.requestId, forceRetry: data.forceRetry },
+      context
+    );
+
+    if (genRes.result.status === "succeeded" && genRes.result.generationId) {
+      try {
+        // Persist asset via canonical VIS-1C engine
+        const persistRes = await executePersistIllustrationAsset(
+          { generationId: genRes.result.generationId, targetSectionId: s.id },
+          context
+        );
+
+        // Attach asset via canonical VIS-1C engine
+        await executeAttachIllustrationAsset(
+          { assetId: persistRes.asset.id, moduleId: data.moduleId, sectionId: s.id },
+          context
+        );
+
+        s.ilustrasi = persistRes.asset.publicUrl;
+
+        items.push({
+          sectionId: s.id,
+          sectionTitle: s.judul,
+          status: "succeeded",
+          asset: persistRes.asset,
+          fromCache: Boolean(genRes.fromCache),
+        });
+      } catch (assetErr: any) {
+        items.push({
+          sectionId: s.id,
+          sectionTitle: s.judul,
+          status: "failed",
+          error: {
+            code: assetErr.code || AI_ERROR_CODES.PERSISTENCE_ERROR,
+            message: assetErr.message || "Gagal menyimpan atau menautkan aset ilustrasi.",
+          },
+        });
+      }
+    } else {
+      items.push({
+        sectionId: s.id,
+        sectionTitle: s.judul,
+        status: "failed",
+        error: {
+          code: genRes.result.error?.code || AI_ERROR_CODES.GENERATION_FAILED,
+          message: genRes.result.error?.message || "Generasi gambar gagal dari penyedia AI.",
+        },
+      });
+    }
+  }
+
+  // Update modul sections if changes occurred
+  if (Array.isArray(modul.sections)) {
+    const updatedSections = modul.sections.map((sec: any) => {
+      const match = items.find((item) => item.sectionId === sec.id && item.status === "succeeded");
+      if (match?.asset?.publicUrl) {
+        return { ...sec, ilustrasi: match.asset.publicUrl };
+      }
+      return sec;
+    });
+    modul.sections = updatedSections;
+    modul.updated_at = new Date().toISOString();
+    fallbackModulesStore.set(data.moduleId, modul);
+    try {
+      if (supabase) {
+        await supabase
+          .from("moduls")
+          .update({ sections: updatedSections, updated_at: modul.updated_at })
+          .eq("id", data.moduleId);
+      }
+    } catch {}
+  }
+
+  const total = items.length;
+  const succeeded = items.filter((i) => i.status === "succeeded").length;
+  const failed = items.filter((i) => i.status === "failed").length;
+
+  return {
+    status: "success" as const,
+    total,
+    succeeded,
+    failed,
+    items,
+    sections: modul.sections,
+  };
+}
+
+export const generateModuleIllustrationsServerFn = createServerFn({
+  method: "POST",
+})
+  .middleware([requireTeacherAiAuth])
+  .validator((input: unknown) => {
+    const parsed = GenerateModuleIllustrationsInputSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new AiServiceError(
+        AI_ERROR_CODES.INVALID_REQUEST,
+        "Parameter permintaan generasi ilustrasi modul tidak valid."
+      );
+    }
+    return parsed.data;
+  })
+  .handler(async ({ data, context }) => {
+    return executeGenerateModuleIllustrations(data, context as any);
+  });
+
 
 

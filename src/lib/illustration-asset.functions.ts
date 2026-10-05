@@ -276,9 +276,14 @@ export async function executePersistIllustrationAsset(
 
   try {
     if (supabase) {
-      await supabase.from("illustration_assets").insert(assetRow);
+      const { error: insertErr } = await supabase.from("illustration_assets").insert(assetRow);
+      if (insertErr) {
+        console.warn("[executePersistIllustrationAsset] Supabase insert asset warning:", insertErr.message);
+      }
     }
-  } catch {}
+  } catch (err) {
+    console.warn("[executePersistIllustrationAsset] Exception persisting asset to Supabase:", err);
+  }
 
   // If section ID was provided, also attach to module
   if (data.targetSectionId) {
@@ -551,7 +556,7 @@ export async function executeDetachIllustrationAsset(
 
   // Unlink from modul sections if it was attached
   if (previousSectionId) {
-    let modul = fallbackModulesStore.get(assetRow.module_id);
+    const modul = fallbackModulesStore.get(assetRow.module_id);
     if (modul && Array.isArray(modul.sections)) {
       const sec = modul.sections.find((s: any) => s.id === previousSectionId);
       if (sec && sec.ilustrasi === assetRow.public_url) {

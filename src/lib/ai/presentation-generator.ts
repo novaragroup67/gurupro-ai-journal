@@ -396,7 +396,7 @@ export async function evaluatePresentationContentSemantics(
   // Deterministic Semantic Evaluator
   const findings: SemanticQualityEvaluationResult["findings"] = [];
   let outlineAlignment: SemanticQualityEvaluationResult["outlineAlignment"] = "aligned";
-  let factualGrounding: SemanticQualityEvaluationResult["factualGrounding"] = "grounded";
+  const factualGrounding: SemanticQualityEvaluationResult["factualGrounding"] = "grounded";
   let styleCompliance: SemanticQualityEvaluationResult["styleCompliance"] = "compliant";
 
   // Check 1: Slide title and purpose correlation

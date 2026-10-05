@@ -17,6 +17,8 @@ export const AI_ERROR_CODES = {
   AI_PROVIDER_ERROR: "AI_PROVIDER_ERROR",
   AI_TIMEOUT: "AI_TIMEOUT",
   AI_RATE_LIMIT: "AI_RATE_LIMIT",
+  AI_QUOTA_EXCEEDED: "AI_QUOTA_EXCEEDED",
+  AI_SAFETY_BLOCKED: "AI_SAFETY_BLOCKED",
   AI_OUTPUT_INVALID: "AI_OUTPUT_INVALID",
   PROVIDER_MALFORMED_OUTPUT: "PROVIDER_MALFORMED_OUTPUT",
   AI_GROUNDING_ERROR: "AI_GROUNDING_ERROR",
@@ -41,6 +43,7 @@ export const AI_ERROR_CODES = {
   INVALID_PARAMETERS: "INVALID_PARAMETERS",
   MISSING_GROUNDING: "MISSING_GROUNDING",
   PROVIDER_UNAVAILABLE: "PROVIDER_UNAVAILABLE",
+  AI_UPSTREAM_ERROR: "AI_UPSTREAM_ERROR",
   GENERATION_FAILED: "GENERATION_FAILED",
   PRESENTATION_GENERATION_FAILED: "PRESENTATION_GENERATION_FAILED",
   PRESENTATION_VALIDATION_FAILED: "PRESENTATION_VALIDATION_FAILED",
@@ -49,6 +52,28 @@ export const AI_ERROR_CODES = {
   PRESENTATION_REVISION_FAILED: "PRESENTATION_REVISION_FAILED",
   PRESENTATION_STALE_REQUEST: "PRESENTATION_STALE_REQUEST",
   PRESENTATION_INVALID_OUTPUT: "PRESENTATION_INVALID_OUTPUT",
+  PPTX_RENDER_FAILED: "PPTX_RENDER_FAILED",
+  PPTX_VALIDATION_FAILED: "PPTX_VALIDATION_FAILED",
+  PPTX_STORAGE_FAILED: "PPTX_STORAGE_FAILED",
+  PPTX_INVALID_CONTENT: "PPTX_INVALID_CONTENT",
+  PPTX_SLIDE_COUNT_MISMATCH: "PPTX_SLIDE_COUNT_MISMATCH",
+  PPTX_ARTIFACT_NOT_FOUND: "PPTX_ARTIFACT_NOT_FOUND",
+  PPTX_UNAPPROVED_ILLUSTRATION: "PPTX_UNAPPROVED_ILLUSTRATION",
+  PPTX_ILLUSTRATION_NOT_FOUND: "PPTX_ILLUSTRATION_NOT_FOUND",
+  PPTX_ILLUSTRATION_LOAD_FAILED: "PPTX_ILLUSTRATION_LOAD_FAILED",
+  PPTX_ILLUSTRATION_UNSUPPORTED_FORMAT: "PPTX_ILLUSTRATION_UNSUPPORTED_FORMAT",
+  PPTX_ILLUSTRATION_LIFECYCLE_INVALID: "PPTX_ILLUSTRATION_LIFECYCLE_INVALID",
+  PRESENTATION_REVIEW_NOT_FOUND: "PRESENTATION_REVIEW_NOT_FOUND",
+  PRESENTATION_REVIEW_INVALID_TRANSITION: "PRESENTATION_REVIEW_INVALID_TRANSITION",
+  PRESENTATION_REVIEW_VERSION_MISMATCH: "PRESENTATION_REVIEW_VERSION_MISMATCH",
+  PRESENTATION_APPROVAL_BLOCKED: "PRESENTATION_APPROVAL_BLOCKED",
+  PRESENTATION_APPROVAL_SUPERSEDED: "PRESENTATION_APPROVAL_SUPERSEDED",
+  PRESENTATION_QUALITY_GATE_BLOCKED: "PRESENTATION_QUALITY_GATE_BLOCKED",
+  PRESENTATION_QUALITY_EVALUATION_NOT_FOUND: "PRESENTATION_QUALITY_EVALUATION_NOT_FOUND",
+  PRESENTATION_DOWNLOAD_UNAUTHORIZED: "PRESENTATION_DOWNLOAD_UNAUTHORIZED",
+  PRESENTATION_ARTIFACT_HASH_MISMATCH: "PRESENTATION_ARTIFACT_HASH_MISMATCH",
+  PRESENTATION_STRUCTURAL_CORRUPTION: "PRESENTATION_STRUCTURAL_CORRUPTION",
+  PRESENTATION_CONTENT_INTEGRITY_FAILED: "PRESENTATION_CONTENT_INTEGRITY_FAILED",
 } as const;
 
 export type AiErrorCode = (typeof AI_ERROR_CODES)[keyof typeof AI_ERROR_CODES];
@@ -100,6 +125,28 @@ const USER_MESSAGES: Record<AiErrorCode, string> = {
   PRESENTATION_REVISION_FAILED: "Proses perbaikan konten presentasi (bounded retry) gagal menghasilkan konten yang valid.",
   PRESENTATION_STALE_REQUEST: "Permintaan generasi presentasi telah kedaluwarsa atau tidak sesuai dengan versi aktif outline.",
   PRESENTATION_INVALID_OUTPUT: "Respons penyedia AI untuk presentasi tidak sesuai dengan struktur JSON terstruktur kanonikal.",
+  PPTX_RENDER_FAILED: "Gagal merender dokumen PowerPoint (.pptx). Terjadi kesalahan pada proses penyusunan slide.",
+  PPTX_VALIDATION_FAILED: "Dokumen PowerPoint (.pptx) gagal memenuhi standar validasi paket OpenXML (OOXML).",
+  PPTX_STORAGE_FAILED: "Gagal menyimpan file PowerPoint (.pptx) ke sistem penyimpanan permanen.",
+  PPTX_INVALID_CONTENT: "Paket konten presentasi tidak valid atau tidak memenuhi spesifikasi PPT-1B.",
+  PPTX_SLIDE_COUNT_MISMATCH: "Jumlah slide yang dirender tidak sesuai dengan spesifikasi paket konten presentasi.",
+  PPTX_ARTIFACT_NOT_FOUND: "Artefak presentasi PowerPoint (.pptx) tidak ditemukan atau Anda tidak memiliki akses.",
+  PPTX_UNAPPROVED_ILLUSTRATION: "Ilustrasi yang dirujuk belum disetujui oleh guru atau telah ditolak. Hanya aset berstatus disetujui yang dapat disematkan.",
+  PPTX_ILLUSTRATION_NOT_FOUND: "Aset ilustrasi yang dirujuk tidak ditemukan di sistem penyimpanan.",
+  PPTX_ILLUSTRATION_LOAD_FAILED: "Gagal mengunduh biner berkas ilustrasi dari penyimpanan atau data terkorupsi.",
+  PPTX_ILLUSTRATION_UNSUPPORTED_FORMAT: "Format berkas ilustrasi tidak didukung untuk disematkan ke dalam dokumen presentasi PPTX.",
+  PPTX_ILLUSTRATION_LIFECYCLE_INVALID: "Aset ilustrasi berada dalam siklus tidak aktif (diarsipkan atau dihapus).",
+  PRESENTATION_REVIEW_NOT_FOUND: "Catatan peninjauan (review) presentasi tidak ditemukan.",
+  PRESENTATION_REVIEW_INVALID_TRANSITION: "Transisi status peninjauan presentasi tidak diizinkan.",
+  PRESENTATION_REVIEW_VERSION_MISMATCH: "Versi presentasi yang ditinjau tidak sesuai dengan versi aktif saat ini.",
+  PRESENTATION_APPROVAL_BLOCKED: "Persetujuan presentasi diblokir karena terdapat ilustrasi atau data slide yang belum disetujui guru.",
+  PRESENTATION_APPROVAL_SUPERSEDED: "Persetujuan presentasi ini telah usang karena outline atau konten telah diubah ke versi baru.",
+  PRESENTATION_QUALITY_GATE_BLOCKED: "Dokumen presentasi belum memenuhi syarat gerbang mutu (quality gate) akhir atau persetujuan guru belum aktif.",
+  PRESENTATION_QUALITY_EVALUATION_NOT_FOUND: "Hasil evaluasi mutu (quality gate) dokumen presentasi tidak ditemukan.",
+  PRESENTATION_DOWNLOAD_UNAUTHORIZED: "Akses unduh ditolak. Dokumen belum disetujui guru, belum lolos quality gate, atau Anda bukan pemilik dokumen ini.",
+  PRESENTATION_ARTIFACT_HASH_MISMATCH: "Checksum integritas berkas PPTX tidak cocok dengan artefak yang tercatat.",
+  PRESENTATION_STRUCTURAL_CORRUPTION: "Validasi struktural OOXML mendeteksi kerusakan pada berkas PowerPoint atau relasi internal.",
+  PRESENTATION_CONTENT_INTEGRITY_FAILED: "Konten dokumen presentasi tidak cocok dengan paket materi yang telah disetujui guru.",
 };
 
 export class AiServiceError extends Error {
@@ -128,6 +175,8 @@ export class AiServiceError extends Error {
         this.isRetryable = false;
         break;
       case "PLAN_NOT_FOUND":
+      case "PPTX_ARTIFACT_NOT_FOUND":
+      case "PPTX_ILLUSTRATION_NOT_FOUND":
         this.statusCode = 404;
         this.isRetryable = false;
         break;
@@ -137,10 +186,15 @@ export class AiServiceError extends Error {
         break;
       case "INVALID_REQUEST":
       case "INVALID_PARAMETERS":
+      case "PPTX_INVALID_CONTENT":
       case "SOURCE_VALIDATION_ERROR":
       case "SOURCE_EMPTY":
       case "SOURCE_TOO_LARGE":
         this.statusCode = 400;
+        this.isRetryable = false;
+        break;
+      case "PPTX_ILLUSTRATION_UNSUPPORTED_FORMAT":
+        this.statusCode = 415;
         this.isRetryable = false;
         break;
       case "SOURCE_FETCH_ERROR":
@@ -168,7 +222,31 @@ export class AiServiceError extends Error {
       case "INVALID_OUTLINE":
       case "INVALID_STYLE":
       case "MISSING_GROUNDING":
+      case "PPTX_VALIDATION_FAILED":
+      case "PPTX_SLIDE_COUNT_MISMATCH":
+      case "PPTX_UNAPPROVED_ILLUSTRATION":
+      case "PPTX_ILLUSTRATION_LIFECYCLE_INVALID":
+      case "PRESENTATION_REVIEW_INVALID_TRANSITION":
+      case "PRESENTATION_REVIEW_VERSION_MISMATCH":
+      case "PRESENTATION_APPROVAL_BLOCKED":
+      case "PRESENTATION_APPROVAL_SUPERSEDED":
+      case "PRESENTATION_QUALITY_GATE_BLOCKED":
+      case "PRESENTATION_STRUCTURAL_CORRUPTION":
+      case "PRESENTATION_CONTENT_INTEGRITY_FAILED":
         this.statusCode = 422;
+        this.isRetryable = false;
+        break;
+      case "PRESENTATION_REVIEW_NOT_FOUND":
+      case "PRESENTATION_QUALITY_EVALUATION_NOT_FOUND":
+        this.statusCode = 404;
+        this.isRetryable = false;
+        break;
+      case "PRESENTATION_DOWNLOAD_UNAUTHORIZED":
+        this.statusCode = 403;
+        this.isRetryable = false;
+        break;
+      case "PRESENTATION_ARTIFACT_HASH_MISMATCH":
+        this.statusCode = 409;
         this.isRetryable = false;
         break;
       case "AI_RATE_LIMIT":
@@ -185,6 +263,9 @@ export class AiServiceError extends Error {
         break;
       case "GENERATION_FAILED":
       case "AI_PROVIDER_ERROR":
+      case "PPTX_RENDER_FAILED":
+      case "PPTX_STORAGE_FAILED":
+      case "PPTX_ILLUSTRATION_LOAD_FAILED":
       default:
         this.statusCode = 502;
         this.isRetryable = true;

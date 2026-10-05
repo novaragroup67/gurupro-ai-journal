@@ -49,19 +49,7 @@ import {
   type SumberPreview,
   type TeacherSourceItem,
 } from "@/lib/sumber.functions";
-
-export function cleanTopicTitle(title: string): string {
-  if (!title) return "";
-  return title
-    .replace(/\s*[-–—|]\s*(Wikipedia|Ensiklopedia Bebas|Kompas\.com|Detikcom|Tribunnews|CNN Indonesia|Kumparan|Merdeka).*$/gi, "")
-    .replace(/\s*[-–—|]\s*Wikipedia bahasa Indonesia, ensiklopedia bebas$/gi, "")
-    .replace(/\s*[-–—|]\s*Wikipedia, the free encyclopedia$/gi, "")
-    .replace(/\s*[-–—|]\s*official website$/gi, "")
-    .replace(/\s*[-–—|]\s*halaman utama$/gi, "")
-    .replace(/^Welcome to\s+/i, "")
-    .replace(/\s*[-–—|]\s*Home$/gi, "")
-    .trim();
-}
+import { cleanTopicTitle, isFilenameOrPlaceholder } from "@/lib/ai/document-parser";
 
 type SumberTipeWithExisting = SumberTipe | "Materi Tersimpan";
 
@@ -164,6 +152,7 @@ export function ModulGeneratorDialog({
         .then((items) => setSavedSources(items || []))
         .catch(() => {});
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // Set default class & mapel
@@ -725,7 +714,10 @@ export function ModulGeneratorDialog({
                             );
                             setPreview(res);
                             setSumberInput(res.konten);
-                            if (!topik.trim()) setTopik(res.judul || f.name.replace(/\.[^/.]+$/, ""));
+                            const cleanedJudul = cleanTopicTitle(res.judul || "");
+                            if (!topik.trim() || isFilenameOrPlaceholder(topik, f.name)) {
+                              setTopik(cleanedJudul || f.name.replace(/\.[^/.]+$/, ""));
+                            }
                             toast.success(`Dokumen "${f.name}" berhasil diserap (${res.jumlahKata} kata).`);
                             setStage("idle");
                           } catch (err: any) {

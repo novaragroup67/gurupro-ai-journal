@@ -1,21 +1,22 @@
 /**
  * ==============================================================================
- * GURUPRO AI: ILLUSTRATION PROVIDER FACTORY (VIS-1B)
+ * GURUPRO AI: ILLUSTRATION PROVIDER FACTORY (VIS-1B & AI-CORE-RECOVERY-1)
  * ==============================================================================
  *
  * Resolves the active server-authoritative IllustrationGenerationProvider
  * based on available server environment variables and credentials.
  *
- * Priority order:
+ * Strategy:
  * 1. Test Mock Provider (if registered in test runner)
- * 2. OpenAI Image Provider (if OPENAI_API_KEY is configured)
- * 3. Gemini Image Provider (if GEMINI_API_KEY is configured)
- * 4. Fails closed with PROVIDER_UNAVAILABLE
+ * 2. Dual-Provider Router (routes between Gemini gemini-3.1-flash-image and OpenAI gpt-image-2
+ *    with bounded failover on retryable transient errors, and strict fail-closed safety block)
+ * 3. Fails closed with PROVIDER_UNAVAILABLE if no API credentials configured
  */
 
 import { AI_ERROR_CODES, AiServiceError } from "../error-taxonomy";
 import { getServerEnv } from "../ai-service";
 import type { IllustrationGenerationProvider } from "../illustration-generation-contract";
+import { DualIllustrationRouter } from "./dual-illustration-router";
 import { OpenAiImageProvider } from "./openai-image-provider";
 import { GeminiImageProvider } from "./gemini-image-provider";
 
@@ -44,20 +45,19 @@ export function resolveIllustrationGenerationProvider(): IllustrationGenerationP
     return _mockProvider;
   }
 
-  // 2. OpenAI Image Provider (if key is set)
-  const openAiKey = getServerEnv("OPENAI_API_KEY");
-  if (openAiKey && openAiKey.trim().length > 0) {
-    return new OpenAiImageProvider({ apiKey: openAiKey.trim() });
-  }
-
-  // 3. Gemini Image Provider (if key is set)
   const geminiKey = getServerEnv("GEMINI_API_KEY");
-  if (geminiKey && geminiKey.trim().length > 0) {
-    return new GeminiImageProvider({ apiKey: geminiKey.trim() });
+  const openAiKey = getServerEnv("OPENAI_API_KEY");
+
+  // 2. Dual-Provider Router if at least one API key is present
+  if ((geminiKey && geminiKey.trim().length > 0) || (openAiKey && openAiKey.trim().length > 0)) {
+    return new DualIllustrationRouter({
+      geminiApiKey: geminiKey?.trim(),
+      openAiApiKey: openAiKey?.trim(),
+    });
   }
 
   throw new AiServiceError(
     AI_ERROR_CODES.PROVIDER_UNAVAILABLE,
-    "Konfigurasi provider AI belum siap: Kunci API gambar (OPENAI_API_KEY atau GEMINI_API_KEY) belum disetel pada server environment."
+    "Konfigurasi provider AI belum siap: Kunci API gambar (GEMINI_API_KEY atau OPENAI_API_KEY) belum disetel pada server environment."
   );
 }

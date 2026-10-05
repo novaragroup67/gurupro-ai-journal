@@ -44,7 +44,7 @@ export class GeminiImageProvider implements IllustrationGenerationProvider {
 
   constructor(options?: GeminiImageProviderOptions) {
     this.apiKey = options?.apiKey || getServerEnv("GEMINI_API_KEY");
-    this.model = options?.model || getServerEnv("GEMINI_IMAGE_MODEL") || "gemini-2.5-flash-image";
+    this.model = options?.model || getServerEnv("GEMINI_IMAGE_MODEL") || "gemini-3.1-flash-image";
     this.baseUrl =
       options?.baseUrl ||
       getServerEnv("GEMINI_BASE_URL") ||
@@ -263,10 +263,10 @@ export class GeminiImageProvider implements IllustrationGenerationProvider {
               model: this.model,
               createdAt: new Date().toISOString(),
               error: {
-                code: AI_ERROR_CODES.AI_QUOTA_EXCEEDED,
+                code: AI_ERROR_CODES.AI_RATE_LIMIT,
                 message:
-                  "Kuota generasi gambar Gemini telah habis atau belum aktif di proyek Google Cloud Anda.",
-                isRetryable: false,
+                  "Kuota generasi gambar Gemini telah habis atau terkena rate limit pada proyek Google Cloud Anda.",
+                isRetryable: true,
               },
             };
           }

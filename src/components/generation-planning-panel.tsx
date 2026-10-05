@@ -54,6 +54,7 @@ import {
   Info,
   ListChecks,
   MessageSquare,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -132,6 +133,7 @@ export function IllustrationPlanningPanel({
     fetchSpecification,
     prepareIllustrationRequest,
     generateIllustration,
+    specification: storeSpec,
   } = useGenerationPlan({
     moduleId,
     targetType: "illustration",
@@ -140,7 +142,8 @@ export function IllustrationPlanningPanel({
 
   // Local editable form state
   const [formOutline, setFormOutline] = useState<IllustrationOutline | null>(null);
-  const [specification, setSpecification] = useState<GenerationSpecification | null>(null);
+  const [localSpecification, setLocalSpecification] = useState<GenerationSpecification | null>(null);
+  const specification = storeSpec || localSpecification;
   const [showSpecPreview, setShowSpecPreview] = useState(false);
   const [showReqPreview, setShowReqPreview] = useState(false);
 
@@ -230,14 +233,14 @@ export function IllustrationPlanningPanel({
 
   // Load specification when approved
   useEffect(() => {
-    if (plan?.status === "approved") {
+    if (plan?.status === "approved" && !storeSpec) {
       void fetchSpecification().then((spec) => {
-        if (spec) setSpecification(spec);
+        if (spec) setLocalSpecification(spec);
       });
-    } else {
-      setSpecification(null);
+    } else if (plan?.status !== "approved") {
+      setLocalSpecification(null);
     }
-  }, [plan?.status, plan?.currentVersion, fetchSpecification]);
+  }, [plan?.status, plan?.currentVersion, fetchSpecification, storeSpec]);
 
   const handleSaveOutline = async () => {
     if (!formOutline) return;
@@ -531,14 +534,17 @@ export function IllustrationPlanningPanel({
                 {ILLUSTRATION_STYLES_CATALOG.map((style) => {
                   const isSelected = selectedStyleId === style.id;
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={style.id}
+                      aria-pressed={isSelected}
+                      disabled={loading || saving}
                       onClick={() => handleStyleChange(style.id)}
                       className={`cursor-pointer rounded-xl border p-3.5 transition-all text-left relative flex flex-col justify-between ${
                         isSelected
                           ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary"
                           : "border-border/70 hover:border-primary/40 hover:bg-muted/30"
-                      }`}
+                      } ${loading || saving ? "opacity-60 cursor-not-allowed" : ""}`}
                     >
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
@@ -565,7 +571,7 @@ export function IllustrationPlanningPanel({
                           </span>
                         ))}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -689,47 +695,59 @@ export function IllustrationPlanningPanel({
               </div>
             </CardHeader>
             <CardContent className="pt-4 grid gap-4">
-              {isApproved && specification ? (
+              {isApproved ? (
                 <div className="grid gap-3">
-                  <div className="rounded-xl border p-4 bg-muted/10 grid gap-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-muted-foreground">ID Otorisasi:</span>
-                      <span className="font-mono font-semibold text-foreground">
-                        {specification.authorizationId}
-                      </span>
+                  {specification ? (
+                    <div className="rounded-xl border p-4 bg-muted/10 grid gap-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-muted-foreground">ID Otorisasi:</span>
+                        <span className="font-mono font-semibold text-foreground">
+                          {specification.authorizationId}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Resolusi Output Target:</span>
+                        <span className="font-medium text-foreground">
+                          {specification.parameters.dimensions?.width}x{specification.parameters.dimensions?.height} (Rasio {specification.parameters.aspectRatio})
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Gaya Diterapkan:</span>
+                        <span className="font-medium text-foreground">
+                          {specification.styleSnapshot.styleName} (v{specification.styleSnapshot.styleVersion})
+                        </span>
+                      </div>
+                      <Separator className="my-1" />
+                      <div>
+                        <span className="text-muted-foreground block mb-1">Prompt Gambar Terstruktur (Grounded):</span>
+                        <p className="p-2.5 rounded-lg bg-background border font-mono text-[11px] text-foreground/90 whitespace-pre-wrap">
+                          {specification.prompt}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Resolusi Output Target:</span>
-                      <span className="font-medium text-foreground">
-                        {specification.parameters.dimensions?.width}x{specification.parameters.dimensions?.height} (Rasio {specification.parameters.aspectRatio})
-                      </span>
+                  ) : (
+                    <div className="rounded-xl border p-3.5 bg-emerald-50/20 border-emerald-500/30 text-xs text-foreground flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                        <span>Rencana telah disetujui. Otorisasi generasi aktif dan siap diproses.</span>
+                      </div>
+                      <Badge className="bg-emerald-600 text-white text-[10px]">Otorisasi Valid</Badge>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Gaya Diterapkan:</span>
-                      <span className="font-medium text-foreground">
-                        {specification.styleSnapshot.styleName} (v{specification.styleSnapshot.styleVersion})
-                      </span>
-                    </div>
-                    <Separator className="my-1" />
-                    <div>
-                      <span className="text-muted-foreground block mb-1">Prompt Gambar Terstruktur (Grounded):</span>
-                      <p className="p-2.5 rounded-lg bg-background border font-mono text-[11px] text-foreground/90 whitespace-pre-wrap">
-                        {specification.prompt}
-                      </p>
-                    </div>
-                  </div>
+                  )}
 
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowSpecPreview(!showSpecPreview)}
-                        className="text-xs gap-1.5"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                        {showSpecPreview ? "Tutup Inspeksi Spek" : "Inspeksi Spesifikasi (JSON)"}
-                      </Button>
+                      {specification ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowSpecPreview(!showSpecPreview)}
+                          className="text-xs gap-1.5"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          {showSpecPreview ? "Tutup Inspeksi Spek" : "Inspeksi Spesifikasi (JSON)"}
+                        </Button>
+                      ) : null}
 
                       <Button
                         variant="default"
@@ -746,7 +764,7 @@ export function IllustrationPlanningPanel({
                     <div className="flex items-center gap-2">
                       <Button
                         onClick={() => generateIllustration()}
-                        disabled={!isApproved || !preparedRequest || generating}
+                        disabled={!isApproved || generating}
                         className="text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm"
                       >
                         {generating ? (
@@ -1790,6 +1808,26 @@ export function PresentationPlanningPanel({
     preparePresentationRequest,
     generatePresentationContent,
     resetPresentationContent,
+    presentationArtifact,
+    renderingPptx,
+    pptxRenderError,
+    renderStage,
+    renderPresentationPptx,
+    loadPresentationArtifact,
+    presentationReview,
+    reviewingPresentation,
+    presentationReviewError,
+    loadPresentationReview,
+    startPresentationReview,
+    approvePresentation,
+    rejectPresentation,
+    updatePresentationReviewNotes,
+    presentationQualityEvaluation,
+    evaluatingPresentationQuality,
+    presentationQualityError,
+    loadPresentationQualityEvaluation,
+    evaluatePresentationQuality,
+    downloadApprovedPresentationPptx,
   } = useGenerationPlan({
     moduleId,
     targetType: "presentation",
@@ -1802,6 +1840,28 @@ export function PresentationPlanningPanel({
   const [showContentJsonPreview, setShowContentJsonPreview] = useState(false);
   const [selectedContentSlideOrder, setSelectedContentSlideOrder] = useState<number>(1);
   const [activeSlideIndex, setActiveSlideIndex] = useState<number>(0);
+  const [teacherReviewNotes, setTeacherReviewNotes] = useState<string>("");
+
+  useEffect(() => {
+    if (generatedPresentationContent) {
+      const resultId = (generatedPresentationContent as any).id || generatedPresentationContent.presentationId;
+      if (resultId) {
+        void loadPresentationReview(resultId);
+      }
+    }
+  }, [generatedPresentationContent, loadPresentationReview]);
+
+  useEffect(() => {
+    if (presentationArtifact?.id) {
+      void loadPresentationQualityEvaluation(presentationArtifact.id);
+    }
+  }, [presentationArtifact?.id, loadPresentationQualityEvaluation]);
+
+  useEffect(() => {
+    if (presentationReview?.teacherNotes) {
+      setTeacherReviewNotes(presentationReview.teacherNotes);
+    }
+  }, [presentationReview?.teacherNotes]);
 
   // PPT-1A presentation parameters
   const [aspectRatio, setAspectRatio] = useState<PresentationAspectRatio>("16:9");
@@ -2280,14 +2340,17 @@ export function PresentationPlanningPanel({
                 {PRESENTATION_STYLES_CATALOG.map((style) => {
                   const isSelected = selectedStyleId === style.id;
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={style.id}
+                      aria-pressed={isSelected}
+                      disabled={loading || saving}
                       onClick={() => handleStyleChange(style.id)}
                       className={`cursor-pointer rounded-xl border p-3.5 transition-all text-left relative flex flex-col justify-between ${
                         isSelected
                           ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary"
                           : "border-border/70 hover:border-primary/40 hover:bg-muted/30"
-                      }`}
+                      } ${loading || saving ? "opacity-60 cursor-not-allowed" : ""}`}
                     >
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
@@ -2314,7 +2377,7 @@ export function PresentationPlanningPanel({
                           </span>
                         ))}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -2595,21 +2658,93 @@ export function PresentationPlanningPanel({
                         )}
                       </Button>
 
-                      <Button
-                        disabled
-                        variant="secondary"
-                        size="sm"
-                        className="opacity-70 cursor-not-allowed text-xs gap-1.5"
-                        title="Rendering dokumen visual PowerPoint (.pptx) fisik akan diimplementasikan pada tahap PPT-1C."
-                      >
-                        <FileCheck2 className="h-3.5 w-3.5 text-muted-foreground" />
-                        Unduh File PPTX Nyata
-                        <Badge variant="outline" className="ml-1 text-[10px] bg-amber-50 text-amber-700 border-amber-200">
-                          PPT-1C Segera Hadir
-                        </Badge>
-                      </Button>
+                      {presentationArtifact ? (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            onClick={() => {
+                              void downloadApprovedPresentationPptx(presentationArtifact.id);
+                            }}
+                            disabled={presentationQualityEvaluation?.status !== "passed"}
+                            variant="default"
+                            size="sm"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1.5 shadow-sm disabled:opacity-50"
+                            title={
+                              presentationQualityEvaluation?.status === "passed"
+                                ? "Unduh berkas Microsoft PowerPoint (.pptx) asli (Telah Lolos Quality Gate)"
+                                : "Unduh terkunci: Selesaikan peninjauan guru dan validasi Quality Gate (PPT-1F) terlebih dahulu"
+                            }
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            Unduh File PPTX Nyata
+                            {presentationQualityEvaluation?.status === "passed" ? (
+                              <Badge variant="outline" className="ml-1 text-[10px] bg-emerald-700/40 text-emerald-100 border-emerald-400/40">
+                                PPTX Ready
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="ml-1 text-[10px] bg-amber-700/40 text-amber-100 border-amber-400/40">
+                                Perlu Quality Gate
+                              </Badge>
+                            )}
+                          </Button>
+                          <Button
+                            disabled={renderingPptx}
+                            onClick={() => {
+                              if (generatedPresentationContent) {
+                                void renderPresentationPptx(generatedPresentationContent.presentationId, true);
+                              }
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="text-xs gap-1"
+                            title="Render ulang dokumen PPTX"
+                          >
+                            <RefreshCw className={`h-3 w-3 ${renderingPptx ? "animate-spin" : ""}`} />
+                            Render Ulang
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          disabled={!generatedPresentationContent || renderingPptx}
+                          onClick={() => {
+                            if (generatedPresentationContent) {
+                              void renderPresentationPptx(generatedPresentationContent.presentationId);
+                            }
+                          }}
+                          variant="secondary"
+                          size="sm"
+                          className="text-xs gap-1.5 border border-indigo-200 bg-indigo-50/80 hover:bg-indigo-100 text-indigo-900"
+                          title="Render dokumen PowerPoint (.pptx) asli dari paket konten PPT-1B"
+                        >
+                          {renderingPptx ? (
+                            <>
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin text-indigo-600" />
+                              {renderStage === "validating"
+                                ? "Memvalidasi OOXML..."
+                                : renderStage === "storing"
+                                ? "Menyimpan File..."
+                                : "Merender PPTX..."}
+                            </>
+                          ) : (
+                            <>
+                              <FileCheck2 className="h-3.5 w-3.5 text-indigo-600" />
+                              Buat Dokumen PPTX (PPT-1C)
+                            </>
+                          )}
+                        </Button>
+                      )}
                     </div>
                   </div>
+
+                  {/* ERROR ALERT IF PPTX RENDERING FAILED */}
+                  {pptxRenderError ? (
+                    <Alert variant="destructive" className="py-2.5">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle className="text-xs font-semibold">Gagal Merender PPTX (PPT-1C)</AlertTitle>
+                      <AlertDescription className="text-[11px] mt-1">
+                        {pptxRenderError}
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
 
                   {/* ERROR ALERT IF GENERATION FAILED */}
                   {presentationGenerationError ? (
@@ -2793,6 +2928,176 @@ export function PresentationPlanningPanel({
                         </div>
                       ) : null}
 
+                      {/* PPT-1E: TEACHER REVIEW & APPROVAL CARD */}
+                      {(() => {
+                        const contentResultId =
+                          (generatedPresentationContent as any).id ||
+                          generatedPresentationContent.presentationId;
+                        const reviewStatus = presentationReview?.reviewStatus || "generated";
+
+                        return (
+                          <div
+                            className={`rounded-xl border p-4 space-y-3 text-xs transition-all ${
+                              reviewStatus === "approved"
+                                ? "border-emerald-500/40 bg-emerald-50/20"
+                                : reviewStatus === "rejected"
+                                ? "border-rose-500/40 bg-rose-50/20"
+                                : reviewStatus === "superseded"
+                                ? "border-amber-500/40 bg-amber-50/20"
+                                : "border-indigo-400/40 bg-indigo-50/15"
+                            }`}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-border/60">
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck
+                                  className={`h-4 w-4 shrink-0 ${
+                                    reviewStatus === "approved"
+                                      ? "text-emerald-600"
+                                      : reviewStatus === "rejected"
+                                      ? "text-rose-600"
+                                      : "text-indigo-600"
+                                  }`}
+                                />
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-foreground text-xs">
+                                      Peninjauan & Persetujuan Guru (PPT-1E)
+                                    </span>
+                                    {reviewStatus === "approved" ? (
+                                      <Badge className="bg-emerald-600 text-white text-[10px] gap-1">
+                                        <CheckCircle2 className="h-3 w-3" />
+                                        Disetujui Guru (v{presentationReview?.approvedVersion})
+                                      </Badge>
+                                    ) : reviewStatus === "rejected" ? (
+                                      <Badge className="bg-rose-600 text-white text-[10px] gap-1">
+                                        <ThumbsDown className="h-3 w-3" />
+                                        Ditolak Guru
+                                      </Badge>
+                                    ) : reviewStatus === "superseded" ? (
+                                      <Badge variant="outline" className="text-amber-700 border-amber-300 text-[10px] gap-1">
+                                        <AlertTriangle className="h-3 w-3" />
+                                        Versi Usang (Superseded)
+                                      </Badge>
+                                    ) : reviewStatus === "in_review" ? (
+                                      <Badge className="bg-blue-600 text-white text-[10px] gap-1">
+                                        <Clock className="h-3 w-3" />
+                                        Sedang Ditinjau Guru
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                                        Menunggu Peninjauan
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                                    Keputusan otoritatif guru sebelum dokumen presentasi difinalisasi.
+                                  </p>
+                                </div>
+                              </div>
+
+                              {presentationReview?.reviewedAt ? (
+                                <span className="text-[10px] text-muted-foreground font-mono self-end sm:self-auto">
+                                  Ditinjau: {new Date(presentationReview.reviewedAt).toLocaleString("id-ID")}
+                                </span>
+                              ) : null}
+                            </div>
+
+                            {presentationReviewError ? (
+                              <Alert variant="destructive" className="py-2 text-xs">
+                                <AlertCircle className="h-3.5 w-3.5" />
+                                <AlertDescription>{presentationReviewError}</AlertDescription>
+                              </Alert>
+                            ) : null}
+
+                            {/* TEACHER REVIEW NOTES & ACTIONS */}
+                            <div className="space-y-2">
+                              <label className="text-[11px] font-medium text-foreground block">
+                                Catatan Evaluasi & Umpan Balik Guru:
+                              </label>
+                              <textarea
+                                value={teacherReviewNotes}
+                                onChange={(e) => setTeacherReviewNotes(e.target.value)}
+                                disabled={reviewingPresentation || reviewStatus === "approved"}
+                                placeholder="Tuliskan catatan evaluasi, poin penguatan materi, atau alasan penolakan jika materi perlu direvisi..."
+                                rows={2}
+                                className="w-full text-xs rounded-lg border border-border/80 bg-background p-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-70 disabled:bg-muted/30"
+                              />
+
+                              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                                <div className="flex items-center gap-2">
+                                  {reviewStatus !== "approved" ? (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        onClick={() =>
+                                          void approvePresentation(
+                                            contentResultId,
+                                            teacherReviewNotes
+                                          )
+                                        }
+                                        disabled={reviewingPresentation}
+                                        className="h-8 gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                                      >
+                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                        {reviewingPresentation ? "Menyimpan..." : "Setujui Presentasi (Approve)"}
+                                      </Button>
+
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                          if (!teacherReviewNotes.trim()) {
+                                            alert("Harap berikan catatan alasan penolakan pada kolom catatan guru.");
+                                            return;
+                                          }
+                                          void rejectPresentation(
+                                            contentResultId,
+                                            teacherReviewNotes
+                                          );
+                                        }}
+                                        disabled={reviewingPresentation || !teacherReviewNotes.trim()}
+                                        className="h-8 gap-1.5 text-xs text-rose-700 border-rose-300 hover:bg-rose-50"
+                                      >
+                                        <ThumbsDown className="h-3.5 w-3.5" />
+                                        Tolak Presentasi (Reject)
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => void startPresentationReview(contentResultId)}
+                                      disabled={reviewingPresentation}
+                                      className="h-8 gap-1.5 text-xs text-muted-foreground"
+                                    >
+                                      <RefreshCw className="h-3.5 w-3.5" />
+                                      Buka Ulang Peninjauan
+                                    </Button>
+                                  )}
+                                </div>
+
+                                {reviewStatus !== "approved" ? (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() =>
+                                      void updatePresentationReviewNotes(
+                                        contentResultId,
+                                        teacherReviewNotes
+                                      )
+                                    }
+                                    disabled={reviewingPresentation}
+                                    className="h-8 text-xs text-muted-foreground"
+                                  >
+                                    Simpan Draf Catatan
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       {/* SLIDES PREVIEW TAB / SELECTOR */}
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
@@ -2868,6 +3173,30 @@ export function PresentationPlanningPanel({
                                     <p className="text-xs text-muted-foreground mt-0.5">
                                       {currentSlide.subtitle}
                                     </p>
+                                  ) : null}
+
+                                  {(currentSlide as any).illustrationReference ? (
+                                    <div className="flex items-center gap-1.5 mt-2">
+                                      <Palette className="h-3.5 w-3.5 text-indigo-600" />
+                                      <span className="text-[11px] text-muted-foreground">Aset Ilustrasi:</span>
+                                      <Badge
+                                        variant="outline"
+                                        className={`text-[10px] font-mono ${
+                                          (currentSlide as any).illustrationReference.isApproved ||
+                                          (currentSlide as any).illustrationReference.reviewStatus === "approved_for_use"
+                                            ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                            : "bg-amber-50 text-amber-800 border-amber-300"
+                                        }`}
+                                      >
+                                        {(currentSlide as any).illustrationReference.isApproved ||
+                                        (currentSlide as any).illustrationReference.reviewStatus === "approved_for_use"
+                                          ? "✓ Ilustrasi Disetujui Guru"
+                                          : "⚠ Belum Disetujui Guru"}
+                                      </Badge>
+                                      <span className="text-[10px] text-muted-foreground font-mono">
+                                        ID: {(currentSlide as any).illustrationReference.assetId}
+                                      </span>
+                                    </div>
                                   ) : null}
                                 </div>
                               </div>
@@ -3041,11 +3370,197 @@ export function PresentationPlanningPanel({
                         </pre>
                       ) : null}
 
+                      {/* PPT-1C PRESENTATION ARTIFACT CARD */}
+                      {presentationArtifact ? (
+                        <div className="rounded-xl border border-emerald-500/30 bg-emerald-50/20 p-4 grid gap-3 text-xs">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <FileCheck2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                              <div>
+                                <span className="font-semibold text-emerald-950 text-xs">
+                                  Dokumen PowerPoint Terverifikasi (PPT-1C)
+                                </span>
+                                <p className="text-[11px] text-muted-foreground">
+                                  Paket OOXML valid dan telah disimpan secara permanen.
+                                </p>
+                              </div>
+                            </div>
+                            <Badge variant="outline" className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-300">
+                              Status: Siap Diunduh
+                            </Badge>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1 border-t border-emerald-200/50 text-[11px]">
+                            <div className="bg-white/80 p-2 rounded-lg border border-emerald-100">
+                              <span className="text-muted-foreground block text-[10px]">Berkas</span>
+                              <span className="font-mono font-medium truncate block" title={presentationArtifact.filename}>
+                                {presentationArtifact.filename}
+                              </span>
+                            </div>
+                            <div className="bg-white/80 p-2 rounded-lg border border-emerald-100">
+                              <span className="text-muted-foreground block text-[10px]">Jumlah Slide</span>
+                              <span className="font-semibold text-foreground">
+                                {presentationArtifact.slideCount} Slide
+                              </span>
+                            </div>
+                            <div className="bg-white/80 p-2 rounded-lg border border-emerald-100">
+                              <span className="text-muted-foreground block text-[10px]">Ukuran File</span>
+                              <span className="font-semibold text-foreground">
+                                {(presentationArtifact.byteSize / 1024).toFixed(1)} KB
+                              </span>
+                            </div>
+                            <div className="bg-white/80 p-2 rounded-lg border border-emerald-100">
+                              <span className="text-muted-foreground block text-[10px]">Media Tersemat</span>
+                              <span className="font-semibold text-emerald-800">
+                                {presentationArtifact.renderMetadata?.embeddedIllustrationCount ?? 0} Ilustrasi
+                              </span>
+                            </div>
+                            <div className="bg-white/80 p-2 rounded-lg border border-emerald-100">
+                              <span className="text-muted-foreground block text-[10px]">Integritas SHA-256</span>
+                              <span className="font-mono text-[10px] text-muted-foreground truncate block" title={presentationArtifact.fileHash}>
+                                {presentationArtifact.fileHash.slice(0, 10)}...
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {/* PPT-1F: FINAL QUALITY & SECURITY GATE CARD */}
+                      {presentationArtifact ? (
+                        <div
+                          className={`rounded-xl border p-4 space-y-3 text-xs transition-all ${
+                            presentationQualityEvaluation?.status === "passed"
+                              ? "border-emerald-500/40 bg-emerald-50/20"
+                              : presentationQualityEvaluation?.status === "failed"
+                              ? "border-rose-500/40 bg-rose-50/20"
+                              : "border-amber-500/40 bg-amber-50/15"
+                          }`}
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-border/60">
+                            <div className="flex items-center gap-2">
+                              <ShieldCheck
+                                className={`h-4 w-4 shrink-0 ${
+                                  presentationQualityEvaluation?.status === "passed"
+                                    ? "text-emerald-600"
+                                    : presentationQualityEvaluation?.status === "failed"
+                                    ? "text-rose-600"
+                                    : "text-amber-600"
+                                }`}
+                              />
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-foreground text-xs">
+                                    Gerbang Mutu & Keamanan Akhir (PPT-1F Quality Gate)
+                                  </span>
+                                  {presentationQualityEvaluation?.status === "passed" ? (
+                                    <Badge className="bg-emerald-600 text-white text-[10px] gap-1">
+                                      <CheckCircle2 className="h-3 w-3" />
+                                      PPTX Ready (PASS)
+                                    </Badge>
+                                  ) : presentationQualityEvaluation?.status === "failed" ? (
+                                    <Badge className="bg-rose-600 text-white text-[10px] gap-1">
+                                      <AlertCircle className="h-3 w-3" />
+                                      PPTX Validation Failed
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-amber-700 border-amber-300 text-[10px] gap-1">
+                                      <Clock className="h-3 w-3" />
+                                      Menunggu Validasi Mutu
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                  Validasi deterministik struktur OOXML, integritas materi, persetujuan ilustrasi, dan verifikasi versi sebelum unduhan diizinkan.
+                                </p>
+                              </div>
+                            </div>
+
+                            {presentationQualityEvaluation?.evaluatedAt ? (
+                              <span className="text-[10px] text-muted-foreground font-mono self-end sm:self-auto">
+                                Divalidasi: {new Date(presentationQualityEvaluation.evaluatedAt).toLocaleString("id-ID")}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {presentationQualityError ? (
+                            <Alert variant="destructive" className="py-2 text-xs">
+                              <AlertCircle className="h-3.5 w-3.5" />
+                              <AlertDescription>{presentationQualityError}</AlertDescription>
+                            </Alert>
+                          ) : null}
+
+                          {/* FINDINGS / REASONS IF FAILED */}
+                          {presentationQualityEvaluation?.status === "failed" &&
+                          presentationQualityEvaluation.findings.length > 0 ? (
+                            <div className="p-3 rounded-lg bg-rose-50 border border-rose-200/80 space-y-2">
+                              <span className="font-semibold text-rose-800 text-[11px] block">
+                                Temuan Validasi yang Memblokir Unduhan ({presentationQualityEvaluation.findings.length} Catatan):
+                              </span>
+                              <ul className="space-y-1 text-rose-700 text-[11px]">
+                                {presentationQualityEvaluation.findings.map((f, idx) => (
+                                  <li key={idx} className="flex items-start gap-1.5">
+                                    <span className="font-mono text-[10px] bg-rose-200 text-rose-900 px-1 py-0.2 rounded shrink-0">
+                                      {f.code}
+                                    </span>
+                                    <span>
+                                      {f.slideNumber ? `[Slide #${f.slideNumber}] ` : ""}
+                                      {f.description}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+
+                          {/* ACTION BUTTONS */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() =>
+                                  void evaluatePresentationQuality(presentationArtifact.id, true)
+                                }
+                                disabled={evaluatingPresentationQuality}
+                                className={`h-8 gap-1.5 text-xs ${
+                                  presentationQualityEvaluation?.status === "passed"
+                                    ? "bg-slate-700 hover:bg-slate-800 text-white"
+                                    : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                                }`}
+                              >
+                                <RefreshCw
+                                  className={`h-3.5 w-3.5 ${
+                                    evaluatingPresentationQuality ? "animate-spin" : ""
+                                  }`}
+                                />
+                                {evaluatingPresentationQuality
+                                  ? "Memvalidasi Mutu..."
+                                  : presentationQualityEvaluation
+                                  ? "Validasi Ulang Mutu (Re-check)"
+                                  : "Jalankan Quality Gate (PPT-1F)"}
+                              </Button>
+
+                              {presentationQualityEvaluation?.status === "passed" ? (
+                                <Button
+                                  size="sm"
+                                  onClick={() =>
+                                    void downloadApprovedPresentationPptx(presentationArtifact.id)
+                                  }
+                                  className="h-8 gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                  Unduh File PPTX Nyata
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+
                       {/* INVARIANT REMINDER */}
                       <Alert className="border-indigo-500/20 bg-indigo-50/20 py-2">
                         <Info className="h-3.5 w-3.5 text-indigo-600" />
                         <AlertDescription className="text-[11px] text-indigo-800">
-                          <strong>Invarian PPT-1B:</strong> Paket konten presentasi ini telah divalidasi kualitasnya oleh AI secara terstruktur. Dokumen visual Microsoft PowerPoint (.pptx) asli akan dirender pada tahap berikutnya (PPT-1C).
+                          <strong>Invarian PPT-1C, PPT-1D, & PPT-1F:</strong> Dokumen PowerPoint (.pptx) asli dihasilkan menggunakan engine perender OpenXML sejati dengan media ilustrasi terverifikasi, persetujuan guru yang sah, dan validasi mutu menyeluruh sebelum dapat didistribusikan.
                         </AlertDescription>
                       </Alert>
                     </div>

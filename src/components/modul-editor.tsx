@@ -46,10 +46,11 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { exportModulAjarPdf, unduhPdf, unduhPpt, unduhWord } from "@/lib/exporters";
-import { buatIlustrasi, buatSlides } from "@/lib/modul-ai";
+import { buatSlides } from "@/lib/modul-ai";
 import { formatTanggal, type Modul } from "@/lib/modul-types";
 import { useServerFn } from "@tanstack/react-start";
 import { editModulAi, generateModulAi, saveModulDraftServerFn, publishModulServerFn } from "@/lib/ai.functions";
+import { generateModuleIllustrationsServerFn } from "@/lib/illustration-generation.functions";
 import { validateTeacherDraftEdit } from "@/lib/ai/modul-contract";
 import { supabase } from "@/integrations/supabase/client";
 import { isRecoverableAuthError, withAuthRetry } from "@/integrations/supabase/auth-token";
@@ -533,31 +534,86 @@ export function ModulEditor({
     }
   };
 
-  const generateIlustrasi = () => {
+  const [replacingSectionId, setReplacingSectionId] = useState<string | null>(null);
+
+  const generateIlustrasi = async () => {
     setIlustrasiLoading(true);
-    setTimeout(() => {
-      onChange({
-        ...modul,
-        sections: modul.sections.map((s) => ({ ...s, ilustrasi: buatIlustrasi(s.judul, s.poin) })),
-      });
+    try {
+      const res = (await generateModuleIllustrationsServerFn({
+        data: { moduleId: modul.id },
+      })) as any;
+
+      if (res.status === "success") {
+        const newSections = res.sections || modul.sections.map((s: any) => {
+          const matched = res.items?.find((item: any) => item.sectionId === s.id && item.status === "succeeded");
+          if (matched?.asset?.publicUrl) {
+            return { ...s, ilustrasi: matched.asset.publicUrl };
+          }
+          return s;
+        });
+
+        onChange({
+          ...modul,
+          sections: newSections,
+          updatedAt: new Date().toISOString(),
+        });
+
+        if (res.failed === 0) {
+          toast.success(`${res.total} / ${res.total} ilustrasi berhasil dibuat.`);
+        } else if (res.succeeded > 0) {
+          toast.warning(`${res.succeeded} / ${res.total} ilustrasi berhasil dibuat (${res.failed} gagal).`);
+        } else {
+          toast.error("Gagal membuat ilustrasi dari penyedia AI.");
+        }
+      }
+    } catch (err: any) {
+      console.error("[generateIlustrasi] Error:", err);
+      const msg = err.message || "";
+      if (msg.includes("belum disetujui") || err.code === "PLAN_NOT_APPROVED") {
+        toast.error("Rencana ilustrasi belum disetujui. Silakan setujui rencana pada tab Ilustrasi AI (Langkah 4) terlebih dahulu.");
+      } else {
+        toast.error(msg || "Gagal membuat ilustrasi AI.");
+      }
+    } finally {
       setIlustrasiLoading(false);
-      toast.success("Ilustrasi dibuat untuk setiap sub-judul modul.");
-    }, 1500);
+    }
+  };
+
+  const regenerateSectionIllustration = async (sectionId: string) => {
+    setReplacingSectionId(sectionId);
+    try {
+      const res = (await generateModuleIllustrationsServerFn({
+        data: { moduleId: modul.id, sectionId, forceRetry: true },
+      })) as any;
+
+      if (res.status === "success" && res.items?.length > 0) {
+        const item = res.items[0];
+        if (item.status === "succeeded" && item.asset?.publicUrl) {
+          patchSection(sectionId, { ilustrasi: item.asset.publicUrl });
+          toast.success("Ilustrasi bab berhasil digenerate ulang.");
+        } else {
+          toast.error(item.error?.message || "Gagal meregenerasi ilustrasi bab.");
+        }
+      }
+    } catch (err: any) {
+      console.error("[regenerateSectionIllustration] Error:", err);
+      const msg = err.message || "";
+      if (msg.includes("belum disetujui") || err.code === "PLAN_NOT_APPROVED") {
+        toast.error("Rencana ilustrasi belum disetujui. Silakan setujui rencana pada tab Ilustrasi AI (Langkah 4) terlebih dahulu.");
+      } else {
+        toast.error(msg || "Gagal meregenerasi ilustrasi AI.");
+      }
+    } finally {
+      setReplacingSectionId(null);
+    }
   };
 
   const generatePpt = () => {
     setPptLoading(true);
     setTimeout(() => {
-      const withIl = {
-        ...modul,
-        sections: modul.sections.map((s) => ({
-          ...s,
-          ilustrasi: s.ilustrasi ?? buatIlustrasi(s.judul, s.poin),
-        })),
-      };
-      onChange({ ...withIl, slides: buatSlides(withIl) });
+      onChange({ ...modul, slides: buatSlides(modul) });
       setPptLoading(false);
-      toast.success("Slide PPT beserta ilustrasi siap ditinjau.");
+      toast.success("Slide PPT siap ditinjau.");
     }, 1600);
   };
 
@@ -1287,15 +1343,15 @@ export function ModulEditor({
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => {
-                              patchSection(s.id, {
-                                ilustrasi: buatIlustrasi(s.judul, s.poin, Date.now()),
-                              });
-                              toast.success("Ilustrasi diganti.");
-                            }}
+                            disabled={replacingSectionId === s.id}
+                            onClick={() => regenerateSectionIllustration(s.id)}
                           >
-                            <RefreshCw className="h-4 w-4" />
-                            Ganti
+                            {replacingSectionId === s.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4" />
+                            )}
+                            {replacingSectionId === s.id ? "Menggambar..." : "Ganti"}
                           </Button>
                           <Button
                             size="sm"

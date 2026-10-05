@@ -28,6 +28,7 @@ export interface DocumentExtractOptions {
 export interface DocumentExtractResult {
   text: string;
   title?: string;
+  suggestedTopic?: string;
   format: SupportedDocumentFormat;
   pageCount?: number;
   wordCount: number;
@@ -70,6 +71,21 @@ export function extractDocxText(buffer: Uint8Array | Buffer): { text: string; ti
       AI_ERROR_CODES.SOURCE_PARSE_ERROR,
       `Gagal membaca file DOCX: arsip zip rusak atau terenkripsi (${err?.message || "unzip error"}).`,
     );
+  }
+
+  let metadataTitle: string | undefined;
+  const coreXmlBytes = unzipped["docProps/core.xml"];
+  if (coreXmlBytes) {
+    try {
+      const coreXml = strFromU8(coreXmlBytes);
+      const titleMatch = /<dc:title\b[^>]*>([\s\S]*?)<\/dc:title>/i.exec(coreXml);
+      if (titleMatch && titleMatch[1]) {
+        const decoded = decodeXmlEntities(titleMatch[1]).trim();
+        if (decoded.length >= 3) {
+          metadataTitle = decoded;
+        }
+      }
+    } catch {}
   }
 
   const docXmlBytes = unzipped["word/document.xml"];
@@ -126,6 +142,8 @@ export function extractDocxText(buffer: Uint8Array | Buffer): { text: string; ti
       // Check paragraph style (e.g. Heading1, Heading2, Title)
       const styleMatch = /<w:pStyle\b[^>]*w:val="([^"]+)"/i.exec(blockXml);
       const styleVal = styleMatch ? styleMatch[1].toLowerCase() : "";
+      const isBold = /<w:b(?:\s|>|\/)/i.test(blockXml);
+      const isLargeFont = /<w:sz\b[^>]*w:val="([0-9]+)"/i.test(blockXml);
 
       // Check list numbering
       const isList = /<w:numPr\b/i.test(blockXml);
@@ -150,6 +168,15 @@ export function extractDocxText(buffer: Uint8Array | Buffer): { text: string; ti
         prefix = "### ";
       } else if (styleVal === "heading4" || styleVal === "judul4") {
         prefix = "#### ";
+      } else if (
+        !firstHeading &&
+        (isBold || isLargeFont) &&
+        cleanText.length >= 4 &&
+        cleanText.length <= 80 &&
+        !cleanText.endsWith(".")
+      ) {
+        prefix = "# ";
+        firstHeading = cleanText;
       } else if (isList) {
         prefix = "- ";
       }
@@ -168,7 +195,7 @@ export function extractDocxText(buffer: Uint8Array | Buffer): { text: string; ti
 
   return {
     text: structuredText,
-    title: firstHeading,
+    title: metadataTitle || firstHeading,
   };
 }
 
@@ -293,6 +320,143 @@ export function extractPlainText(buffer: Uint8Array | Buffer): { text: string; t
   };
 }
 
+export function cleanTopicTitle(title: string): string {
+  if (!title) return "";
+  return title
+    .replace(/\s*[-–—|]\s*(Wikipedia|Ensiklopedia Bebas|Kompas\.com|Detikcom|Tribunnews|CNN Indonesia|Kumparan|Merdeka).*$/gi, "")
+    .replace(/\s*[-–—|]\s*Wikipedia bahasa Indonesia, ensiklopedia bebas$/gi, "")
+    .replace(/\s*[-–—|]\s*Wikipedia, the free encyclopedia$/gi, "")
+    .replace(/\s*[-–—|]\s*official website$/gi, "")
+    .replace(/\s*[-–—|]\s*halaman utama$/gi, "")
+    .replace(/^Welcome to\s+/i, "")
+    .replace(/\s*[-–—|]\s*Home$/gi, "")
+    .trim();
+}
+
+/**
+ * Checks if a topic candidate is merely a filename or generic container placeholder
+ */
+export function isFilenameOrPlaceholder(topic?: string, fileName?: string): boolean {
+  if (!topic || !topic.trim()) return true;
+  const clean = topic.trim().toLowerCase();
+  if (fileName && clean === fileName.trim().toLowerCase()) return true;
+  if (/\.(docx|pdf|txt|html|htm|doc)$/i.test(clean)) return true;
+  if (/^(e-book|ebook|buku|dokumen|file|materi)(\s+[\w\s.-]+)?\.(docx|pdf|txt|html)$/i.test(clean)) return true;
+  if (/^e-book\s+/i.test(clean) || /^ebook\s+/i.test(clean)) return true;
+  if (clean === "dokumen" || clean === "materi rujukan" || clean === "untitled" || clean === "materi pembelajaran") return true;
+  return false;
+}
+
+/**
+ * Intelligently infers a canonical educational topic from document content,
+ * headings, and metadata, rather than using raw filenames or generic placeholders.
+ *
+ * Precedence:
+ * 1. Document title metadata (non-filename)
+ * 2. Strongest document heading (# or Title)
+ * 3. First meaningful heading / chapter title (e.g. BAB 1 ..., Modul ...)
+ * 4. Repeated major topic phrases / educational domain phrases
+ * 5. Normalized filename stem only as weak final hint
+ */
+export function deriveDocumentSuggestedTopic(
+  content: string,
+  fileName?: string,
+  rawTitle?: string
+): string {
+  // 1. If rawTitle is provided and not a filename/placeholder, use it
+  if (rawTitle && !isFilenameOrPlaceholder(rawTitle, fileName)) {
+    const cleaned = cleanTopicTitle(rawTitle);
+    if (cleaned.length >= 4) return cleaned;
+  }
+
+  const lines = content
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  // 2. Strongest document heading: look for lines starting with # or ##
+  for (const line of lines) {
+    const headingMatch = /^#{1,2}\s+(.+)$/.exec(line);
+    if (headingMatch) {
+      const hText = cleanTopicTitle(headingMatch[1]);
+      if (hText.length >= 4 && !isFilenameOrPlaceholder(hText, fileName)) {
+        return hText;
+      }
+    }
+  }
+
+  // 3. First meaningful chapter / section heading
+  for (const line of lines.slice(0, 30)) {
+    const babMatch = /^(?:BAB\s+[IVX0-9]+:?|MODUL\s+[0-9]+:?)\s*(.+)$/i.exec(line);
+    if (babMatch && babMatch[1]) {
+      const bText = cleanTopicTitle(babMatch[1]);
+      if (bText.length >= 4 && !isFilenameOrPlaceholder(bText, fileName)) {
+        return bText;
+      }
+    }
+
+    // Short standalone title line (< 60 chars, no ending period, >= 2 words)
+    if (
+      line.length >= 5 &&
+      line.length <= 60 &&
+      !/[.!?]$/.test(line) &&
+      !line.startsWith("-") &&
+      !line.startsWith("*") &&
+      !line.startsWith("|") &&
+      line.split(/\s+/).length >= 2 &&
+      !isFilenameOrPlaceholder(line, fileName)
+    ) {
+      return cleanTopicTitle(line);
+    }
+  }
+
+  // 4. Repeated major topic phrases / educational domain phrases in first ~2000 words
+  const sampleText = content.slice(0, 10000).toLowerCase();
+
+  const domainPatterns: Array<{ pattern: RegExp; title: string }> = [
+    { pattern: /\bpython\b/i, title: "Dasar-Dasar Pemrograman Python" },
+    { pattern: /\b(javascript|typescript)\b/i, title: "Pemrograman Web JavaScript" },
+    { pattern: /\b(java\b|object-oriented|pemrograman berorientasi objek)/i, title: "Pemrograman Berorientasi Objek" },
+    { pattern: /\b(c\+\+|bahasa c)\b/i, title: "Pemrograman Bahasa C/C++" },
+    { pattern: /\b(html|css)\b/i, title: "Desain dan Pemrograman Web Dasar" },
+    { pattern: /\b(sql|basis data|database|mysql|postgresql)\b/i, title: "Sistem Basis Data Relasional" },
+    { pattern: /\b(jaringan|routing|switch|lan|wan|ip address|tcp\/ip)\b/i, title: "Jaringan Komputer dan Komunikasi Data" },
+    { pattern: /\b(sistem operasi|linux|windows server)\b/i, title: "Administrasi Sistem Operasi" },
+    { pattern: /\b(keamanan siber|cyber security|kriptografi)\b/i, title: "Dasar Keamanan Siber dan Jaringan" },
+    { pattern: /\b(akuntansi|jurnal|buku besar|neraca)\b/i, title: "Dasar-Dasar Akuntansi dan Keuangan" },
+    { pattern: /\b(mesin|otomotif|motor|chassis|engine)\b/i, title: "Pemeliharaan Mesin Otomotif" },
+  ];
+
+  for (const dp of domainPatterns) {
+    if (dp.pattern.test(sampleText)) {
+      return dp.title;
+    }
+  }
+
+  // 5. Normalized filename stem as weak final hint
+  if (fileName) {
+    const stem = fileName
+      .replace(/\.[^/.]+$/, "")
+      .replace(/^(e-book|ebook|buku|modul|materi|dokumen|file)[-_\s]*/i, "")
+      .replace(/[-_]+/g, " ")
+      .trim();
+
+    if (stem.length >= 3) {
+      const capitalized = stem
+        .split(/\s+/)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(" ");
+
+      if (sampleText.includes("program") || sampleText.includes("coding")) {
+        return `Pemrograman ${capitalized}`;
+      }
+      return capitalized;
+    }
+  }
+
+  return "Materi Pembelajaran";
+}
+
 /**
  * Determines file format and extracts structured text server-side
  */
@@ -317,9 +481,11 @@ export async function extractDocumentText(
     format = "docx";
     const { text, title } = extractDocxText(buffer);
     const words = text.split(/\s+/).filter(Boolean).length;
+    const suggestedTopic = deriveDocumentSuggestedTopic(text, fileName, title);
     return {
       text,
       title,
+      suggestedTopic,
       format,
       wordCount: words,
       charCount: text.length,
@@ -330,9 +496,11 @@ export async function extractDocumentText(
     format = "pdf";
     const { text, title, pageCount } = await extractPdfText(buffer);
     const words = text.split(/\s+/).filter(Boolean).length;
+    const suggestedTopic = deriveDocumentSuggestedTopic(text, fileName, title);
     return {
       text,
       title,
+      suggestedTopic,
       format,
       pageCount,
       wordCount: words,
@@ -350,9 +518,11 @@ export async function extractDocumentText(
     const rawHtml = decoder.decode(buffer);
     const { normalized, title } = normalizeHtmlContent(rawHtml);
     const words = normalized.split(/\s+/).filter(Boolean).length;
+    const suggestedTopic = deriveDocumentSuggestedTopic(normalized, fileName, title);
     return {
       text: normalized,
       title,
+      suggestedTopic,
       format,
       wordCount: words,
       charCount: normalized.length,
@@ -363,9 +533,11 @@ export async function extractDocumentText(
   format = "text";
   const { text, title } = extractPlainText(buffer);
   const words = text.split(/\s+/).filter(Boolean).length;
+  const suggestedTopic = deriveDocumentSuggestedTopic(text, fileName, title);
   return {
     text,
     title,
+    suggestedTopic,
     format,
     wordCount: words,
     charCount: text.length,

@@ -45,7 +45,7 @@ export class OpenAiImageProvider implements IllustrationGenerationProvider {
 
   constructor(options?: OpenAiImageProviderOptions) {
     this.apiKey = options?.apiKey || getServerEnv("OPENAI_API_KEY");
-    this.model = options?.model || getServerEnv("OPENAI_IMAGE_MODEL") || "gpt-image-1-mini";
+    this.model = options?.model || getServerEnv("OPENAI_IMAGE_MODEL") || "gpt-image-2";
     this.baseUrl = options?.baseUrl || getServerEnv("OPENAI_BASE_URL") || "https://api.openai.com/v1";
     this.fetchFn = options?.fetchFn || globalThis.fetch;
   }

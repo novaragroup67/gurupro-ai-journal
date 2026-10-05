@@ -203,7 +203,12 @@ function hash(text: string) {
   return h;
 }
 
-/** Deterministic local "AI" illustration: contextual SVG diagram per sub-heading. */
+/**
+ * @deprecated TEST/DEV MOCK ONLY (VIS-1F Architecture Invariant).
+ * Do NOT use in production generation paths.
+ * Production AI illustrations MUST strictly use canonical backend services
+ * (executeGenerateIllustration / executeGenerateModuleIllustrations).
+ */
 export function buatIlustrasi(judul: string, poin: string[], nonce = 0) {
   const seed = hash(judul + nonce);
   const palette = PALETTES[seed % PALETTES.length] as string[];

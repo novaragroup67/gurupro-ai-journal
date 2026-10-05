@@ -10,7 +10,7 @@ import { isIP, isPrivateOrReservedIp } from "./ip-utils";
 import { AI_ERROR_CODES, AiServiceError } from "./error-taxonomy";
 import { normalizeHtmlContent, normalizeTextContent } from "./source-normalizer";
 import { chunkNormalizedSource } from "./source-chunker";
-import { extractDocumentText } from "./document-parser";
+import { extractDocumentText, isFilenameOrPlaceholder } from "./document-parser";
 import type { AiSourceSnapshot, IngestionOptions } from "./types";
 
 export { isPrivateOrReservedIp } from "./ip-utils";
@@ -18,6 +18,8 @@ export { isPrivateOrReservedIp } from "./ip-utils";
 const MAX_BYTES = 2 * 1024 * 1024; // 2MB
 const TIMEOUT_MS = 10000; // 10s
 const MAX_REDIRECTS = 3;
+export const MAX_BASE64_DOCUMENT_LENGTH = 14 * 1024 * 1024; // ~14MB base64 string
+export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024; // 10MB decoded binary
 
 // In-memory snapshot registry for server-side caching & instant retrieval
 const inMemorySnapshots = new Map<string, AiSourceSnapshot>();
@@ -220,7 +222,7 @@ export async function ingestSource(options: IngestionOptions): Promise<AiSourceS
 
   let rawContent = input || "";
   let sourceUrl: string | undefined;
-  let extractedTitle = options.title || options.fileName;
+  let extractedTitle = options.title || (!isFilenameOrPlaceholder(options.fileName) ? options.fileName : undefined);
   let contentType = "text/plain";
   let normalizedContent = "";
 
@@ -256,21 +258,41 @@ export async function ingestSource(options: IngestionOptions): Promise<AiSourceS
   } else if (sourceType === "dokumen") {
     let docBuffer: Uint8Array | Buffer | undefined = options.documentBuffer;
     if (!docBuffer && options.base64Data) {
+      if (options.base64Data.length > MAX_BASE64_DOCUMENT_LENGTH) {
+        throw new AiServiceError(
+          AI_ERROR_CODES.SOURCE_VALIDATION_ERROR,
+          "Ukuran dokumen base64 melebihi batas maksimum (10MB).",
+        );
+      }
       const cleanB64 = options.base64Data.replace(/^data:[^;]+;base64,/, "");
       docBuffer = Buffer.from(cleanB64, "base64");
     } else if (!docBuffer && input && input.startsWith("data:")) {
+      if (input.length > MAX_BASE64_DOCUMENT_LENGTH) {
+        throw new AiServiceError(
+          AI_ERROR_CODES.SOURCE_VALIDATION_ERROR,
+          "Ukuran dokumen data URI melebihi batas maksimum (10MB).",
+        );
+      }
       const cleanB64 = input.replace(/^data:[^;]+;base64,/, "");
       docBuffer = Buffer.from(cleanB64, "base64");
     }
 
     if (docBuffer) {
+      if (docBuffer.byteLength > MAX_DOCUMENT_BYTES) {
+        throw new AiServiceError(
+          AI_ERROR_CODES.SOURCE_VALIDATION_ERROR,
+          "Ukuran dokumen biner melebihi batas maksimum 10MB.",
+        );
+      }
       const docRes = await extractDocumentText({
         buffer: docBuffer,
         fileName: options.fileName,
         mimeType: options.mimeType,
       });
       rawContent = docRes.text;
-      if (!extractedTitle && docRes.title) {
+      if (docRes.suggestedTopic && (!extractedTitle || isFilenameOrPlaceholder(extractedTitle, options.fileName))) {
+        extractedTitle = docRes.suggestedTopic;
+      } else if (docRes.title && (!extractedTitle || isFilenameOrPlaceholder(extractedTitle, options.fileName))) {
         extractedTitle = docRes.title;
       }
       contentType =
@@ -363,8 +385,19 @@ async function persistSnapshotToDatabase(snapshot: AiSourceSnapshot, client?: an
       ingestion_status: snapshot.ingestionStatus,
       created_at: snapshot.createdAt,
     };
-    await supabase.from("ai_source_snapshots").upsert(row);
-  } catch {
+    const { error } = await supabase.from("ai_source_snapshots").upsert(row);
+    if (error) {
+      console.warn("[source-ingestion] Supabase upsert warning:", error.message);
+      if (error.code === "PGRST205" || error.code === "42P01" || process.env.NODE_ENV === "test") {
+        return;
+      }
+      throw new AiServiceError(
+        AI_ERROR_CODES.STORAGE_PERSISTENCE_FAILED || AI_ERROR_CODES.SYSTEM_ERROR,
+        `Gagal menyimpan snapshot materi ke basis data: ${error.message}`
+      );
+    }
+  } catch (err) {
+    if (err instanceof AiServiceError) throw err;
     // Non-blocking in pure mock/unit test environments
   }
 }

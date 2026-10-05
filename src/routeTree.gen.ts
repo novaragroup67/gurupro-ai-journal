@@ -21,6 +21,7 @@ import { Route as ModulAjarRouteImport } from './routes/modul-ajar'
 import { Route as PenilaianRouteImport } from './routes/penilaian'
 import { Route as PenugasanRouteImport } from './routes/penugasan'
 import { Route as ProfilRouteImport } from './routes/profil'
+import { Route as RekapRouteImport } from './routes/rekap'
 import { Route as SoalRouteImport } from './routes/soal'
 import { Route as VerifikasiRouteImport } from './routes/verifikasi'
 import { Route as GabungKodeKelasRouteImport } from './routes/gabung.$kodeKelas'
@@ -87,6 +88,11 @@ const ProfilRoute = ProfilRouteImport.update({
   path: '/profil',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RekapRoute = RekapRouteImport.update({
+  id: '/rekap',
+  path: '/rekap',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SoalRoute = SoalRouteImport.update({
   id: '/soal',
   path: '/soal',
@@ -126,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/penilaian': typeof PenilaianRoute
   '/penugasan': typeof PenugasanRoute
   '/profil': typeof ProfilRoute
+  '/rekap': typeof RekapRoute
   '/soal': typeof SoalRoute
   '/verifikasi': typeof VerifikasiRoute
   '/gabung/$kodeKelas': typeof GabungKodeKelasRoute
@@ -145,6 +152,7 @@ export interface FileRoutesByTo {
   '/penilaian': typeof PenilaianRoute
   '/penugasan': typeof PenugasanRoute
   '/profil': typeof ProfilRoute
+  '/rekap': typeof RekapRoute
   '/soal': typeof SoalRoute
   '/verifikasi': typeof VerifikasiRoute
   '/gabung/$kodeKelas': typeof GabungKodeKelasRoute
@@ -165,6 +173,7 @@ export interface FileRoutesById {
   '/penilaian': typeof PenilaianRoute
   '/penugasan': typeof PenugasanRoute
   '/profil': typeof ProfilRoute
+  '/rekap': typeof RekapRoute
   '/soal': typeof SoalRoute
   '/verifikasi': typeof VerifikasiRoute
   '/gabung/$kodeKelas': typeof GabungKodeKelasRoute
@@ -186,6 +195,7 @@ export interface FileRouteTypes {
     | '/penilaian'
     | '/penugasan'
     | '/profil'
+    | '/rekap'
     | '/soal'
     | '/verifikasi'
     | '/gabung/$kodeKelas'
@@ -205,6 +215,7 @@ export interface FileRouteTypes {
     | '/penilaian'
     | '/penugasan'
     | '/profil'
+    | '/rekap'
     | '/soal'
     | '/verifikasi'
     | '/gabung/$kodeKelas'
@@ -224,6 +235,7 @@ export interface FileRouteTypes {
     | '/penilaian'
     | '/penugasan'
     | '/profil'
+    | '/rekap'
     | '/soal'
     | '/verifikasi'
     | '/gabung/$kodeKelas'
@@ -244,6 +256,7 @@ export interface RootRouteChildren {
   PenilaianRoute: typeof PenilaianRoute
   PenugasanRoute: typeof PenugasanRoute
   ProfilRoute: typeof ProfilRoute
+  RekapRoute: typeof RekapRoute
   SoalRoute: typeof SoalRoute
   VerifikasiRoute: typeof VerifikasiRoute
   GabungKodeKelasRoute: typeof GabungKodeKelasRoute
@@ -337,6 +350,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProfilRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/rekap': {
+      id: '/rekap'
+      path: '/rekap'
+      fullPath: '/rekap'
+      preLoaderRoute: typeof RekapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/soal': {
       id: '/soal'
       path: '/soal'
@@ -388,6 +408,7 @@ const rootRouteChildren: RootRouteChildren = {
   PenilaianRoute: PenilaianRoute,
   PenugasanRoute: PenugasanRoute,
   ProfilRoute: ProfilRoute,
+  RekapRoute: RekapRoute,
   SoalRoute: SoalRoute,
   VerifikasiRoute: VerifikasiRoute,
   GabungKodeKelasRoute: GabungKodeKelasRoute,

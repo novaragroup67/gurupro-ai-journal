@@ -31,13 +31,13 @@ import {
   validateModulGenerationInput,
 } from "./modul-contract";
 import { retrieveSourceContext, type ScoredChunk } from "./retriever";
-import { getCachedSourceSnapshot } from "./source-ingestion";
+import { getCachedSourceSnapshot, getPersistedSourceSnapshot } from "./source-ingestion";
 import { evaluateGroundingAgainstSource, cleanClaimOrTopicText, EDUCATIONAL_SYNONYMS } from "./grounding";
 import type { AiSourceSnapshot } from "./types";
 
 export interface BuildContextOptions {
-  maxTotalChunks?: number; // Default: 10 chunks
-  maxTotalWords?: number; // Default: 3000 words
+  maxTotalChunks?: number; // Default: 16 chunks
+  maxTotalWords?: number; // Default: 5000 words
   customSnapshots?: AiSourceSnapshot[]; // In-memory snapshots override for testing
   additionalTeacherPrompt?: string;
   pendekatan?: string;
@@ -252,8 +252,8 @@ export async function buildModulGroundingContext(
   authContext: TeacherAcademicContext,
   options: BuildContextOptions = {},
 ): Promise<ModulGroundingContext> {
-  const maxTotalChunks = options.maxTotalChunks ?? 10;
-  const maxTotalWords = options.maxTotalWords ?? 3000;
+  const maxTotalChunks = options.maxTotalChunks ?? 16;
+  const maxTotalWords = options.maxTotalWords ?? 5000;
 
   // Enrich availableSourceSnapshots if needed from cache or customSnapshots
   const enrichedSnapshots = [...(authContext?.availableSourceSnapshots || [])];
@@ -261,7 +261,9 @@ export async function buildModulGroundingContext(
     for (const snapId of (rawInput as any).sourceSnapshotIds) {
       if (!enrichedSnapshots.some((s) => s.id === snapId)) {
         const found =
-          options.customSnapshots?.find((s) => s.id === snapId) || getCachedSourceSnapshot(snapId);
+          options.customSnapshots?.find((s) => s.id === snapId) ||
+          getCachedSourceSnapshot(snapId) ||
+          (await getPersistedSourceSnapshot(snapId, authContext?.teacherId));
         if (found) {
           enrichedSnapshots.push({
             id: found.id,
@@ -376,8 +378,8 @@ export async function buildModulGroundingContext(
       sourceId: snapshot.id,
       userId: validated.teacherId,
       query: queryBundle.topicCoreQuery,
-      maxChunks: 4,
-      maxWords: 1500,
+      maxChunks: maxTotalChunks,
+      maxWords: maxTotalWords,
     });
 
     totalRawRetrieved += topicRes.retrievedChunks.length;
@@ -440,8 +442,8 @@ export async function buildModulGroundingContext(
         sourceId: snapshot.id,
         userId: validated.teacherId,
         query: q,
-        maxChunks: 4,
-        maxWords: 1500,
+        maxChunks: maxTotalChunks,
+        maxWords: maxTotalWords,
       });
 
       totalRawRetrieved += res.retrievedChunks.length;

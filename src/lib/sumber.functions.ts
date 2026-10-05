@@ -219,13 +219,15 @@ export const analisisSumberDokumen = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }): Promise<SumberPreview> => {
     const userId = (context as any)?.userId || (context as any)?.profile?.id || "teacher_user";
+    const supabase = (context as any)?.supabase;
     const snapshot = await ingestSource({
       sourceType: "dokumen",
       base64Data: data.base64Data,
       fileName: data.fileName,
       mimeType: data.fileType,
       userId,
-    });
+      supabaseClient: supabase,
+    } as any);
 
     return {
       url: "",

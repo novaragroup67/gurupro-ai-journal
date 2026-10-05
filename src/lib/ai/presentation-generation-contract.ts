@@ -370,8 +370,41 @@ export function validatePresentationGenerationRequest(
 }
 
 // ==============================================================================
-// 7. PPT-1B REAL AI PRESENTATION CONTENT PACKAGE CONTRACT
+// 7. PPT-1B & PPT-1D PRESENTATION CONTENT & ILLUSTRATION REFERENCE CONTRACT
 // ==============================================================================
+
+export const IllustrationPlacementSchema = z.enum([
+  "right",
+  "left",
+  "center",
+  "full_width",
+  "split_card",
+]);
+export type IllustrationPlacement = z.infer<typeof IllustrationPlacementSchema>;
+
+export const SlideIllustrationReferenceSchema = z.object({
+  assetId: z.string().min(1, "Asset ID wajib ada."),
+  storagePath: z.string().optional(),
+  publicUrl: z.string().optional(),
+  caption: z.string().optional(),
+  altText: z.string().optional(),
+  placement: IllustrationPlacementSchema.default("right"),
+  aspectRatio: z.enum(["16:9", "4:3", "1:1", "3:2"]).optional(),
+  isApproved: z.boolean().default(false),
+  reviewStatus: z.enum(["pending", "reviewed", "approved_for_use", "rejected"]).optional(),
+  provenance: z
+    .object({
+      generationId: z.string().optional(),
+      moduleId: z.string().optional(),
+      styleId: z.string().optional(),
+      ownerId: z.string().optional(),
+      sourceReferences: z.array(z.string()).default([]),
+    })
+    .optional(),
+});
+export type SlideIllustrationReference = z.infer<
+  typeof SlideIllustrationReferenceSchema
+>;
 
 export const PresentationSlideContentSchema = z.object({
   slideId: z.string().min(1, "ID slide wajib ada."),
@@ -386,6 +419,7 @@ export const PresentationSlideContentSchema = z.object({
   visualDirection: z.string().trim().min(1, "Arah visual slide wajib ada."),
   referencedAssetIds: z.array(z.string()).default([]),
   requiresGeneratedIllustration: z.boolean().default(false),
+  illustrationReference: SlideIllustrationReferenceSchema.optional().nullable(),
   speakerNotes: z.string().optional(),
   sourceReferences: z.array(z.string()).default([]),
   evidenceReferences: z.array(z.string()).default([]),

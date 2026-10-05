@@ -118,7 +118,8 @@ const COMMON_INDO_WORDS = new Set([
   "refleksi", "studi", "kelebihan", "keunggulan", "perbedaan", "standar", "protokol", "perutean",
   "jurnal", "beban", "biaya", "aset", "nilai", "cara", "fungsi", "mesin", "komponen",
   "indonesia", "bahasa", "bebas", "ensiklopedia", "wikipedia", "web", "situs", "artikel",
-  "buku", "modul", "materi", "resmi", "official", "halaman", "utama", "home", "welcome"
+  "buku", "modul", "materi", "resmi", "official", "halaman", "utama", "home", "welcome",
+  "ebook", "e-book", "pdf", "docx", "doc", "file", "dokumen", "berkas", "unduhan", "download", "teks", "bab", "judul"
 ]);
 
 /**
@@ -142,7 +143,7 @@ function extractDistinctiveEntities(claim: string): string[] {
       continue;
     }
 
-    // Skip if it's a common Indonesian word
+    // Skip if it's a common Indonesian word or container term
     if (COMMON_INDO_WORDS.has(lower)) {
       continue;
     }
@@ -172,13 +173,14 @@ export function evaluateGroundingAgainstSource(
     };
   }
 
-  // Tokenize claim into significant terms (3+ letters, excluding Indonesian stopwords)
+  // Tokenize claim into significant terms (3+ letters, excluding Indonesian stopwords and container terms)
   const stopwords = new Set([
     "yang", "untuk", "pada", "dalam", "dengan", "dan", "atau", "dari",
     "adalah", "sebagai", "oleh", "ini", "itu", "akan", "dapat", "secara",
     "karena", "maka", "jika", "apakah", "bagaimana", "dimana", "kapan", "siapa",
     "ke", "di", "bisa", "harus", "ada", "tidak", "bukan", "hanya", "juga",
     "serta", "yaitu", "yakni", "bagi", "tentang", "atas", "bawah", "saat",
+    "ebook", "docx", "pdf", "file", "dokumen", "berkas", "buku", "materi"
   ]);
 
   const claimTerms = cleanClaim

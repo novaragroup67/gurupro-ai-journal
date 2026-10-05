@@ -334,10 +334,27 @@ export const getGenerationPlanServerFn = createServerFn({ method: "POST" })
       versions = fallbackVersions.get(plan.id) || [];
     }
 
+    let specification: GenerationSpecification | null = null;
+    if (plan.status === "approved" && plan.approvedVersion === plan.currentVersion) {
+      try {
+        const profile = (context as any).profile;
+        const authContext = {
+          userId,
+          role: profile?.role || "guru",
+          isGuru: true,
+          verificationStatus: profile?.status_verifikasi || "verified",
+        };
+        specification = createGenerationSpecification(plan, authContext);
+      } catch (e) {
+        console.warn("[getGenerationPlan] Unable to derive specification for approved plan:", e);
+      }
+    }
+
     return {
       status: "success" as const,
       plan,
       versions,
+      specification,
     };
   });
 
@@ -400,21 +417,30 @@ export const updateGenerationPlanServerFn = createServerFn({ method: "POST" })
 
     // 3. Persist to Database
     try {
-      await supabase
-        .from("generation_plans")
-        .update(toPlanRow(updatedPlan))
-        .eq("id", updatedPlan.id);
+      if (supabase) {
+        const { error: planErr } = await supabase
+          .from("generation_plans")
+          .update(toPlanRow(updatedPlan))
+          .eq("id", updatedPlan.id);
+        if (planErr) {
+          console.warn("[updateGenerationPlan] Supabase update plan warning:", planErr.message);
+        }
 
-      await supabase
-        .from("generation_plan_versions")
-        .insert(toVersionRow(newVersion));
-    } catch {
-      // Fallback in-memory
-      fallbackPlans.set(updatedPlan.id, updatedPlan);
-      const list = fallbackVersions.get(updatedPlan.id) || [];
-      list.push(newVersion);
-      fallbackVersions.set(updatedPlan.id, list);
+        const { error: verErr } = await supabase
+          .from("generation_plan_versions")
+          .insert(toVersionRow(newVersion));
+        if (verErr) {
+          console.warn("[updateGenerationPlan] Supabase insert version warning:", verErr.message);
+        }
+      }
+    } catch (err) {
+      console.warn("[updateGenerationPlan] Exception persisting to Supabase:", err);
     }
+
+    fallbackPlans.set(updatedPlan.id, updatedPlan);
+    const list = fallbackVersions.get(updatedPlan.id) || [];
+    list.push(newVersion);
+    fallbackVersions.set(updatedPlan.id, list);
 
     return {
       status: "success" as const,
@@ -470,13 +496,20 @@ export const selectPlanStyleServerFn = createServerFn({ method: "POST" })
     const updatedPlan = applyStyleSelection(currentPlan, data.styleId);
 
     try {
-      await supabase
-        .from("generation_plans")
-        .update(toPlanRow(updatedPlan))
-        .eq("id", updatedPlan.id);
-    } catch {
-      fallbackPlans.set(updatedPlan.id, updatedPlan);
+      if (supabase) {
+        const { error: styleErr } = await supabase
+          .from("generation_plans")
+          .update(toPlanRow(updatedPlan))
+          .eq("id", updatedPlan.id);
+        if (styleErr) {
+          console.warn("[selectPlanStyle] Supabase update plan warning:", styleErr.message);
+        }
+      }
+    } catch (err) {
+      console.warn("[selectPlanStyle] Exception persisting to Supabase:", err);
     }
+
+    fallbackPlans.set(updatedPlan.id, updatedPlan);
 
     return {
       status: "success" as const,
@@ -534,35 +567,49 @@ export const approveGenerationPlanServerFn = createServerFn({ method: "POST" })
     const { approvedPlan } = applyPlanApproval(currentPlan, authContext);
     const nowIso = new Date().toISOString();
 
-    try {
-      await supabase
-        .from("generation_plans")
-        .update(toPlanRow(approvedPlan))
-        .eq("id", approvedPlan.id);
+    // Canonical generation specification issued upon approval
+    const specification = createGenerationSpecification(approvedPlan, authContext);
 
-      await supabase
-        .from("generation_plan_versions")
-        .update({
-          is_approved: true,
-          approved_at: nowIso,
-          approved_by: userId,
-        })
-        .eq("plan_id", approvedPlan.id)
-        .eq("version_number", approvedPlan.currentVersion);
-    } catch {
-      fallbackPlans.set(approvedPlan.id, approvedPlan);
-      const vList = fallbackVersions.get(approvedPlan.id) || [];
-      const curV = vList.find((v) => v.versionNumber === approvedPlan.currentVersion);
-      if (curV) {
-        curV.isApproved = true;
-        curV.approvedAt = nowIso;
-        curV.approvedBy = userId;
+    try {
+      if (supabase) {
+        const { error: planErr } = await supabase
+          .from("generation_plans")
+          .update(toPlanRow(approvedPlan))
+          .eq("id", approvedPlan.id);
+        if (planErr) {
+          console.warn("[approveGenerationPlan] Supabase update plan warning:", planErr.message);
+        }
+
+        const { error: verErr } = await supabase
+          .from("generation_plan_versions")
+          .update({
+            is_approved: true,
+            approved_at: nowIso,
+            approved_by: userId,
+          })
+          .eq("plan_id", approvedPlan.id)
+          .eq("version_number", approvedPlan.currentVersion);
+        if (verErr) {
+          console.warn("[approveGenerationPlan] Supabase update version warning:", verErr.message);
+        }
       }
+    } catch (err) {
+      console.warn("[approveGenerationPlan] Exception persisting to Supabase:", err);
+    }
+
+    fallbackPlans.set(approvedPlan.id, approvedPlan);
+    const vList = fallbackVersions.get(approvedPlan.id) || [];
+    const curV = vList.find((v) => v.versionNumber === approvedPlan.currentVersion);
+    if (curV) {
+      curV.isApproved = true;
+      curV.approvedAt = nowIso;
+      curV.approvedBy = userId;
     }
 
     return {
       status: "success" as const,
       plan: approvedPlan,
+      specification,
     };
   });
 
@@ -611,13 +658,20 @@ export const revokeApprovalServerFn = createServerFn({ method: "POST" })
     const revokedPlan = applyPlanApprovalRevocation(currentPlan, authContext);
 
     try {
-      await supabase
-        .from("generation_plans")
-        .update(toPlanRow(revokedPlan))
-        .eq("id", revokedPlan.id);
-    } catch {
-      fallbackPlans.set(revokedPlan.id, revokedPlan);
+      if (supabase) {
+        const { error: revokeErr } = await supabase
+          .from("generation_plans")
+          .update(toPlanRow(revokedPlan))
+          .eq("id", revokedPlan.id);
+        if (revokeErr) {
+          console.warn("[revokeApproval] Supabase update plan warning:", revokeErr.message);
+        }
+      }
+    } catch (err) {
+      console.warn("[revokeApproval] Exception persisting to Supabase:", err);
     }
+
+    fallbackPlans.set(revokedPlan.id, revokedPlan);
 
     return {
       status: "success" as const,

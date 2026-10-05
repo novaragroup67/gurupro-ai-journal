@@ -28,6 +28,7 @@ import {
   PresentationOutline,
   PresentationSlide,
   GenerationStyle,
+  GenerationSpecification,
   ILLUSTRATION_STYLES_CATALOG,
   PRESENTATION_STYLES_CATALOG,
 } from "./ai/generation-planning-contract";
@@ -57,6 +58,23 @@ import {
   generatePresentationContentServerFn,
   getPresentationGenerationResultServerFn,
 } from "./presentation-generation.functions";
+import {
+  renderPresentationPptxServerFn,
+  getPresentationArtifactServerFn,
+  listPresentationArtifactsServerFn,
+} from "./presentation-artifact.functions";
+import {
+  getPresentationReviewServerFn,
+  startPresentationReviewServerFn,
+  approvePresentationServerFn,
+  rejectPresentationServerFn,
+  updatePresentationReviewNotesServerFn,
+} from "./presentation-review.functions";
+import {
+  evaluatePresentationQualityServerFn,
+  getPresentationQualityEvaluationServerFn,
+  downloadPresentationPptxServerFn,
+} from "./presentation-quality.functions";
 import type {
   IllustrationGenerationRequest,
   IllustrationGenerationParameters,
@@ -67,6 +85,9 @@ import type {
   PresentationGenerationParameters,
   PresentationContentPackage,
 } from "./ai/presentation-generation-contract";
+import type { PresentationArtifact } from "./ai/presentation-artifact-contract";
+import type { PresentationReview } from "./ai/presentation-review-contract";
+import type { PresentationQualityEvaluation } from "./ai/presentation-quality-contract";
 
 export interface UseGenerationPlanOptions {
   moduleId: string;
@@ -95,9 +116,24 @@ export function useGenerationPlan({
   const [generatedPresentationContent, setGeneratedPresentationContent] = useState<PresentationContentPackage | null>(null);
   const [generatingPresentationContent, setGeneratingPresentationContent] = useState(false);
   const [presentationGenerationError, setPresentationGenerationError] = useState<string | null>(null);
+  const [presentationArtifact, setPresentationArtifact] = useState<PresentationArtifact | null>(null);
+  const [renderingPptx, setRenderingPptx] = useState(false);
+  const [pptxRenderError, setPptxRenderError] = useState<string | null>(null);
+  const [renderStage, setRenderStage] = useState<
+    "idle" | "rendering" | "validating" | "storing" | "ready" | "failed"
+  >("idle");
+  const [presentationReview, setPresentationReview] = useState<PresentationReview | null>(null);
+  const [reviewingPresentation, setReviewingPresentation] = useState(false);
+  const [presentationReviewError, setPresentationReviewError] = useState<string | null>(null);
+  const [presentationQualityEvaluation, setPresentationQualityEvaluation] =
+    useState<PresentationQualityEvaluation | null>(null);
+  const [evaluatingPresentationQuality, setEvaluatingPresentationQuality] =
+    useState(false);
+  const [presentationQualityError, setPresentationQualityError] = useState<string | null>(null);
   const [availableStyles] = useState<GenerationStyle[]>(
     targetType === "illustration" ? ILLUSTRATION_STYLES_CATALOG : PRESENTATION_STYLES_CATALOG,
   );
+  const [specification, setSpecification] = useState<GenerationSpecification | null>(null);
 
   const loadPlan = useCallback(async () => {
     if (!moduleId) return;
@@ -110,9 +146,15 @@ export function useGenerationPlan({
       if (res.status === "success" && res.plan) {
         setPlan(res.plan);
         setVersions(res.versions || []);
+        if (res.specification) {
+          setSpecification(res.specification);
+        } else {
+          setSpecification(null);
+        }
       } else {
         setPlan(null);
         setVersions([]);
+        setSpecification(null);
       }
     } catch (err: any) {
       console.warn("[useGenerationPlan] Error loading plan:", err);
@@ -145,6 +187,7 @@ export function useGenerationPlan({
         if (res.status === "success" && res.plan) {
           setPlan(res.plan);
           setVersions(res.initialVersion ? [res.initialVersion] : []);
+          setSpecification(null);
           toast.success(
             targetType === "illustration"
               ? "Draf outline rencana ilustrasi berhasil dibuat."
@@ -177,6 +220,8 @@ export function useGenerationPlan({
         if (res.status === "success" && res.plan) {
           setPlan(res.plan);
           setVersions((prev) => [...prev, res.newVersion]);
+          setSpecification(null);
+          setPreparedRequest(null);
           if (plan.status === "approved") {
             toast.info("Perubahan disimpan. Persetujuan sebelumnya dicabut karena ada pembaruan outline.");
           } else {
@@ -209,6 +254,8 @@ export function useGenerationPlan({
           const wasApproved = plan.status === "approved";
           setPlan(res.plan);
           if (wasApproved && res.plan.status !== "approved") {
+            setSpecification(null);
+            setPreparedRequest(null);
             toast.info("Gaya diubah. Persetujuan sebelumnya dicabut agar sesuai dengan gaya baru.");
           } else {
             toast.success("Gaya visual berhasil dipilih.");
@@ -241,6 +288,9 @@ export function useGenerationPlan({
             v.versionNumber === res.plan.currentVersion ? { ...v, isApproved: true } : v,
           ),
         );
+        if (res.specification) {
+          setSpecification(res.specification);
+        }
         toast.success("Rencana generasi berhasil disetujui! Otorisasi generasi kini aktif.");
       }
     } catch (err: any) {
@@ -263,6 +313,8 @@ export function useGenerationPlan({
 
       if (res.status === "success" && res.plan) {
         setPlan(res.plan);
+        setSpecification(null);
+        setPreparedRequest(null);
         toast.info("Persetujuan rencana generasi berhasil dicabut.");
       }
     } catch (err: any) {
@@ -375,7 +427,7 @@ export function useGenerationPlan({
         req = await prepareIllustrationRequest();
       }
       if (!req) {
-        toast.error("Permintaan generasi gambar belum siap. Silakan klik Siapkan Permintaan terlebih dahulu.");
+        toast.error("Permintaan generasi gambar belum siap. Pastikan rencana telah disetujui.");
         return null;
       }
 
@@ -522,6 +574,253 @@ export function useGenerationPlan({
     setPresentationGenerationError(null);
   }, []);
 
+  const renderPresentationPptx = useCallback(
+    async (contentResultId: string, forceReRender = false) => {
+      setRenderingPptx(true);
+      setPptxRenderError(null);
+      setRenderStage("rendering");
+      try {
+        setRenderStage("validating");
+        const res = (await renderPresentationPptxServerFn({
+          data: { contentResultId, forceReRender },
+        })) as any;
+
+        if (res.status === "success" && res.artifact) {
+          setRenderStage("ready");
+          setPresentationArtifact(res.artifact);
+          toast.success("File PowerPoint (.pptx) berhasil dibuat!");
+          return res.artifact;
+        } else {
+          throw new Error("Gagal membuat file PPTX.");
+        }
+      } catch (err: any) {
+        setRenderStage("failed");
+        const msg = err.message || "Gagal merender file PPTX.";
+        setPptxRenderError(msg);
+        toast.error(`Gagal membuat PPTX: ${msg}`);
+        return null;
+      } finally {
+        setRenderingPptx(false);
+      }
+    },
+    []
+  );
+
+  const loadPresentationArtifact = useCallback(async (artifactId: string) => {
+    try {
+      const res = (await getPresentationArtifactServerFn({
+        data: { artifactId },
+      })) as any;
+      if (res.status === "success" && res.artifact) {
+        setPresentationArtifact(res.artifact);
+        setRenderStage("ready");
+        return res.artifact;
+      }
+    } catch (err: any) {
+      console.warn("[loadPresentationArtifact] Error:", err);
+    }
+    return null;
+  }, []);
+
+  const resetPresentationArtifact = useCallback(() => {
+    setPresentationArtifact(null);
+    setPptxRenderError(null);
+    setRenderStage("idle");
+  }, []);
+
+  const loadPresentationReview = useCallback(async (contentResultId: string) => {
+    try {
+      const res = (await getPresentationReviewServerFn({
+        data: { contentResultId },
+      })) as any;
+      if (res.status === "success" && res.review) {
+        setPresentationReview(res.review);
+        return res.review;
+      }
+    } catch (err: any) {
+      console.warn("[loadPresentationReview] Error:", err);
+    }
+    return null;
+  }, []);
+
+  const startPresentationReview = useCallback(async (contentResultId: string) => {
+    setReviewingPresentation(true);
+    setPresentationReviewError(null);
+    try {
+      const res = (await startPresentationReviewServerFn({
+        data: { contentResultId },
+      })) as any;
+      if (res.status === "success" && res.review) {
+        setPresentationReview(res.review);
+        return res.review;
+      }
+    } catch (err: any) {
+      const msg = err.message || "Gagal memulai peninjauan presentasi.";
+      setPresentationReviewError(msg);
+      toast.error(msg);
+    } finally {
+      setReviewingPresentation(false);
+    }
+    return null;
+  }, []);
+
+  const approvePresentation = useCallback(
+    async (contentResultId: string, teacherNotes?: string, expectedVersion?: number) => {
+      setReviewingPresentation(true);
+      setPresentationReviewError(null);
+      try {
+        const res = (await approvePresentationServerFn({
+          data: { contentResultId, teacherNotes, expectedVersion },
+        })) as any;
+        if (res.status === "success" && res.review) {
+          setPresentationReview(res.review);
+          toast.success("Presentasi berhasil disetujui oleh guru!");
+          return res.review;
+        }
+      } catch (err: any) {
+        const msg = err.message || "Gagal menyetujui presentasi.";
+        setPresentationReviewError(msg);
+        toast.error(`Persetujuan ditolak: ${msg}`);
+      } finally {
+        setReviewingPresentation(false);
+      }
+      return null;
+    },
+    []
+  );
+
+  const rejectPresentation = useCallback(
+    async (contentResultId: string, teacherNotes: string, expectedVersion?: number) => {
+      setReviewingPresentation(true);
+      setPresentationReviewError(null);
+      try {
+        const res = (await rejectPresentationServerFn({
+          data: { contentResultId, teacherNotes, expectedVersion },
+        })) as any;
+        if (res.status === "success" && res.review) {
+          setPresentationReview(res.review);
+          toast.info("Presentasi telah ditolak dengan catatan evaluasi.");
+          return res.review;
+        }
+      } catch (err: any) {
+        const msg = err.message || "Gagal menolak presentasi.";
+        setPresentationReviewError(msg);
+        toast.error(`Penolakan gagal: ${msg}`);
+      } finally {
+        setReviewingPresentation(false);
+      }
+      return null;
+    },
+    []
+  );
+
+  const updatePresentationReviewNotes = useCallback(
+    async (contentResultId: string, teacherNotes?: string) => {
+      try {
+        const res = (await updatePresentationReviewNotesServerFn({
+          data: { contentResultId, teacherNotes },
+        })) as any;
+        if (res.status === "success" && res.review) {
+          setPresentationReview(res.review);
+          toast.success("Catatan review berhasil diperbarui.");
+          return res.review;
+        }
+      } catch (err: any) {
+        console.warn("[updatePresentationReviewNotes] Error:", err);
+      }
+      return null;
+    },
+    []
+  );
+
+  const resetPresentationReview = useCallback(() => {
+    setPresentationReview(null);
+    setPresentationReviewError(null);
+  }, []);
+
+  const loadPresentationQualityEvaluation = useCallback(
+    async (artifactId: string) => {
+      if (!artifactId) return null;
+      try {
+        const res = (await getPresentationQualityEvaluationServerFn({
+          data: { artifactId },
+        })) as any;
+        if (res.status === "success") {
+          setPresentationQualityEvaluation(res.evaluation);
+          return res.evaluation;
+        }
+      } catch (err: any) {
+        console.warn("[loadPresentationQualityEvaluation] Error:", err);
+      }
+      return null;
+    },
+    []
+  );
+
+  const evaluatePresentationQuality = useCallback(
+    async (artifactId: string, forceReevaluate = false) => {
+      if (!artifactId) return null;
+      setEvaluatingPresentationQuality(true);
+      setPresentationQualityError(null);
+      try {
+        const res = (await evaluatePresentationQualityServerFn({
+          data: { artifactId, forceReevaluate },
+        })) as any;
+        if (res.status === "success" && res.evaluation) {
+          setPresentationQualityEvaluation(res.evaluation);
+          if (res.evaluation.status === "passed") {
+            toast.success("Dokumen PPTX lolos validasi mutu (Quality Gate PASS)! Berkas siap diunduh.");
+          } else {
+            toast.error("Validasi mutu mendeteksi kendala pada presentasi. Periksa catatan temuan.");
+          }
+          return res.evaluation;
+        }
+      } catch (err: any) {
+        const msg = err.message || "Gagal menjalankan evaluasi mutu presentasi.";
+        setPresentationQualityError(msg);
+        toast.error(`Quality Gate gagal: ${msg}`);
+      } finally {
+        setEvaluatingPresentationQuality(false);
+      }
+      return null;
+    },
+    []
+  );
+
+  const downloadApprovedPresentationPptx = useCallback(
+    async (artifactId: string) => {
+      if (!artifactId) return null;
+      try {
+        const res = (await downloadPresentationPptxServerFn({
+          data: { artifactId },
+        })) as any;
+        if (res.status === "success") {
+          if (typeof window !== "undefined" && res.downloadUrl) {
+            const a = document.createElement("a");
+            a.href = res.downloadUrl;
+            a.download = res.filename;
+            a.target = "_blank";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          }
+          toast.success("Mengunduh dokumen PowerPoint (.pptx)...");
+          return res;
+        }
+      } catch (err: any) {
+        const msg = err.message || "Gagal mengunduh presentasi.";
+        toast.error(`Unduhan ditolak: ${msg}`);
+      }
+      return null;
+    },
+    []
+  );
+
+  const resetPresentationQualityEvaluation = useCallback(() => {
+    setPresentationQualityEvaluation(null);
+    setPresentationQualityError(null);
+  }, []);
+
   return {
     plan,
     versions,
@@ -537,7 +836,19 @@ export function useGenerationPlan({
     generatedPresentationContent,
     generatingPresentationContent,
     presentationGenerationError,
+    presentationArtifact,
+    renderingPptx,
+    pptxRenderError,
+    renderStage,
+    presentationReview,
+    reviewingPresentation,
+    presentationReviewError,
+    presentationQualityEvaluation,
+    evaluatingPresentationQuality,
+    presentationQualityError,
     availableStyles,
+    specification,
+    setSpecification,
     isApproved: Boolean(plan && plan.status === "approved" && plan.approvedVersion === plan.currentVersion),
     initPlan,
     loadPlan,
@@ -561,5 +872,21 @@ export function useGenerationPlan({
     loadPresentationContent,
     resetPresentationContent,
     setGeneratedPresentationContent,
+    renderPresentationPptx,
+    loadPresentationArtifact,
+    resetPresentationArtifact,
+    setPresentationArtifact,
+    loadPresentationReview,
+    startPresentationReview,
+    approvePresentation,
+    rejectPresentation,
+    updatePresentationReviewNotes,
+    resetPresentationReview,
+    setPresentationReview,
+    loadPresentationQualityEvaluation,
+    evaluatePresentationQuality,
+    downloadApprovedPresentationPptx,
+    resetPresentationQualityEvaluation,
+    setPresentationQualityEvaluation,
   };
 }

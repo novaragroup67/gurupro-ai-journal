@@ -211,8 +211,8 @@ export async function getKelasRekapData(kelasId: string): Promise<KelasRekapData
   const assignmentIds = daftarPenugasan.map((p) => p.id);
 
   // 4. Ambil seluruh pengumpulan (utama & remedial) untuk penugasan-penugasan kelas ini
-  let pengumpulanMap: Record<string, any> = {};
-  let remedialMap: Record<string, any> = {};
+  const pengumpulanMap: Record<string, any> = {};
+  const remedialMap: Record<string, any> = {};
 
   if (assignmentIds.length > 0) {
     const [subRes, remRes] = await Promise.all([

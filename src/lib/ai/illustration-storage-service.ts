@@ -29,6 +29,7 @@ export interface IllustrationStorageDriver {
     bytes: Uint8Array,
     mimeType: string
   ): Promise<StorageUploadResult>;
+  download(storagePath: string): Promise<Uint8Array>;
   delete(storagePath: string): Promise<void>;
 }
 
@@ -129,6 +130,30 @@ export class SupabaseStorageDriver implements IllustrationStorageDriver {
     }
   }
 
+  async download(storagePath: string): Promise<Uint8Array> {
+    if (!this.supabaseClient?.storage) {
+      throw new AiServiceError(
+        AI_ERROR_CODES.STORAGE_ERROR,
+        "Supabase Storage client tidak tersedia."
+      );
+    }
+    try {
+      const { data, error } = await this.supabaseClient.storage
+        .from(this.bucketName)
+        .download(storagePath);
+      if (error || !data) {
+        throw new Error(error?.message || "Berkas tidak ditemukan dalam storage");
+      }
+      const arrayBuffer = await data.arrayBuffer();
+      return new Uint8Array(arrayBuffer);
+    } catch (err: any) {
+      throw new AiServiceError(
+        AI_ERROR_CODES.PPTX_ILLUSTRATION_LOAD_FAILED,
+        `Gagal mengunduh berkas ilustrasi dari Supabase Storage: ${err.message}`
+      );
+    }
+  }
+
   async delete(storagePath: string): Promise<void> {
     if (!this.supabaseClient?.storage) return;
     try {
@@ -165,12 +190,27 @@ export class MemoryStorageDriver implements IllustrationStorageDriver {
     };
   }
 
+  async download(storagePath: string): Promise<Uint8Array> {
+    const item = this.store.get(storagePath);
+    if (!item) {
+      throw new AiServiceError(
+        AI_ERROR_CODES.PPTX_ILLUSTRATION_LOAD_FAILED,
+        `Berkas ilustrasi tidak ditemukan di memory storage: ${storagePath}`
+      );
+    }
+    return item.bytes;
+  }
+
   async delete(storagePath: string): Promise<void> {
     this.store.delete(storagePath);
   }
 
   getStored(storagePath: string): { bytes: Uint8Array; mimeType: string } | undefined {
     return this.store.get(storagePath);
+  }
+
+  has(storagePath: string): boolean {
+    return this.store.has(storagePath);
   }
 
   clear(): void {

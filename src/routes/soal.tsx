@@ -271,6 +271,14 @@ function SoalPage() {
     modulIdsInOtherYears,
   ]);
 
+  const isDirty = useMemo(() => {
+    if (!initialSnapshot) return false;
+    if (judul.trim() !== initialSnapshot.judul.trim()) return true;
+    if (topik.trim() !== initialSnapshot.topik.trim()) return true;
+    if (draftSoal.length !== initialSnapshot.soal.length) return true;
+    return JSON.stringify(draftSoal) !== JSON.stringify(initialSnapshot.soal);
+  }, [initialSnapshot, judul, topik, draftSoal]);
+
   if (ready && profile.role !== "guru") {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center p-6 text-center">
@@ -288,14 +296,6 @@ function SoalPage() {
       </div>
     );
   }
-
-  const isDirty = useMemo(() => {
-    if (!initialSnapshot) return false;
-    if (judul.trim() !== initialSnapshot.judul.trim()) return true;
-    if (topik.trim() !== initialSnapshot.topik.trim()) return true;
-    if (draftSoal.length !== initialSnapshot.soal.length) return true;
-    return JSON.stringify(draftSoal) !== JSON.stringify(initialSnapshot.soal);
-  }, [initialSnapshot, judul, topik, draftSoal]);
 
   const resetDraft = () => {
     setJudul("");
