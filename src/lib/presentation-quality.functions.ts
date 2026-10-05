@@ -56,6 +56,7 @@ import {
   type ResolvedSlideIllustration,
 } from "./ai/presentation-illustration-resolver";
 import type { IllustrationStorageDriver } from "./ai/illustration-storage-service";
+import { trackProductEvent } from "@/lib/analytics/product-events";
 
 // ==============================================================================
 // 1. DATA STORAGE & ROW INTERFACES
@@ -446,6 +447,17 @@ export async function executeEvaluatePresentationQuality(
 
     fallbackPresentationQualityEvaluations.set(evaluation.id, evaluationRow);
 
+    if (evaluation.status === "passed" && evaluation.decision === "PASS") {
+      void trackProductEvent("PRESENTATION_QUALITY_PASSED", "presentation", {
+        userId,
+        role: "guru",
+        metadata: {
+          artifactId,
+          overallScore: evaluation.overallScore,
+        },
+      });
+    }
+
     return {
       status: "success",
       evaluation,
@@ -719,6 +731,15 @@ export async function executeSecureDownloadPresentationPptx(
       "Integritas biner berkas rusak: checksum SHA-256 tidak cocok dengan artefak yang tercatat."
     );
   }
+
+  void trackProductEvent("PRESENTATION_DOWNLOADED", "presentation", {
+    userId,
+    role: effectiveRole,
+    metadata: {
+      artifactId: artifactRow.id,
+      byteSize: artifactRow.byte_size,
+    },
+  });
 
   return {
     status: "success",

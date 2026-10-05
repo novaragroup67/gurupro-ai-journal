@@ -23,6 +23,7 @@
 
 import { AI_ERROR_CODES, AiServiceError } from "../error-taxonomy";
 import { getServerEnv } from "../ai-service";
+import { trackProductEvent, PRODUCT_EVENT_NAMES } from "../../analytics/product-events";
 import type {
   IllustrationGenerationProvider,
   IllustrationGenerationRequest,
@@ -171,6 +172,11 @@ export class DualIllustrationRouter implements IllustrationGenerationProvider {
       // 1. Try Primary Provider
       const result = await this.primaryProvider.generate(request);
       if (result.status === "succeeded") {
+        trackProductEvent({
+          eventName: PRODUCT_EVENT_NAMES.AI_GENERATION_SUCCESS,
+          feature: "ai_core",
+          metadata: { provider: this.primaryProvider.providerName, requestId: request.requestId },
+        });
         return result;
       }
       primaryErr = result.error || {
@@ -192,6 +198,16 @@ export class DualIllustrationRouter implements IllustrationGenerationProvider {
       console.warn(
         `[DualIllustrationRouter] Primary provider (${this.primaryProvider.providerName}) triggered safety block. Aborting without failover.`
       );
+      trackProductEvent({
+        eventName: PRODUCT_EVENT_NAMES.AI_GENERATION_FAILURE,
+        feature: "ai_core",
+        metadata: {
+          provider: this.primaryProvider.providerName,
+          code: "AI_SAFETY_BLOCKED",
+          safety_blocked: true,
+          requestId: request.requestId,
+        },
+      });
       if (primaryErr instanceof Error) throw primaryErr;
       throw new AiServiceError(
         AI_ERROR_CODES.AI_SAFETY_BLOCKED,
@@ -204,6 +220,16 @@ export class DualIllustrationRouter implements IllustrationGenerationProvider {
       console.warn(
         `[DualIllustrationRouter] Primary provider (${this.primaryProvider.providerName}) failed with retryable error (${primaryErr.message || primaryErr.code}). Failing over to ${this.fallbackProvider.providerName}...`
       );
+      trackProductEvent({
+        eventName: PRODUCT_EVENT_NAMES.AI_PROVIDER_FAILOVER,
+        feature: "ai_core",
+        metadata: {
+          from: this.primaryProvider.providerName,
+          to: this.fallbackProvider.providerName,
+          error: primaryErr.message || primaryErr.code,
+          requestId: request.requestId,
+        },
+      });
 
       try {
         const fallbackResult = await this.fallbackProvider.generate(request);
@@ -213,6 +239,15 @@ export class DualIllustrationRouter implements IllustrationGenerationProvider {
             fallbackResult.error?.message || "Fallback provider gagal menghasilkan gambar."
           );
         }
+        trackProductEvent({
+          eventName: PRODUCT_EVENT_NAMES.AI_GENERATION_SUCCESS,
+          feature: "ai_core",
+          metadata: {
+            provider: this.fallbackProvider.providerName,
+            failover: true,
+            requestId: request.requestId,
+          },
+        });
         // Mark failover in result metadata for auditability
         return {
           ...fallbackResult,
@@ -229,6 +264,15 @@ export class DualIllustrationRouter implements IllustrationGenerationProvider {
           `[DualIllustrationRouter] Fallback provider (${this.fallbackProvider.providerName}) also failed:`,
           fallbackErr
         );
+        trackProductEvent({
+          eventName: PRODUCT_EVENT_NAMES.AI_PROVIDER_UNAVAILABLE,
+          feature: "ai_core",
+          metadata: {
+            primary: this.primaryProvider.providerName,
+            fallback: this.fallbackProvider.providerName,
+            requestId: request.requestId,
+          },
+        });
         throw new AiServiceError(
           fallbackErr.code || AI_ERROR_CODES.AI_UPSTREAM_ERROR,
           `Generasi ilustrasi gagal pada provider utama (${this.primaryProvider.providerName}: ${primaryErr.message}) dan fallback (${this.fallbackProvider.providerName}: ${fallbackErr.message}).`

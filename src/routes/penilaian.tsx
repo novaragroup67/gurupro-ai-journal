@@ -22,6 +22,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { exportRekapNilaiCsv, exportRekapNilaiPdf } from "@/lib/exporters";
+import { trackProductEvent } from "@/lib/analytics/product-events";
 
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -93,6 +94,13 @@ function GuruRekapNilaiView() {
   const { kelasList, loading: loadingClasses } = useKelas();
   const currentUserId = user?.id || profile?.id;
   const { selectedYear } = useTahunAjaran(currentUserId);
+
+  useEffect(() => {
+    trackProductEvent("GRADING_OPENED", "penilaian", {
+      userId: currentUserId,
+      role: profile.role,
+    });
+  }, [currentUserId, profile.role]);
 
   // Filter hanya kelas milik guru yang login pada tahun ajaran yang dipilih
   const allTeacherClasses = useMemo(() => {

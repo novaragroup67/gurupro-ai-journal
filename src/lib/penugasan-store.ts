@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { trackProductEvent } from "@/lib/analytics/product-events";
 
 export type PenugasanStatus = "draft" | "published" | "closed";
 
@@ -363,6 +364,18 @@ export async function createPenugasan(
 
     cachedGuruAssignments = [created, ...cachedGuruAssignments];
     emitChange();
+
+    void trackProductEvent("ASSIGNMENT_CREATED", "penugasan", {
+      userId,
+      role: "guru",
+      metadata: {
+        assignmentId: created.id,
+        kelasId: created.kelasId,
+        status: created.status,
+        totalSoal: created.totalSoal,
+      },
+    });
+
     return { ok: true, penugasan: created };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Gagal membuat penugasan.";
@@ -419,7 +432,13 @@ export async function updatePenugasan(
 export async function publishPenugasan(
   id: string,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  return updatePenugasan(id, { status: "published" });
+  const res = await updatePenugasan(id, { status: "published" });
+  if (res.ok) {
+    void trackProductEvent("ASSIGNMENT_PUBLISHED", "penugasan", {
+      metadata: { assignmentId: id },
+    });
+  }
+  return res;
 }
 
 /**

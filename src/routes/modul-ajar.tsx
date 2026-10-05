@@ -57,6 +57,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { publishModulServerFn } from "@/lib/ai.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { isRecoverableAuthError, withAuthRetry } from "@/integrations/supabase/auth-token";
+import { trackProductEvent, PRODUCT_EVENT_NAMES } from "@/lib/analytics/product-events";
 
 export const Route = createFileRoute("/modul-ajar")({
   head: () => ({
@@ -98,6 +99,15 @@ function ModulAjarPage() {
   const [publishLoading, setPublishLoading] = useState(false);
   const publishModulFn = useServerFn(publishModulServerFn);
 
+  useEffect(() => {
+    trackProductEvent({
+      eventName: PRODUCT_EVENT_NAMES.MODUL_OPENED,
+      feature: "modul_ajar",
+      actorId: user?.id || profile?.id,
+      role: profile?.role,
+    });
+  }, [user?.id, profile?.id, profile?.role]);
+
   const handleConfirmPublish = async () => {
     if (!targetPublish) return;
     setPublishLoading(true);
@@ -113,6 +123,13 @@ function ModulAjarPage() {
           }),
       );
       if (res.status === "success") {
+        trackProductEvent({
+          eventName: PRODUCT_EVENT_NAMES.MODUL_PUBLISHED,
+          feature: "modul_ajar",
+          actorId: currentGuruId,
+          role: profile?.role,
+          metadata: { modulId: targetPublish.id },
+        });
         toast.success(`Modul "${targetPublish.judul}" berhasil dipublikasikan.`);
         await reloadModuls();
         setTargetPublish(null);

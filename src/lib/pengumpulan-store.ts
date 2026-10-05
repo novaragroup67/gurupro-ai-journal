@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { trackProductEvent } from "@/lib/analytics/product-events";
 
 export interface SanitizedSoal {
   id: string;
@@ -201,23 +202,31 @@ export async function createDraftSubmission(
       };
     }
 
+    const submissionResult = {
+      id: data.id,
+      penugasanId: data.penugasan_id,
+      siswaId: data.siswa_id,
+      status: data.status as "draft" | "submitted",
+      submittedAt: data.submitted_at,
+      nilaiPg: data.nilai_pg !== null ? Number(data.nilai_pg) : null,
+      nilaiEssay: data.nilai_essay !== null ? Number(data.nilai_essay) : null,
+      nilaiAkhir: data.nilai_akhir !== null ? Number(data.nilai_akhir) : null,
+      statusPenilaian: (data.status_penilaian as any) || "belum_dinilai",
+      catatanGuru: data.catatan_guru,
+      gradedAt: data.graded_at,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+
+    void trackProductEvent("SUBMISSION_STARTED", "submission", {
+      userId,
+      role: "siswa",
+      metadata: { penugasanId },
+    });
+
     return {
       ok: true,
-      submission: {
-        id: data.id,
-        penugasanId: data.penugasan_id,
-        siswaId: data.siswa_id,
-        status: data.status as "draft" | "submitted",
-        submittedAt: data.submitted_at,
-        nilaiPg: data.nilai_pg !== null ? Number(data.nilai_pg) : null,
-        nilaiEssay: data.nilai_essay !== null ? Number(data.nilai_essay) : null,
-        nilaiAkhir: data.nilai_akhir !== null ? Number(data.nilai_akhir) : null,
-        statusPenilaian: (data.status_penilaian as any) || "belum_dinilai",
-        catatanGuru: data.catatan_guru,
-        gradedAt: data.graded_at,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
-      },
+      submission: submissionResult,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Gagal memulai tugas.";
@@ -363,6 +372,14 @@ export async function saveAnswers(
       return { ok: false, message: error.message };
     }
 
+    void trackProductEvent("ANSWER_SAVED", "submission", {
+      role: "siswa",
+      metadata: {
+        pengumpulanId,
+        answerCount: rows.length,
+      },
+    });
+
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Gagal menyimpan jawaban.";
@@ -389,6 +406,10 @@ export async function submitAssignment(
     if (rpcData && typeof rpcData === "object") {
       const res = rpcData as any;
       if (res.ok) {
+        void trackProductEvent("SUBMISSION_SUBMITTED", "submission", {
+          role: "siswa",
+          metadata: { pengumpulanId },
+        });
         return { ok: true, submittedAt: res.submitted_at || new Date().toISOString() };
       }
       return { ok: false, message: res.message || "Gagal mengumpulkan tugas." };
@@ -519,6 +540,13 @@ export async function gradeSubmission(
     if (!rpcError && rpcData && typeof rpcData === "object") {
       const res = rpcData as any;
       if (res.ok) {
+        void trackProductEvent("GRADING_COMPLETED", "penilaian", {
+          role: "guru",
+          metadata: {
+            pengumpulanId,
+            nilaiAkhir: Number(res.nilai_akhir),
+          },
+        });
         return {
           ok: true,
           nilaiAkhir: Number(res.nilai_akhir),

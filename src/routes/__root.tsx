@@ -14,6 +14,7 @@ import { useEffect, type ReactNode } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { BugReportDialog } from "@/components/bug-report-dialog";
+import { FeedbackDialog } from "@/components/feedback-dialog";
 import { GuruProMark } from "@/components/gurupro-logo";
 import { NotificationMenu } from "@/components/notification-menu";
 import { Badge } from "@/components/ui/badge";
@@ -257,6 +258,13 @@ function AppShell() {
             </div>
 
             <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+              <FeedbackDialog
+                triggerVariant="ghost"
+                triggerSize="sm"
+                triggerLabel="Feedback"
+                triggerClassName="hidden md:inline-flex h-8 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+              />
+
               <BugReportDialog
                 triggerVariant="ghost"
                 triggerSize="sm"

@@ -149,3 +149,20 @@ Router visual [`DualIllustrationRouter`](file:///c:/novara%20project/gurupro-ai-
 
 ### C. Pemulihan Aset Storage
 - File citra ilustrasi dan presentasi PPTX yang disimpan di bucket Supabase Storage bersifat terisolasi dan persisten, tidak terpengaruh oleh restart serverless atau deployment aplikasi baru.
+
+---
+
+## 8. Analitik Produk & Manajemen Masukan Pengguna (OPS-2)
+
+Pada tahap **OPS-2**, sistem diperluas dengan kemampuan pengukuran adopsi pengguna, funnel konversi alur kerja, keandalan AI, dan manajemen masukan (*user feedback*) terpadu:
+
+### A. Non-Blocking Invariant & Zero-Leak Privacy
+- **Pelacakan Non-Blocking**: Seluruh event produk dilacak secara asinkron tanpa memblokir alur kerja utama aplikasi. Kegagalan basis data atau jaringan ditangkap secara senyap tanpa menghasilkan pengecualian bagi pengguna.
+- **Pembersihan Metadata**: Kunci rahasia (token Bearer, JWT, kata sandi, API key) otomatis disanitasi menjadi `[REDACTED]`. Teks jawaban siswa tidak disimpan dalam metadata analitik, melainkan dikonversi menjadi ringkasan panjang (*length*) atau jumlah (*count*).
+
+### B. Dashboard Analitik Admin & Triage Masukan
+- Administrator dapat memantau metriks adopsi guru/siswa, funnel konversi (Modul Ajar, Bank Soal, Penugasan & Penilaian, Presentasi PPTX), dan keandalan penyedia AI melalui tab **Analitik Produk** pada Dashboard Admin.
+- Pengguna dapat mengirimkan umpan balik melalui dialog masukan pada navbar aplikasi (kategori: `bug`, `usability`, `ai_output`, `performance`, `suggestion`).
+- Siklus hidup status masukan dikelola secara terkontrol oleh Admin: `new` ──► `triaged` ──► `in_progress` ──► `resolved` ──► `closed`.
+- Dokumentasi teknis mendalam tersedia di [`docs/OPS-2-PRODUCT-ANALYTICS.md`](file:///c:/novara%20project/gurupro-ai-journal-main/docs/OPS-2-PRODUCT-ANALYTICS.md).
+

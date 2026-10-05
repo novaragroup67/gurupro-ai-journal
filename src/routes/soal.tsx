@@ -23,9 +23,10 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { archiveAcademicItem } from "@/lib/archive-store";
+import { trackProductEvent } from "@/lib/analytics/product-events";
 
 import { PageHeader } from "@/components/page-header";
 import {
@@ -127,6 +128,13 @@ function SoalPage() {
   const currentGuruId = user?.id || profile.id;
   const { kelasList } = useKelas();
   const { selectedYear } = useTahunAjaran(currentGuruId);
+
+  useEffect(() => {
+    trackProductEvent("QUESTION_GENERATOR_OPENED", "soal", {
+      userId: currentGuruId,
+      role: profile.role,
+    });
+  }, [currentGuruId, profile.role]);
 
   // Kelas milik guru pada tahun ajaran aktif
   const myKelas = useMemo(() => {
@@ -1552,7 +1560,19 @@ function SoalPage() {
                   toast.error("Pilih minimal satu kelas.");
                   return;
                 }
-                if (terbitTarget) void terbitkanSebagaiTugas(terbitTarget.id, kelasPilihan);
+                if (terbitTarget) {
+                  void terbitkanSebagaiTugas(terbitTarget.id, kelasPilihan);
+                  void trackProductEvent("QUESTION_PACKAGE_PUBLISHED", "soal", {
+                    userId: currentGuruId,
+                    role: profile.role,
+                    metadata: {
+                      paketId: terbitTarget.id,
+                      questionCount: terbitTarget.soal?.length || 0,
+                      target: "tugas",
+                      kelasCount: kelasPilihan.length,
+                    },
+                  });
+                }
                 setTerbitTarget(null);
                 toast.success("Soal diterbitkan sebagai tugas.");
               }}
@@ -1670,6 +1690,14 @@ function PaketActions({
           onClick={async () => {
             try {
               await publishPaket(paket.id);
+              void trackProductEvent("QUESTION_PACKAGE_PUBLISHED", "soal", {
+                role: "guru",
+                metadata: {
+                  paketId: paket.id,
+                  questionCount: paket.soal?.length || 0,
+                  target: "bank_soal",
+                },
+              });
               toast.success("Paket soal berhasil diterbitkan ke Bank Soal.");
             } catch (err: any) {
               console.error("[publishPaket] Error:", err);

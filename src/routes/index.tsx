@@ -30,11 +30,13 @@ import {
   Search,
   ExternalLink,
   Trash2,
+  BarChart3,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
+import { ProductAnalyticsView } from "@/components/analytics/product-analytics-view";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1427,7 +1429,7 @@ function AdminDashboard() {
 
       {/* Tab Konten Admin */}
       <Tabs defaultValue="guru" className="space-y-4">
-        <TabsList className="grid grid-cols-3 w-full max-w-xl">
+        <TabsList className="grid grid-cols-4 w-full max-w-3xl">
           <TabsTrigger value="guru" className="gap-2 text-xs">
             <UserCheck className="h-4 w-4" />
             Manajemen Guru
@@ -1439,6 +1441,10 @@ function AdminDashboard() {
           <TabsTrigger value="monitoring" className="gap-2 text-xs">
             <ShieldAlert className="h-4 w-4" />
             Monitoring Log
+          </TabsTrigger>
+          <TabsTrigger value="analitik" className="gap-2 text-xs">
+            <BarChart3 className="h-4 w-4 text-blue-600" />
+            Analitik Produk
           </TabsTrigger>
         </TabsList>
 
@@ -1875,6 +1881,10 @@ function AdminDashboard() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+        {/* TAB 4: ANALITIK PRODUK & REAL-USER FEEDBACK (OPS-2) */}
+        <TabsContent value="analitik" className="space-y-4">
+          <ProductAnalyticsView />
         </TabsContent>
       </Tabs>
 

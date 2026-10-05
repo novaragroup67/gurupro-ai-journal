@@ -60,6 +60,17 @@ Setiap kali pengguna melaporkan error atau konsol mencatat insiden, sistem menye
   2. Pastikan bucket `presentation-artifacts` di Supabase Storage memiliki hak akses RLS yang sah untuk guru pemilik modul.
   3. Jika file rusak di storage, lakukan *regenerate* terkontrol melalui antarmuka modul presentasi dengan persetujuan guru yang sah (*teacher sovereign approval*).
 
+### D. Sub-sistem Analitik & Umpan Balik Pengguna (OPS-2)
+- **Indikasi**: Drop-off ekstrem pada funnel konversi (misal: tingkat kelulusan penilaian anjlok), atau lonjakan laporan masukan berprioritas `kritis` / `tinggi`.
+- **Penyebab**: Hambatan fungsional atau usability pada salah satu tahap workflow guru/siswa.
+- **Prosedur Penanganan**:
+  1. Masuk ke Dashboard Admin → Tab **Analitik Produk**.
+  2. Filter rentang waktu `Hari Ini` atau `7 Hari Terakhir`.
+  3. Periksa rincian masukan pengguna dengan status `new` dan kategori `bug` atau `ai_output`.
+  4. Lacak Correlation ID terkait pada log serverless untuk merekonstruksi urutan peristiwa.
+  5. Ubah status masukan menjadi `triaged` atau `in_progress` dengan catatan admin yang relevan.
+  6. Jalankan suite verifikasi analitik produk: `npm run test:ops2`.
+
 ---
 
 ## 4. Prosedur Rollback Darurat (Emergency Rollback)
