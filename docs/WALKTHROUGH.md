@@ -992,13 +992,80 @@ Menghilangkan navigasi berulang, menghindari pengisian data ganda yang tidak per
 PRODUCT-1C COMPLETE — TEACHER WORKFLOW OPTIMIZATION VERIFIED
 ```
 
+---
 
+## 17. Tahap PRODUCT-1D: Optimasi Pengalaman Siswa (Student Experience Optimization)
 
+### Ringkasan Eksekutif
+Tahap **PRODUCT-1D** berfokus pada penyempurnaan alur belajar siswa (*student journey*):
+```text
+Dashboard Siswa
+→ Penugasan
+→ Buka Tugas
+→ Baca Petunjuk
+→ Jawab Pertanyaan
+→ Simpan Progres (Autosave & Retry)
+→ Tinjau Jawaban
+→ Kumpulkan (Submit Confirmation Guard)
+→ Status Terkumpul (Read-Only Lock)
+→ Lihat Hasil Nilai
+```
+Optimasi ini meniadakan kebingungan status tugas, memberikan indikator tenggat waktu yang intuitif, menyediakan palet navigasi butir soal yang aksesibel, menjamin keandalan penyimpanan progres draf jawaban tanpa risiko kehilangan data, serta memperjelas modal konfirmasi pengumpulan akhir dengan rincian soal yang belum terjawab.
 
+Seluruh optimasi ini menjaga integritas keamanan tingkat tinggi:
+- **Zero Answer Key Leakage**: Butir soal yang diterima siswa disanitasi ketat dari kunci jawaban (`kunci`) maupun pembahasan (`pembahasan`).
+- **Isolasi Multi-Tenant RLS**: Siswa hanya dapat membaca dan menulis draf penyerahan mereka sendiri (`auth.uid() = siswa_id`).
+- **Logika Penilaian Tetap Utuh**: Rumus penilaian otomatis pilihan ganda dan alur penilaian manual esai guru tidak diubah sama sekali.
 
+Laporan audit lengkap didokumentasikan di [`docs/PRODUCT-1D-STUDENT-EXPERIENCE.md`](file:///c:/novara%20project/gurupro-ai-journal-main/docs/PRODUCT-1D-STUDENT-EXPERIENCE.md).
 
+### 3 Area Perbaikan Berdampak Tinggi yang Diterapkan
 
+1. **Kejelasan Status Tugas, Tenggat Waktu & Tombol Aksi Kontekstual (`src/lib/pengumpulan-store.ts`, `src/routes/penugasan.tsx`, `src/routes/index.tsx`, `src/routes/penilaian.tsx`)**:
+   - **Masalah**: Siswa kesulitan membedakan status tugas (apakah baru, sedang dalam draf pengerjaan, menunggu penilaian, atau sudah dinilai). Tenggat waktu hanya berupa teks tanggal pasif tanpa indikator urgensi relatif.
+   - **Solusi**:
+     - Ditambahkan fungsi pembantu `computeDeadlineInfo(deadlineIso)` yang menghitung status tenggat waktu relatif (`Tenggat Waktu Berakhir`, `Mendekati Tenggat`, `Sisa N hari/jam`).
+     - Ditambahkan fungsi pembantu `getStudentAssignmentState(assignment, submission)` yang memetakan tugas ke 5 status otoritatif: `belum_dikerjakan` ("Mulai Mengerjakan"), `sedang_dikerjakan` ("Lanjutkan Mengerjakan"), `sudah_dikumpulkan` ("Lihat Pengumpulan"), `sudah_dinilai` ("Lihat Hasil"), dan `ditutup` ("Lihat Tugas").
+     - Di `src/routes/penugasan.tsx`, ditambahkan tab penyaring status: `Perlu Dikerjakan` (belum & draf), `Selesai` (disubmit & dinilai), dan `Semua`.
+     - Ditambahkan penanganan *deep-linking* via `search.penugasanId` untuk membuka tugas secara otomatis.
+     - Di Dashboard Siswa (`src/routes/index.tsx`), ditambahkan bagian prioritas utama **"Tugas Belajar Perlu Dikerjakan"** yang menampilkan tugas aktif dengan lencana urgensi tenggat dan tombol aksi langsung menuju pengerjaan.
+     - Di Riwayat Nilai Siswa (`src/routes/penilaian.tsx`), judul tugas kini dapat diklik langsung dengan ikon eksternal menuju `/penugasan?penugasanId=...`.
 
+2. **Palet Navigasi Butir Soal, Progres Visual & Aksesibilitas (`src/routes/penugasan.tsx`)**:
+   - **Masalah**: Pada tugas dengan butir soal yang banyak, siswa harus terus melakukan scroll panjang untuk mencari soal yang belum dijawab. Pilihan ganda belum memenuhi standar aksesibilitas keyboard dan pembaca layar.
+   - **Solusi**:
+     - Ditambahkan **Palet Navigasi Butir Soal** (`role="navigation"`, `aria-label="Daftar nomor butir soal"`) di bagian atas lembar pengerjaan.
+     - Setiap nomor soal (1..N) menunjukkan status terisi (solid warna primer) vs belum terisi (outline) secara reaktif.
+     - Mengklik nomor soal melakukan scroll halus (*smooth scroll*) langsung ke kartu soal yang dituju (`#soal-card-${id}`).
+     - Ditambahkan bilah progres visual (`role="progressbar"`) dengan persentase penyelesaian real-time (`answeredCount / totalSoal * 100%`).
+     - Diperbarui pilihan ganda menjadi grup radio yang aksesibel (`role="radiogroup"`, `role="radio"`, `aria-checked`, cincin fokus keyboard `focus-visible:ring-2 focus-visible:ring-primary`).
 
+3. **Keandalan Penyimpanan Progres, Pemulihan Kesalahan & Modal Pratinjau Pengumpulan Akhir (`src/routes/penugasan.tsx`)**:
+   - **Masalah**: Siswa khawatir kehilangan ketikan jawaban esai saat koneksi internet terganggu. Konfirmasi pengumpulan akhir sebelumnya hanya berupa dialog konfirmasi umum tanpa informasi berapa soal yang masih kosong.
+   - **Solusi**:
+     - Ditambahkan fungsi pemulihan `handleRetrySave` dengan tombol `"Coba Simpan Ulang"` ketika status penyimpanan mengalami galat jaringan/server.
+     - Ditambahkan pengaman `window.addEventListener("beforeunload", ...)` dan `handleSafeBack` yang mengonfirmasi siswa jika ingin keluar saat penyimpanan draf masih berlangsung di latar belakang.
+     - Dirombak dialog konfirmasi pengumpulan (`AlertDialog`) menjadi ringkasan pratinjau informatif:
+       - Menampilkan jumlah soal terjawab vs total soal.
+       - Menampilkan peringatan tegas disertai nomor butir soal yang belum diisi (contoh: `Soal #3, #7 belum diisi`).
+       - Menyediakan tombol pintasan 1-klik untuk langsung membuka dan melompat ke nomor soal pertama yang belum terjawab (`Buka Soal #3`).
+       - Menegaskan bahwa pengumpulan bersifat permanen dan mengunci jawaban, serta mencegah klik ganda pengumpulan (`disabled={submittingFinal}`).
 
+### Hasil Uji Mutu & Verifikasi PRODUCT-1D
 
+| Suite Uji / Verifikasi | Perintah | Status | Keterangan |
+|---|---|:---:|---|
+| **PRODUCT-1D Student Experience Suite** | `npm run test:product1d` | **16 / 16 PASS (100%)** | Validasi status tugas, palet navigasi soal, progres visual, radio group accessibility, retry save, modal pratinjau submit, dan isolasi keamanan |
+| **PRODUCT-1C Teacher Workflow Suite** | `npm run test:product1c` | **13 / 13 PASS (100%)** | Validasi alur Modul $\to$ Soal, Paket $\to$ Tugas, Penugasan $\to$ Penilaian, dan multi-tenant authorization |
+| **OPS-2 Product Analytics Suite** | `npm run test:ops2` | **16 / 16 PASS (100%)** | Taksonomi analitik privasi aman, siklus hidup masukan, dan kueri dashboard |
+| **OPS-1 Production Monitoring Suite** | `npm run test:ops` | **26 / 26 PASS (100%)** | Kesehatan sistem, sanitasi log zero-leak, korelasi request, dan failover terikat |
+| **GO-LIVE Production Operations Suite** | `npm run test:golive` | **29 / 29 PASS (100%)** | Operasional penuh akun guru/siswa, modul, penugasan, penilaian, dan PPTX live |
+| **Full Product UAT Suite** | `npm run test:uat` | **51 / 51 PASS (100%)** | Seluruh 51 skenario end-to-end terverifikasi |
+| **Release Parity Audit** | `npm run verify:release-parity` | **6 / 6 GATES PASS** | Git baseline bersih, env terverifikasi, skema aktif, dan proteksi rahasia |
+| **Linter Sanitization** | `npm run lint` | **PASS (0 error)** | 0 error |
+| **Production Build** | `npm run build` | **PASS (0 error)** | Build Nitro SSR & TanStack Start optimal dalam 874ms |
+
+### Status Operasional Tahap PRODUCT-1D
+```text
+PRODUCT-1D COMPLETE — STUDENT EXPERIENCE OPTIMIZATION VERIFIED
+```

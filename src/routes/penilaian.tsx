@@ -915,7 +915,14 @@ function SiswaRiwayatNilaiView() {
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-wrap items-center gap-1.5">
-                                <p className="font-semibold text-navy">{item.penugasanJudul}</p>
+                                <Link
+                                  to="/penugasan"
+                                  search={{ penugasanId: item.penugasanId }}
+                                  className="font-semibold text-navy hover:text-primary hover:underline inline-flex items-center gap-1"
+                                >
+                                  {item.penugasanJudul}
+                                  <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                                </Link>
                                 {item.remedialEnabled && (
                                   <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 text-[10px]">
                                     Remedial

@@ -105,7 +105,10 @@ import { getPublishedModulsForSiswa, useModuls } from "@/lib/modul-store";
 import { formatTanggal, type Modul } from "@/lib/modul-types";
 import {
   getMyGradedSubmissions,
+  getMySubmissionsMap,
+  computeDeadlineInfo,
   getTeacherSubmissionsSummary,
+  type PenugasanPengumpulan,
 } from "@/lib/pengumpulan-store";
 import {
   refreshPenugasanGuru,
@@ -267,6 +270,7 @@ function StudentDashboard() {
   const [assignments, setAssignments] = useState<Penugasan[]>([]);
   const [gradedList, setGradedList] = useState<GradedSubmissionItem[]>([]);
   const [availableModuls, setAvailableModuls] = useState<Modul[]>([]);
+  const [submissionsMap, setSubmissionsMap] = useState<Record<string, PenugasanPengumpulan>>({});
   const [loading, setLoading] = useState(true);
 
   // Dialog Gabung Kelas State
@@ -280,16 +284,18 @@ function StudentDashboard() {
     if (!siswaId) return;
     setLoading(true);
     try {
-      const [kList, aList, gList, mList] = await Promise.all([
+      const [kList, aList, gList, mList, sMap] = await Promise.all([
         getKelasBySiswa(siswaId),
         refreshPenugasanSiswa(),
         getMyGradedSubmissions(),
         getPublishedModulsForSiswa(),
+        getMySubmissionsMap(),
       ]);
       setKelasList(kList);
       setAssignments(aList);
       setGradedList(gList);
       setAvailableModuls(mList);
+      setSubmissionsMap(sMap);
     } finally {
       setLoading(false);
     }
@@ -351,14 +357,28 @@ function StudentDashboard() {
   const pendingClasses = kelasList.filter((k) => k.status === "menunggu");
   const activeAssignments = assignments.filter((a) => a.status === "published");
 
+  // Filter tugas yang belum selesai disubmit oleh siswa
+  const pendingAssignments = useMemo(() => {
+    return activeAssignments
+      .filter((a) => {
+        const sub = submissionsMap[a.id];
+        return !sub || sub.status === "draft";
+      })
+      .sort((a, b) => {
+        if (!a.deadline) return 1;
+        if (!b.deadline) return -1;
+        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+      });
+  }, [activeAssignments, submissionsMap]);
+
   // Cari tenggat terdekat yang belum lewat
   const nearestDeadlineAssignment = useMemo(() => {
     const now = new Date().getTime();
-    const withFutureDeadline = activeAssignments
+    const withFutureDeadline = pendingAssignments
       .filter((a) => a.deadline && new Date(a.deadline).getTime() > now)
       .sort((a, b) => new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime());
     return withFutureDeadline[0] || null;
-  }, [activeAssignments]);
+  }, [pendingAssignments]);
 
   const nearestRemainingDays = useMemo(() => {
     if (!nearestDeadlineAssignment?.deadline) return null;
@@ -501,11 +521,13 @@ function StudentDashboard() {
               </span>
               <div className="min-w-0">
                 <p className="font-display text-2xl font-bold leading-tight text-navy">
-                  {activeAssignments.length}
+                  {pendingAssignments.length}
                 </p>
-                <p className="text-sm font-medium">Tugas Aktif</p>
+                <p className="text-sm font-medium">Tugas Perlu Aksi</p>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  {activeAssignments.length > 0 ? "Tersedia dikerjakan" : "Tidak ada tugas baru"}
+                  {pendingAssignments.length > 0
+                    ? `${pendingAssignments.length} belum selesai`
+                    : "Semua tugas tuntas"}
                 </p>
               </div>
             </CardContent>
@@ -550,6 +572,101 @@ function StudentDashboard() {
           </Link>
         </Card>
       </div>
+
+      {/* Bagian Tugas Belajar Perlu Dikerjakan (Prioritas Utama Siswa) */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-3">
+          <div>
+            <CardTitle className="font-display text-base text-navy">
+              Tugas Belajar Perlu Dikerjakan
+            </CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Daftar tugas yang belum Anda selesaikan atau masih berupa draf pengerjaan.
+            </p>
+          </div>
+          <Button asChild variant="ghost" size="sm" className="gap-1 text-xs">
+            <Link to="/penugasan">
+              Lihat Semua Tugas
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </CardHeader>
+        <CardContent className="px-5 pb-5">
+          {pendingAssignments.length === 0 ? (
+            <div className="py-8 text-center">
+              <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-600/70" />
+              <p className="mt-2 text-sm font-semibold text-navy">
+                Luar biasa! Tidak ada tugas yang menunggu tindakan
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Semua tugas aktif telah selesai Anda kerjakan dan kumpulkan ke bapak/ibu guru.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {pendingAssignments.slice(0, 3).map((a) => {
+                const sub = submissionsMap[a.id];
+                const isDraft = sub?.status === "draft";
+                const dlInfo = computeDeadlineInfo(a.deadline);
+
+                return (
+                  <div
+                    key={a.id}
+                    className="rounded-xl border p-4 transition-all hover:border-primary/40 hover:shadow-xs flex flex-col justify-between space-y-3 bg-card"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <Badge
+                          variant="outline"
+                          className={
+                            isDraft
+                              ? "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 font-semibold"
+                              : "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300"
+                          }
+                        >
+                          {isDraft ? "Draf Sedang Dikerjakan" : "Belum Dikerjakan"}
+                        </Badge>
+                        <span className="text-muted-foreground text-[11px] truncate max-w-[120px]">
+                          {a.kelasNama}
+                        </span>
+                      </div>
+                      <h4 className="font-display font-semibold text-navy line-clamp-2">{a.judul}</h4>
+                      <p className="text-xs text-muted-foreground">
+                        {a.kelasMapel ? `${a.kelasMapel} · ` : ""}Guru: {a.guruNama || "Guru Pengampu"}
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t flex items-center justify-between text-xs">
+                      {dlInfo ? (
+                        <span
+                          className={`text-[11px] font-medium flex items-center gap-1 ${
+                            dlInfo.isPassed
+                              ? "text-destructive"
+                              : dlInfo.isUrgent
+                              ? "text-amber-600 dark:text-amber-400 font-semibold"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          <Clock className="h-3 w-3" />
+                          {dlInfo.statusLabel}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground">Tanpa batas waktu</span>
+                      )}
+                      <Button asChild size="sm" className="h-7 text-xs gap-1 font-medium">
+                        <Link to="/penugasan" search={{ penugasanId: a.id }}>
+                          <Edit3 className="h-3.5 w-3.5" />
+                          {isDraft ? "Lanjutkan" : "Kerjakan"}
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Bagian Modul Ajar Tersedia untuk Siswa (Read-Only) */}
       <Card>

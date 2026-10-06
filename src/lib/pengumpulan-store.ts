@@ -1119,3 +1119,221 @@ export async function gradeRemedialSubmission(
     return { ok: false, message: msg };
   }
 }
+
+export interface DeadlineInfo {
+  formatted: string;
+  statusLabel: string;
+  isPassed: boolean;
+  isUrgent: boolean;
+  remainingDays: number | null;
+  remainingHours: number | null;
+}
+
+export function computeDeadlineInfo(deadlineIso: string | null | undefined): DeadlineInfo | null {
+  if (!deadlineIso) return null;
+  const d = new Date(deadlineIso);
+  if (isNaN(d.getTime())) return null;
+
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  const isPassed = diffMs <= 0;
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  const formatted = new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+
+  if (isPassed) {
+    return {
+      formatted,
+      statusLabel: "Tenggat Waktu Berakhir",
+      isPassed: true,
+      isUrgent: false,
+      remainingDays: 0,
+      remainingHours: 0,
+    };
+  }
+
+  if (diffHours <= 24) {
+    return {
+      formatted,
+      statusLabel: diffHours <= 1 ? "Sisa kurang dari 1 jam!" : `Sisa ${diffHours} jam!`,
+      isPassed: false,
+      isUrgent: true,
+      remainingDays: diffDays,
+      remainingHours: diffHours,
+    };
+  }
+
+  if (diffDays <= 3) {
+    return {
+      formatted,
+      statusLabel: `${diffDays} hari lagi`,
+      isPassed: false,
+      isUrgent: true,
+      remainingDays: diffDays,
+      remainingHours: diffHours,
+    };
+  }
+
+  return {
+    formatted,
+    statusLabel: `${diffDays} hari lagi`,
+    isPassed: false,
+    isUrgent: false,
+    remainingDays: diffDays,
+    remainingHours: diffHours,
+  };
+}
+
+export type StudentAssignmentStatus =
+  | "belum_dikerjakan"
+  | "sedang_dikerjakan"
+  | "sudah_dikumpulkan"
+  | "sudah_dinilai"
+  | "ditutup";
+
+export interface StudentAssignmentState {
+  status: StudentAssignmentStatus;
+  statusLabel: string;
+  badgeVariant: "default" | "secondary" | "destructive" | "outline";
+  badgeClassName: string;
+  actionLabel: string;
+  isActionDisabled: boolean;
+  score: number | null;
+  submission: PenugasanPengumpulan | null;
+}
+
+export function getStudentAssignmentState(
+  assignment: { id: string; status: string; deadline: string | null },
+  submission: PenugasanPengumpulan | null | undefined,
+): StudentAssignmentState {
+  const now = new Date();
+  const isDeadlinePassed = Boolean(assignment.deadline && new Date(assignment.deadline) < now);
+  const isClosed = assignment.status === "closed" || isDeadlinePassed;
+
+  if (submission?.status === "submitted") {
+    if (submission.statusPenilaian === "dinilai") {
+      return {
+        status: "sudah_dinilai",
+        statusLabel: `Sudah Dinilai (${submission.nilaiAkhir ?? 0}/100)`,
+        badgeVariant: "outline",
+        badgeClassName: "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300",
+        actionLabel: "Lihat Hasil",
+        isActionDisabled: false,
+        score: submission.nilaiAkhir,
+        submission,
+      };
+    }
+    return {
+      status: "sudah_dikumpulkan",
+      statusLabel:
+        submission.statusPenilaian === "perlu_penilaian_manual"
+          ? "Menunggu Koreksi Guru"
+          : "Sudah Dikumpulkan",
+      badgeVariant: "outline",
+      badgeClassName: "bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300",
+      actionLabel: "Lihat Pengumpulan",
+      isActionDisabled: false,
+      score: null,
+      submission,
+    };
+  }
+
+  if (submission?.status === "draft") {
+    if (isClosed) {
+      return {
+        status: "ditutup",
+        statusLabel: "Ditutup (Draf Tidak Terkirim)",
+        badgeVariant: "secondary",
+        badgeClassName: "text-muted-foreground",
+        actionLabel: "Lihat Tugas",
+        isActionDisabled: false,
+        score: null,
+        submission,
+      };
+    }
+    return {
+      status: "sedang_dikerjakan",
+      statusLabel: "Sedang Dikerjakan",
+      badgeVariant: "outline",
+      badgeClassName: "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 font-semibold",
+      actionLabel: "Lanjutkan Mengerjakan",
+      isActionDisabled: false,
+      score: null,
+      submission,
+    };
+  }
+
+  // Belum ada submission
+  if (isClosed) {
+    return {
+      status: "ditutup",
+      statusLabel: "Ditutup / Lewat",
+      badgeVariant: "secondary",
+      badgeClassName: "text-muted-foreground",
+      actionLabel: "Lihat Tugas",
+      isActionDisabled: false,
+      score: null,
+      submission: null,
+    };
+  }
+
+  return {
+    status: "belum_dikerjakan",
+    statusLabel: "Belum Dikerjakan",
+    badgeVariant: "default",
+    badgeClassName: "bg-emerald-600 text-white hover:bg-emerald-600",
+    actionLabel: "Mulai Mengerjakan",
+    isActionDisabled: false,
+    score: null,
+    submission: null,
+  };
+}
+
+/**
+ * Mengambil semua submission milik siswa yang sedang login, diindeks berdasarkan penugasanId.
+ */
+export async function getMySubmissionsMap(): Promise<Record<string, PenugasanPengumpulan>> {
+  try {
+    const userId = await currentUserId();
+    const { data, error } = await supabase
+      .from("penugasan_pengumpulan")
+      .select("*")
+      .eq("siswa_id", userId);
+
+    if (error) {
+      console.warn("[Pengumpulan] Gagal memuat submissions map siswa:", error.message);
+      return {};
+    }
+
+    const map: Record<string, PenugasanPengumpulan> = {};
+    for (const row of data || []) {
+      map[row.penugasan_id] = {
+        id: row.id,
+        penugasanId: row.penugasan_id,
+        siswaId: row.siswa_id,
+        status: row.status as "draft" | "submitted",
+        submittedAt: row.submitted_at,
+        nilaiPg: row.nilai_pg !== null ? Number(row.nilai_pg) : null,
+        nilaiEssay: row.nilai_essay !== null ? Number(row.nilai_essay) : null,
+        nilaiAkhir: row.nilai_akhir !== null ? Number(row.nilai_akhir) : null,
+        statusPenilaian: (row.status_penilaian as any) || "belum_dinilai",
+        catatanGuru: row.catatan_guru,
+        gradedAt: row.graded_at,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+    }
+    return map;
+  } catch (err) {
+    console.error("[Pengumpulan] Error getMySubmissionsMap:", err);
+    return {};
+  }
+}
+

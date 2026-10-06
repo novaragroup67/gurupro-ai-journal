@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   AlertCircle,
+  AlertTriangle,
   Archive,
   ArrowLeft,
   Award,
@@ -19,6 +20,7 @@ import {
   MessageSquare,
   Pencil,
   Plus,
+  RefreshCw,
   Save,
   School,
   Send,
@@ -27,7 +29,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { archiveAcademicItem } from "@/lib/archive-store";
 
@@ -72,6 +74,10 @@ import {
   createDraftSubmission,
   getMyAnswers,
   getMySubmission,
+  getMySubmissionsMap,
+  getStudentAssignmentState,
+  computeDeadlineInfo,
+  type StudentAssignmentState,
   getSoalForSiswa,
   getTeacherPaketSoal,
   getTeacherSubmissions,
@@ -2099,31 +2105,80 @@ function GuruSubmissionsModal({
 
 function SiswaPenugasanView() {
   const { penugasanList, loading } = usePenugasanSiswa();
+  const search = Route.useSearch();
   const [activePenugasan, setActivePenugasan] = useState<Penugasan | null>(null);
-  const [filterTab, setFilterTab] = useState<"aktif" | "semua" | "closed">("aktif");
+  const [filterTab, setFilterTab] = useState<"perlu_dikerjakan" | "selesai" | "semua">("perlu_dikerjakan");
+  const [submissionsMap, setSubmissionsMap] = useState<Record<string, PenugasanPengumpulan>>({});
+
+  const loadSubmissions = useCallback(async () => {
+    try {
+      const map = await getMySubmissionsMap();
+      setSubmissionsMap(map);
+    } catch (err) {
+      console.warn("[SiswaPenugasanView] Gagal memuat submissions map:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSubmissions();
+  }, [loadSubmissions]);
+
+  // Deep-link auto-opener jika search.penugasanId ada
+  useEffect(() => {
+    if (search.penugasanId && penugasanList.length > 0) {
+      const matched = penugasanList.find((p) => p.id === search.penugasanId);
+      if (matched) {
+        setActivePenugasan(matched);
+      }
+    }
+  }, [search.penugasanId, penugasanList]);
+
+  const assignmentStates = useMemo(() => {
+    const states: Record<string, StudentAssignmentState> = {};
+    penugasanList.forEach((p) => {
+      states[p.id] = getStudentAssignmentState(p, submissionsMap[p.id]);
+    });
+    return states;
+  }, [penugasanList, submissionsMap]);
+
+  const countPerlu = useMemo(() => {
+    return penugasanList.filter((p) => {
+      const st = assignmentStates[p.id]?.status;
+      return st === "belum_dikerjakan" || st === "sedang_dikerjakan";
+    }).length;
+  }, [penugasanList, assignmentStates]);
+
+  const countSelesai = useMemo(() => {
+    return penugasanList.filter((p) => {
+      const st = assignmentStates[p.id]?.status;
+      return st === "sudah_dikumpulkan" || st === "sudah_dinilai";
+    }).length;
+  }, [penugasanList, assignmentStates]);
 
   const filteredItems = useMemo(() => {
-    const now = new Date();
     if (filterTab === "semua") return penugasanList;
-    if (filterTab === "aktif") {
+    if (filterTab === "perlu_dikerjakan") {
       return penugasanList.filter((p) => {
-        if (p.status !== "published") return false;
-        if (!p.deadline) return true;
-        return new Date(p.deadline) >= now;
+        const st = assignmentStates[p.id]?.status;
+        return st === "belum_dikerjakan" || st === "sedang_dikerjakan";
       });
     }
-    // closed or expired
     return penugasanList.filter((p) => {
-      if (p.status === "closed") return true;
-      if (p.deadline && new Date(p.deadline) < now) return true;
-      return false;
+      const st = assignmentStates[p.id]?.status;
+      return st === "sudah_dikumpulkan" || st === "sudah_dinilai";
     });
-  }, [penugasanList, filterTab]);
+  }, [penugasanList, filterTab, assignmentStates]);
 
   // Jika siswa sedang membuka detail/pengerjaan tugas tertentu
   if (activePenugasan) {
     return (
-      <SiswaPengerjaanView penugasan={activePenugasan} onBack={() => setActivePenugasan(null)} />
+      <SiswaPengerjaanView
+        penugasan={activePenugasan}
+        onBack={() => {
+          setActivePenugasan(null);
+          void loadSubmissions();
+        }}
+      />
     );
   }
 
@@ -2137,18 +2192,25 @@ function SiswaPenugasanView() {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="font-display text-base text-navy">Tugas Kelas Anda</CardTitle>
+            <div>
+              <CardTitle className="font-display text-base text-navy">Tugas Kelas Anda</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {countPerlu > 0
+                  ? `${countPerlu} tugas memerlukan tindakan pengerjaan Anda.`
+                  : "Semua tugas aktif telah terselesaikan."}
+              </p>
+            </div>
             <Tabs
               value={filterTab}
               onValueChange={(v) => setFilterTab(v as typeof filterTab)}
               className="w-auto"
             >
               <TabsList className="grid grid-cols-3 h-9">
-                <TabsTrigger value="aktif" className="text-xs">
-                  Tugas Aktif
+                <TabsTrigger value="perlu_dikerjakan" className="text-xs">
+                  Perlu Dikerjakan ({countPerlu})
                 </TabsTrigger>
-                <TabsTrigger value="closed" className="text-xs">
-                  Selesai / Ditutup
+                <TabsTrigger value="selesai" className="text-xs">
+                  Selesai ({countSelesai})
                 </TabsTrigger>
                 <TabsTrigger value="semua" className="text-xs">
                   Semua ({penugasanList.length})
@@ -2167,20 +2229,23 @@ function SiswaPenugasanView() {
             <div className="py-12 text-center">
               <ClipboardList className="mx-auto h-10 w-10 text-muted-foreground/40" />
               <p className="mt-2 font-display text-base font-semibold text-navy">
-                {filterTab === "aktif"
-                  ? "Belum ada tugas aktif untuk Anda saat ini"
+                {filterTab === "perlu_dikerjakan"
+                  ? "Bagus sekali! Tidak ada tugas yang perlu dikerjakan saat ini"
+                  : filterTab === "selesai"
+                  ? "Belum ada tugas yang selesai dikumpulkan"
                   : "Tidak ada data tugas yang ditemukan"}
               </p>
               <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
-                Tugas dari guru pengampu kelas Anda yang telah diterbitkan akan muncul secara
-                otomatis di halaman ini.
+                {filterTab === "perlu_dikerjakan"
+                  ? "Semua tugas telah Anda selesaikan atau belum ada tugas baru yang diterbitkan guru."
+                  : "Tugas dari guru pengampu kelas Anda akan muncul secara otomatis di halaman ini."}
               </p>
             </div>
           ) : (
             <div className="grid gap-4">
               {filteredItems.map((item) => {
-                const isDeadlinePassed = item.deadline && new Date(item.deadline) < now;
-                const isClosed = item.status === "closed" || isDeadlinePassed;
+                const st = assignmentStates[item.id] || getStudentAssignmentState(item, null);
+                const dlInfo = computeDeadlineInfo(item.deadline);
 
                 return (
                   <div
@@ -2190,13 +2255,9 @@ function SiswaPenugasanView() {
                     <div className="space-y-1.5 min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-display font-bold text-base text-navy">{item.judul}</h3>
-                        {isClosed ? (
-                          <Badge variant="secondary">Ditutup / Lewat</Badge>
-                        ) : (
-                          <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-                            Tersedia
-                          </Badge>
-                        )}
+                        <Badge variant={st.badgeVariant} className={`text-xs ${st.badgeClassName}`}>
+                          {st.statusLabel}
+                        </Badge>
                         <Badge variant="outline" className="border-primary/30 text-primary font-medium text-xs">
                           KKM: {item.kkm ?? 75}
                         </Badge>
@@ -2218,14 +2279,23 @@ function SiswaPenugasanView() {
                           <Users className="h-3.5 w-3.5 text-muted-foreground" />
                           Guru: {item.guruNama || "Guru Pengampu"}
                         </span>
-                        {item.deadline && (
+                        {dlInfo && (
                           <span
                             className={`inline-flex items-center gap-1 font-medium ${
-                              isDeadlinePassed ? "text-destructive" : "text-amber-600"
+                              dlInfo.isPassed
+                                ? "text-destructive"
+                                : dlInfo.isUrgent
+                                ? "text-amber-600 dark:text-amber-400 font-semibold"
+                                : "text-muted-foreground"
                             }`}
                           >
-                            <Calendar className="h-3.5 w-3.5" />
-                            Tenggat: {formatDeadline(item.deadline)}
+                            <Clock className="h-3.5 w-3.5" />
+                            {dlInfo.isPassed ? "Tenggat Waktu Lewat" : `Tenggat: ${dlInfo.formatted}`}
+                            {dlInfo.isUrgent && !dlInfo.isPassed && (
+                              <Badge variant="outline" className="ml-1 text-[10px] border-amber-400 text-amber-700 bg-amber-50">
+                                {dlInfo.statusLabel}
+                              </Badge>
+                            )}
                           </span>
                         )}
                       </div>
@@ -2237,22 +2307,38 @@ function SiswaPenugasanView() {
                       )}
                     </div>
 
-                    {/* Tombol Buka Tugas */}
+                    {/* Tombol Aksi Pengerjaan Terarah */}
                     <div className="shrink-0 pt-2 sm:pt-0">
                       <Button
                         className="gap-2 font-medium w-full sm:w-auto"
-                        variant={isClosed ? "outline" : "default"}
+                        variant={st.status === "sudah_dinilai" ? "outline" : st.status === "ditutup" ? "secondary" : "default"}
                         onClick={() => setActivePenugasan(item)}
                       >
-                        {isClosed ? (
+                        {st.status === "sudah_dinilai" ? (
+                          <>
+                            <Award className="h-4 w-4 text-emerald-600" />
+                            {st.actionLabel}
+                          </>
+                        ) : st.status === "sudah_dikumpulkan" ? (
                           <>
                             <Eye className="h-4 w-4" />
-                            Lihat Tugas
+                            {st.actionLabel}
+                          </>
+                        ) : st.status === "sedang_dikerjakan" ? (
+                          <>
+                            <Edit3 className="h-4 w-4" />
+                            {st.actionLabel}
+                            <ChevronRight className="h-4 w-4 ml-1" />
+                          </>
+                        ) : st.status === "ditutup" ? (
+                          <>
+                            <Eye className="h-4 w-4" />
+                            {st.actionLabel}
                           </>
                         ) : (
                           <>
                             <Edit3 className="h-4 w-4" />
-                            Kerjakan Tugas
+                            {st.actionLabel}
                             <ChevronRight className="h-4 w-4 ml-1" />
                           </>
                         )}
@@ -2911,6 +2997,49 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
     }
   };
 
+  // Handler simpan ulang saat terjadi error simpan
+  const handleRetrySave = async () => {
+    if (!submission || isReadOnly) return;
+    Object.values(debounceTimersRef.current).forEach((t) => clearTimeout(t));
+    debounceTimersRef.current = {};
+
+    setSavingStatus("saving");
+    try {
+      const res = await saveAnswers(submission.id, answers);
+      if (res.ok) {
+        setSavingStatus("saved");
+        toast.success("Jawaban berhasil disimpan ke cloud.");
+      } else {
+        setSavingStatus("error");
+        toast.error(res.message || "Gagal menyimpan draf jawaban.");
+      }
+    } catch {
+      setSavingStatus("error");
+      toast.error("Gagal menyimpan ke server. Periksa koneksi internet Anda.");
+    }
+  };
+
+  // Guard browser refresh/close tab jika autosave sedang aktif
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (savingStatus === "saving" || Object.keys(debounceTimersRef.current).length > 0) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [savingStatus]);
+
+  const handleSafeBack = () => {
+    if (savingStatus === "saving" || Object.keys(debounceTimersRef.current).length > 0) {
+      if (!window.confirm("Jawaban sedang dalam proses penyimpanan ke server. Yakin ingin kembali?")) {
+        return;
+      }
+    }
+    onBack();
+  };
+
   // Simpan draf manual: batalkan pending timers lalu simpan seluruh jawaban secara batch
   const handleSaveDraftManual = async () => {
     if (!submission || isReadOnly) return;
@@ -2996,6 +3125,17 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
   const answeredCount = Object.values(answers).filter((v) => v && v.trim().length > 0).length;
   const unansweredCount = Math.max(0, soalList.length - answeredCount);
 
+  const unansweredIndices = useMemo(() => {
+    const indices: number[] = [];
+    soalList.forEach((s, idx) => {
+      const ans = answers[s.id];
+      if (!ans || !ans.trim()) {
+        indices.push(idx + 1);
+      }
+    });
+    return indices;
+  }, [soalList, answers]);
+
   if (viewingRemedialMode && submission) {
     return (
       <SiswaRemedialPengerjaanView
@@ -3013,35 +3153,72 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
     <div className="grid gap-6 max-w-4xl mx-auto">
       {/* Header Navigasi */}
       <div className="flex items-center justify-between gap-4">
-        <Button variant="ghost" size="sm" onClick={onBack} className="gap-2">
+        <Button variant="ghost" size="sm" onClick={handleSafeBack} className="gap-2">
           <ArrowLeft className="h-4 w-4" />
           Kembali ke Daftar Tugas
         </Button>
 
-        {/* Indikator Autosave (Hanya aktif jika belum submitted) */}
+        {/* Indikator Autosave & Tombol Retry */}
         {!isReadOnly && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {savingStatus === "saving" && (
-              <>
+              <span className="flex items-center gap-1.5">
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
                 <span>Menyimpan ke cloud…</span>
-              </>
+              </span>
             )}
             {savingStatus === "saved" && (
-              <>
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                <span className="text-emerald-600 font-medium">Tersimpan di cloud</span>
-              </>
+              <span className="flex items-center gap-1.5 text-emerald-600 font-medium">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>Tersimpan di cloud</span>
+              </span>
             )}
             {savingStatus === "error" && (
-              <>
-                <AlertCircle className="h-3.5 w-3.5 text-destructive" />
-                <span className="text-destructive font-medium">Gagal menyimpan</span>
-              </>
+              <div className="flex items-center gap-1.5">
+                <span className="flex items-center gap-1 text-destructive font-medium">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  <span>Gagal menyimpan</span>
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRetrySave}
+                  className="h-6 text-[11px] px-2 text-destructive border-destructive/30 hover:bg-destructive/10"
+                >
+                  <RefreshCw className="mr-1 h-3 w-3" />
+                  Coba Lagi
+                </Button>
+              </div>
             )}
           </div>
         )}
       </div>
+
+      {/* Banner Peringatan Gagal Simpan & Tombol Coba Lagi */}
+      {!isReadOnly && savingStatus === "error" && (
+        <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-start gap-2.5 text-destructive">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-destructive">Sebagian perubahan belum tersimpan di server</p>
+              <p className="text-muted-foreground mt-0.5">
+                Koneksi internet Anda mungkin terputus. Jawaban tetap tersimpan di halaman ini. Silakan klik simpan ulang.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            onClick={handleRetrySave}
+            className="gap-1.5 shrink-0 self-start sm:self-auto font-medium"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Coba Simpan Ulang
+          </Button>
+        </div>
+      )}
 
       {/* Banner Status Pengumpulan & Hasil Penilaian */}
       {isSubmitted && (
@@ -3321,6 +3498,75 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
         </CardContent>
       </Card>
 
+      {/* Palet Navigasi Soal & Bar Progres */}
+      {soalList.length > 0 && (
+        <Card className="border-border shadow-xs">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-navy">Navigasi Butir Soal</span>
+                <Badge variant="outline" className="text-[11px] font-medium">
+                  {answeredCount} dari {soalList.length} Terjawab ({Math.round((answeredCount / (soalList.length || 1)) * 100)}%)
+                </Badge>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-primary" />
+                  Sudah Terisi
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full border border-muted-foreground/40 bg-background" />
+                  Belum Terisi
+                </span>
+              </div>
+            </div>
+
+            {/* Visual Progress Bar */}
+            <div
+              className="h-2 w-full rounded-full bg-muted overflow-hidden"
+              role="progressbar"
+              aria-valuenow={answeredCount}
+              aria-valuemin={0}
+              aria-valuemax={soalList.length}
+            >
+              <div
+                className="h-full bg-primary transition-all duration-300 rounded-full"
+                style={{
+                  width: `${soalList.length > 0 ? (answeredCount / soalList.length) * 100 : 0}%`,
+                }}
+              />
+            </div>
+
+            {/* Question Number Badges */}
+            <div className="flex flex-wrap gap-2 pt-1" role="navigation" aria-label="Daftar nomor butir soal">
+              {soalList.map((s, idx) => {
+                const isFilled = (answers[s.id] || "").trim().length > 0;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById(`soal-card-${s.id}`);
+                      if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }
+                    }}
+                    aria-label={`Loncat ke Soal nomor ${idx + 1}: ${isFilled ? "Sudah terisi" : "Belum terisi"}`}
+                    className={`h-8 w-8 text-xs font-semibold rounded-lg transition-all flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                      isFilled
+                        ? "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90"
+                        : "border border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                    }`}
+                  >
+                    {idx + 1}
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Daftar Butir Soal */}
       {loading ? (
         <div className="py-16 text-center text-sm text-muted-foreground">
@@ -3348,6 +3594,7 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
             return (
               <Card
                 key={s.id}
+                id={`soal-card-${s.id}`}
                 className={`transition-all ${
                   isFilled ? "border-primary/40 shadow-xs" : "border-border"
                 }`}
@@ -3367,7 +3614,11 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
                 </CardHeader>
                 <CardContent className="pt-2">
                   {s.jenis === "Pilihan Ganda" ? (
-                    <div className="grid gap-2">
+                    <div
+                      className="grid gap-2"
+                      role="radiogroup"
+                      aria-label={`Pilihan jawaban untuk soal nomor ${index + 1}`}
+                    >
                       {s.opsi.map((opsi, oIdx) => {
                         const optionLabel =
                           opsi.match(/^[A-E]\./i) !== null
@@ -3379,18 +3630,21 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
                           <button
                             key={oIdx}
                             type="button"
+                            role="radio"
+                            aria-checked={isSelected}
+                            aria-label={`Pilihan ${String.fromCharCode(65 + oIdx)}: ${opsi}`}
                             disabled={isReadOnly}
                             onClick={() => handleAnswerChange(s.id, optionLabel, true)}
-                            className={`flex items-start gap-3 rounded-lg border p-3 text-left text-xs transition-all ${
+                            className={`flex items-start gap-3 rounded-lg border p-3 text-left text-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                               isSelected
-                                ? "border-primary bg-primary/10 font-medium text-primary shadow-xs"
+                                ? "border-primary bg-primary/10 font-medium text-primary shadow-xs ring-1 ring-primary/40"
                                 : "hover:border-primary/30 hover:bg-muted/40 text-foreground"
                             } ${isReadOnly ? "cursor-default opacity-80" : "cursor-pointer"}`}
                           >
                             <span
-                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] ${
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${
                                 isSelected
-                                  ? "border-primary bg-primary text-primary-foreground font-bold"
+                                  ? "border-primary bg-primary text-primary-foreground shadow-xs"
                                   : "border-muted-foreground/40 text-muted-foreground"
                               }`}
                             >
@@ -3406,6 +3660,7 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
                       <Textarea
                         rows={4}
                         disabled={isReadOnly}
+                        aria-label={`Jawaban uraian untuk soal nomor ${index + 1}`}
                         placeholder={
                           isReadOnly
                             ? "(Jawaban telah terkunci)"
@@ -3474,26 +3729,77 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
         </Card>
       )}
 
-      {/* Dialog Konfirmasi Submit */}
+      {/* Dialog Konfirmasi Submit Terstruktur & Informatif */}
       <AlertDialog open={confirmSubmitOpen} onOpenChange={setConfirmSubmitOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Kumpulkan Tugas Sekarang?</AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-2 text-xs text-muted-foreground">
-                <p>
-                  Setelah tugas dikumpulkan, status pengerjaan akan tercatat sebagai{" "}
-                  <strong>Terkumpul (Submitted)</strong> dan Anda tidak dapat lagi mengubah jawaban.
-                </p>
-                {unansweredCount > 0 && (
-                  <p className="text-amber-600 font-medium">
-                    Perhatian: Masih terdapat {unansweredCount} butir soal yang belum Anda jawab.
-                  </p>
+              <div className="space-y-3 text-xs text-muted-foreground pt-1">
+                <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/50 p-3 border text-center">
+                  <div>
+                    <span className="text-[11px] text-muted-foreground block">Soal Terjawab</span>
+                    <span className="font-bold text-base text-foreground">
+                      {answeredCount} dari {soalList.length}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-muted-foreground block">Belum Terisi</span>
+                    <span
+                      className={`font-bold text-base ${
+                        unansweredIndices.length > 0 ? "text-amber-600" : "text-emerald-600"
+                      }`}
+                    >
+                      {unansweredIndices.length} soal
+                    </span>
+                  </div>
+                </div>
+
+                {unansweredIndices.length > 0 ? (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50/80 p-3 text-amber-800 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300 space-y-1">
+                    <p className="font-semibold flex items-center gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Perhatian: Ada soal yang belum Anda jawab!
+                    </p>
+                    <p className="text-[11px] leading-relaxed">
+                      Nomor soal: <strong>#{unansweredIndices.join(", #")}</strong> masih kosong. Soal yang tidak diisi akan dihitung bernilai 0.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-emerald-300 bg-emerald-50/80 p-3 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-300 text-[11px] font-medium flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Bagus! Seluruh {soalList.length} butir soal telah terisi lengkap.
+                  </div>
                 )}
+
+                <p className="leading-relaxed">
+                  Setelah menekan tombol <strong>Ya, Kumpulkan Tugas</strong>, seluruh jawaban Anda akan terkunci permanen di sistem dan tidak dapat diubah kembali.
+                </p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
+            {unansweredIndices.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={submittingFinal}
+                onClick={() => {
+                  setConfirmSubmitOpen(false);
+                  const firstMissingId = soalList[unansweredIndices[0] - 1]?.id;
+                  if (firstMissingId) {
+                    setTimeout(() => {
+                      document
+                        .getElementById(`soal-card-${firstMissingId}`)
+                        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }, 100);
+                  }
+                }}
+              >
+                Buka Soal #{unansweredIndices[0]}
+              </Button>
+            )}
             <AlertDialogCancel disabled={submittingFinal}>Periksa Lagi</AlertDialogCancel>
             <AlertDialogAction
               disabled={submittingFinal}
