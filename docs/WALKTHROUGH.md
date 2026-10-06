@@ -1112,3 +1112,70 @@ Laporan audit lengkap didokumentasikan di [`docs/PRODUCT-1E-FINAL-VALIDATION.md`
 PRODUCT-1E COMPLETE — PRODUCT VALIDATION & FINAL OPTIMIZATION VERIFIED
 ```
 
+---
+
+## 19. Tahap PRODUCT-2A: Peta Jalan Fitur & Prioritisasi (Feature Roadmap & Prioritization)
+
+### Ringkasan Eksekutif
+Tahap **PRODUCT-2A** mengawali fase **PRODUCT-2: New Feature Expansion & Roadmap Implementation** dengan menyusun peta jalan ekspansi fitur berbasis bukti nyata, terukur, dan selaras dengan proposisi nilai utama GuruPro:
+> **“Guru fokus mengajar, GuruPro urus adminnya.”**
+
+Setelah siklus **PRODUCT-1** berhasil mengoptimalkan dan mengunci stabilitas alur inti (Modul Ajar, Generator Soal, Penugasan, Pengumpulan Siswa, Penilaian, Rekap Nilai, dan Presentasi PPTX), tahap ini menetapkan prioritas fitur baru secara sistematis tanpa mengubah kode atau arsitektur yang sudah berjalan. Spesifikasi lengkap didokumentasikan di [`docs/PRODUCT-2-ROADMAP.md`](file:///c:/novara%20project/gurupro-ai-journal-main/docs/PRODUCT-2-ROADMAP.md).
+
+### Temuan Audit Celah Produk & Bukti Operasional
+1. **Beban Administrasi Guru (Kebutuhan Terbesar)**:
+   - Guru masih mencatat agenda harian/jurnal mengajar secara manual di buku fisik untuk memenuhi kewajiban supervisi kurikulum dan dinas.
+   - Presensi siswa per jam pelajaran belum terintegrasi secara cepat ke dalam agenda mengajar.
+2. **Kebutuhan Visibilitas Real-Time di Kelas**:
+   - Telemetri OPS-2 dan pola akses menunjukkan guru berulang kali memuat ulang halaman penugasan saat jam ujian/tugas berlangsung untuk memantau siapa saja siswa yang telah selesai.
+3. **Kebutuhan Formatif & Refleksi Siswa**:
+   - Selama tugas aktif, kunci dan pembahasan diamankan 100% dari kebocoran (*zero leakage invariant*). Namun setelah guru mempublikasikan nilai akhir, siswa belum dapat melihat pembahasan untuk mempelajari butir soal yang salah.
+
+### Metodologi Prioritisasi & Evaluasi Kandidat Fitur
+Evaluasi dilakukan terhadap 11 kandidat fitur (F-01 hingga F-11) menggunakan formula prioritas terukur:
+$$\text{Priority Score} = (\text{User Value} + \text{Strategic Importance} + \text{Evidence}) - (\text{Complexity} + \text{Risk})$$
+
+#### Ringkasan Pemeringkatan Fitur:
+- **P0 (Critical — Fondasi Utama Pengurangan Beban Guru)**:
+  - **F-01: Jurnal Mengajar & Agenda Harian** (Skor 12) — Pencatatan pelaksanaan pembelajaran terhubung ke Modul & Kelas dengan ekspor rekap resmi.
+  - **F-02: Presensi Siswa Sesi Kelas** (Skor 10) — Presensi 1-ketukan per sesi kelas terintegrasi ke jurnal mengajar.
+- **P1 (High — Peningkatan Asesmen & Pedagogi)**:
+  - **F-03: Real-Time Live Submission Stream** (Skor 9) — Pemantauan pengumpulan tugas siswa via Supabase Realtime tanpa reload.
+  - **F-04: Pembahasan Formatif Pasca-Penilaian** (Skor 9) — Opsi rilis pembahasan dan kunci soal setelah tugas dinilai untuk refleksi siswa.
+  - **F-05: Pembuatan Paket Remedial Adaptif** (Skor 8) — Penurunan otomatis paket remedial dari butir soal belum tuntas.
+- **P2 (Medium — Efisiensi Lanjutan)**:
+  - **F-07: Ekspor Format Resmi Dokumen Sekolah** (Skor 7)
+  - **F-06: Asisten Rubrik Koreksi Esai AI** (Skor 6)
+  - **F-09: Kalender & Jadwal Tugas Siswa** (Skor 6)
+  - **F-08: Importir Massal Bank Soal** (Skor 5)
+- **P3 (Future — Skala Kolaborasi & Luring)**:
+  - **F-10: Pustaka Berbagi Modul/Soal Sekolah** (Skor 2)
+  - **F-11: Sinkronisasi Pengerjaan PWA Luring** (Skor 1)
+
+### Rencana Pelaksanaan Bertahap Siklus PRODUCT-2
+```text
+PRODUCT-2A: Feature Roadmap & Prioritization (Perencanaan & Baseline) [SELESAI]
+      ↓
+PRODUCT-2B: Jurnal Mengajar Harian & Presensi Siswa Sesi Kelas (Core Admin Relief)
+      ↓
+PRODUCT-2C: Real-Time Live Submissions & Classroom Activity Stream (Live Operations)
+      ↓
+PRODUCT-2D: Pembahasan Formatif Pasca-Penilaian & Refleksi Belajar Siswa (Pedagogy)
+      ↓
+PRODUCT-2E: Adaptive Remedial Intelligence & Diagnostic Derivation (Remediation)
+      ↓
+PRODUCT-2F: Asisten Rubrik Koreksi Esai AI & Final PRODUCT-2 Gate (Validation)
+```
+
+### Invarian Keamanan, Data & Tata Kelola AI
+- **Migrasi Forward-Only**: Seluruh tabel baru (`jurnal_mengajar`, `presensi_sesi`) dan kolom penanda rilis dibuat via migrasi forward-only tanpa memodifikasi skema historis.
+- **Zero Answer Leakage**: Proteksi kunci jawaban tetap aktif penuh selama pengerjaan; rilis pembahasan hanya dapat dibuka oleh guru setelah penilaian rampung.
+- **Kedaulatan Guru Mutlak**: Seluruh fitur asistensi AI bersifat rekomendasi draf yang wajib disetujui guru sebelum disimpan.
+- **RLS & Multi-Tenant Terisolasi**: Hak akses jurnal dan presensi terisolasi ketat per ID guru dan keanggotaan kelas.
+
+### Status Operasional Tahap PRODUCT-2A
+```text
+PRODUCT-2A COMPLETE — FEATURE ROADMAP & PRIORITIZATION VERIFIED
+```
+
+
