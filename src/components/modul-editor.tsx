@@ -681,7 +681,7 @@ export function ModulEditor({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+        <div className="flex flex-wrap items-center gap-2 pt-1 lg:pt-0 lg:justify-end">
           {modul.status === "Terbit" ? (
             <Badge
               variant="outline"
@@ -695,23 +695,25 @@ export function ModulEditor({
                 variant={manual ? "secondary" : "outline"}
                 size="sm"
                 onClick={() => setManual((v) => !v)}
+                className="text-xs"
               >
-                {manual ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+                {manual ? <X className="h-4 w-4 mr-1.5" /> : <Pencil className="h-4 w-4 mr-1.5" />}
                 {manual ? "Selesai Edit" : "Edit Terstruktur"}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setAiOpen(true)}>
-                <Sparkles className="h-4 w-4" />
+              <Button variant="outline" size="sm" onClick={() => setAiOpen(true)} className="text-xs">
+                <Sparkles className="h-4 w-4 mr-1.5" />
                 Edit dengan AI
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setRegenerateOpen(true)}>
-                <RefreshCw className="h-4 w-4" />
+              <Button variant="outline" size="sm" onClick={() => setRegenerateOpen(true)} className="text-xs">
+                <RefreshCw className="h-4 w-4 mr-1.5" />
                 Regenerasi
               </Button>
               <Button
                 size="sm"
                 onClick={handleSaveDraft}
                 disabled={saveStatus === "saving" || isPublishing}
-                className="bg-navy hover:bg-navy/90 text-white font-medium"
+                aria-busy={saveStatus === "saving"}
+                className="bg-navy hover:bg-navy/90 text-white font-medium text-xs gap-1.5"
               >
                 {saveStatus === "saving" ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -725,6 +727,7 @@ export function ModulEditor({
                 variant="secondary"
                 onClick={() => setPublishConfirmOpen(true)}
                 disabled={saveStatus === "saving" || isPublishing}
+                className="text-xs gap-1.5 font-medium"
               >
                 <Send className="h-4 w-4" />
                 Publikasikan

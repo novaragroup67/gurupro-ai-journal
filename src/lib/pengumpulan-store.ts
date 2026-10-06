@@ -913,6 +913,46 @@ export async function saveRemedialAnswer(
 }
 
 /**
+ * Menyimpan banyak jawaban remedial siswa sekaligus ke database Supabase.
+ */
+export async function saveRemedialAnswers(
+  pengumpulanRemedialId: string,
+  answers: Record<string, string>,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const rows = Object.entries(answers).map(([soalId, ans]) => ({
+      pengumpulan_remedial_id: pengumpulanRemedialId,
+      soal_id: soalId,
+      jawaban: ans ? ans.trim() : null,
+    }));
+
+    if (rows.length === 0) return { ok: true };
+
+    const { error } = await supabase.from("penugasan_remedial_jawaban").upsert(rows, {
+      onConflict: "pengumpulan_remedial_id, soal_id",
+    });
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+
+    void trackProductEvent("ANSWER_SAVED", "submission", {
+      role: "siswa",
+      metadata: {
+        pengumpulanRemedialId,
+        answerCount: rows.length,
+        isRemedial: true,
+      },
+    });
+
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal menyimpan jawaban remedial.";
+    return { ok: false, message: msg };
+  }
+}
+
+/**
  * Mengirimkan (submit) tugas remedial siswa secara final dengan auto-grading PG.
  */
 export async function submitRemedialAssignment(

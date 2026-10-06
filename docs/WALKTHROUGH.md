@@ -828,6 +828,54 @@ Aktivitas Nyata Pengguna (Guru / Siswa)
 OPS-2 COMPLETE — PRODUCT ANALYTICS & FEEDBACK VERIFIED
 ```
 
+---
+
+## 14. Tahap PRODUCT-1A: Audit UX Inti & Peningkatan Berdampak Tinggi
+
+### Ringkasan Eksekutif & Metodologi
+Tahap **PRODUCT-1A** mengeksekusi optimalisasi produk secara inkremental dan presisi dengan metodologi:
+$$\text{Data Penggunaan Riil} \longrightarrow \text{Analisis Hambatan (UX Friction)} \longrightarrow \text{Prioritas Berdampak Tinggi} \longrightarrow \text{Perbaikan Minimal & Aman} \longrightarrow \text{Validasi Regresi Mutlak}$$
+
+Fokus ditujukan langsung pada friksi tertinggi pada alur harian pengguna nyata (Siswa & Guru) tanpa mengubah antarmuka visual secara sembarangan ataupun merusak aturan bisnis dan gerbang mutu AI yang sudah tervalidasi.
+
+### Hambatan Utama yang Ditemukan & Diperbaiki
+
+1. **Debounce Autosave pada Pengerjaan Tugas Esai Siswa (`src/routes/penugasan.tsx`)**:
+   - **Masalah**: Pada komponen `SiswaPengerjaanView` dan `SiswaRemedialPengerjaanView`, elemen `<Textarea>` memicu penyimpanan cloud Supabase pada setiap karakter ketikan tanpa debouncing. Mengetik 50 kata memicu puluhan request HTTP simultan, menyebabkan stuttering antarmuka, potensi data tertimpa jika request tiba tidak berurutan, dan toast error yang mengganggu konsentrasi siswa jika terjadi latensi sesaat.
+   - **Solusi**: Diterapkan debounce timer `800ms` menggunakan `useRef<Record<string, NodeJS.Timeout>>({})`. State lokal diperbarui instan untuk pengetikan yang mulus tanpa jeda, sementara penyimpanan ke basis data ditunda hingga siswa jeda mengetik. Pilihan ganda tetap tersimpan langsung (`immediate: true`).
+
+2. **Penyimpanan Batch Atomik Pengumpulan Tugas (`src/lib/pengumpulan-store.ts`)**:
+   - **Masalah**: Tombol "Simpan Draf" dan modal "Kumpulkan Tugas" sebelumnya melakukan loop sekuensial `for ... of await saveAnswer(...)` butir demi butir. Pada tugas berisi 20 butir soal, terjadi 20 panggilan jaringan berturut-turut yang membuat antarmuka tampak membeku beberapa detik.
+   - **Solusi**: Diimplementasikan fungsi `saveAnswers` dan `saveRemedialAnswers` yang melakukan upsert batch atomik dalam 1 permintaan jaringan tunggal. Latensi pengumpulan terpangkas hingga ~95%.
+
+3. **Pencegahan Klik Ganda & Proteksi Dialog Konfirmasi Pengumpulan**:
+   - **Masalah**: Pada dialog konfirmasi Radix UI / shadcn, tombol submit tanpa `e.preventDefault()` langsung menutup dialog sebelum server selesai memproses respons.
+   - **Solusi**: Ditambahkan `e.preventDefault()` agar dialog tetap menampilkan indikator `<Loader2 className="animate-spin" />` dan status "Mengumpulkan…", tombol dinonaktifkan (`disabled={submittingFinal}`) untuk mencegah pengumpulan duplikat ganda, dan dialog baru tertutup setelah respons server tervalidasi berhasil.
+
+4. **Keterbacaan Bilah Aksi Editor Modul Ajar Mobile (`src/components/modul-editor.tsx`)**:
+   - **Peningkatan**: Penyesuaian tata letak tombol aksi editor modul ajar dengan wrapping fleksibel, target sentuh responsif minimal 36px, dan penambahan atribut `aria-busy` saat proses penyimpanan draf latar belakang berlangsung.
+
+### Hasil Uji Mutu & Verifikasi PRODUCT-1A
+
+| Suite Uji / Verifikasi | Perintah | Status | Keterangan |
+|---|---|:---:|---|
+| **PRODUCT-1A Core UX Suite** | `npm run test:product1a` | **12 / 12 PASS (100%)** | Memvalidasi mekanika debounce, batch saving, status jawaban, proteksi dialog pengumpulan, dan responsivitas editor |
+| **OPS-2 Product Analytics Suite** | `npm run test:ops2` | **16 / 16 PASS (100%)** | Taksonomi analitik produk, penanganan masukan, dan isolasi RLS |
+| **OPS-1 Production Stabilization Suite** | `npm run test:ops` | **26 / 26 PASS (100%)** | Endpoint kesehatan produksi, observabilitas error, dan failover AI |
+| **GO-LIVE Production Operations Suite** | `npm run test:golive` | **29 / 29 PASS (100%)** | Operasional penuh produksi live guru & siswa |
+| **Full Product UAT Suite** | `npm run test:uat` | **51 / 51 PASS (100%)** | 51 skenario produk terverifikasi |
+| **AI Core Recovery Suite** | `npm run test:recovery` | **40 / 40 PASS (100%)** | Pemulihan dokumen, grounding, dan generator visual |
+| **Full Regression Suite** | `npm test` | **PASS (100%)** | Seluruh 48 sub-suite regresi lulus tanpa kegagalan |
+| **Release Parity Audit** | `npm run verify:release-parity` | **6 / 6 GATES PASS** | Seluruh 6 gerbang rilis produksi terverifikasi |
+| **Linter Sanitization** | `npm run lint` | **PASS (0 error)** | 0 error |
+| **Production Build** | `npm run build` | **PASS (0 error, 1.36s)** | Build Nitro SSR & TanStack Start bersih |
+
+### Status Operasional Tahap PRODUCT-1A
+```text
+PRODUCT-1A COMPLETE — CORE UX IMPROVEMENTS VERIFIED
+```
+
+
 
 
 

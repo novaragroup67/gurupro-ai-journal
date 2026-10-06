@@ -26,7 +26,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { archiveAcademicItem } from "@/lib/archive-store";
 
@@ -79,6 +79,7 @@ import {
   PenugasanPengumpulan,
   SanitizedSoal,
   saveAnswer,
+  saveAnswers,
   submitAssignment,
   TeacherSubmissionItem,
   // Remedial methods and types
@@ -88,6 +89,7 @@ import {
   getRemedialSoalForSiswa,
   getMyRemedialAnswers,
   saveRemedialAnswer,
+  saveRemedialAnswers,
   submitRemedialAssignment,
   getTeacherRemedialSubmissions,
   gradeRemedialSubmission,
@@ -2204,8 +2206,18 @@ function SiswaRemedialPengerjaanView({
   const [submittingFinal, setSubmittingFinal] = useState(false);
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
 
+  // Debounce timers ref untuk input esai
+  const debounceTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
+
   const isSubmitted = remedialSub?.status === "submitted";
   const isReadOnly = isSubmitted;
+
+  // Cleanup debounce timers saat unmount
+  useEffect(() => {
+    return () => {
+      Object.values(debounceTimersRef.current).forEach((t) => clearTimeout(t));
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -2248,47 +2260,79 @@ function SiswaRemedialPengerjaanView({
     };
   }, [penugasan.id]);
 
-  const handleAnswerChange = async (soalId: string, val: string) => {
+  // Handler perubahan jawaban: immediate (pilihan ganda) vs debounced 800ms (esai)
+  const handleAnswerChange = (soalId: string, val: string, immediate = false) => {
     if (isReadOnly || !remedialSub) return;
 
+    // Perbarui state lokal secara instan agar UI/ketikan tetap responsif
     setAnswers((prev) => ({ ...prev, [soalId]: val }));
     setSavingStatus("saving");
 
-    try {
-      const res = await saveRemedialAnswer(remedialSub.id, soalId, val);
-      if (res.ok) {
-        setSavingStatus("saved");
-      } else {
+    // Bersihkan timer sebelumnya untuk soal ini jika ada
+    if (debounceTimersRef.current[soalId]) {
+      clearTimeout(debounceTimersRef.current[soalId]);
+      delete debounceTimersRef.current[soalId];
+    }
+
+    const doSave = async () => {
+      try {
+        const res = await saveRemedialAnswer(remedialSub.id, soalId, val);
+        if (res.ok) {
+          setSavingStatus("saved");
+        } else {
+          setSavingStatus("error");
+          console.warn("[Autosave Remedial] Gagal menyimpan jawaban:", res.message);
+        }
+      } catch (err) {
+        console.error("[Autosave Remedial] Error:", err);
         setSavingStatus("error");
-        toast.error(res.message);
       }
-    } catch {
-      setSavingStatus("error");
+    };
+
+    if (immediate) {
+      void doSave();
+    } else {
+      debounceTimersRef.current[soalId] = setTimeout(() => {
+        void doSave();
+        delete debounceTimersRef.current[soalId];
+      }, 800);
     }
   };
 
+  // Simpan draf manual: batalkan pending timers lalu simpan seluruh jawaban secara batch
   const handleSaveDraftManual = async () => {
     if (!remedialSub || isReadOnly) return;
+    Object.values(debounceTimersRef.current).forEach((t) => clearTimeout(t));
+    debounceTimersRef.current = {};
+
     setSavingStatus("saving");
     try {
-      for (const [sId, ans] of Object.entries(answers)) {
-        await saveRemedialAnswer(remedialSub.id, sId, ans);
+      const res = await saveRemedialAnswers(remedialSub.id, answers);
+      if (res.ok) {
+        setSavingStatus("saved");
+        toast.success("Draf jawaban remedial berhasil disimpan.");
+      } else {
+        setSavingStatus("error");
+        toast.error(res.message || "Gagal menyimpan draf remedial.");
       }
-      setSavingStatus("saved");
-      toast.success("Draf jawaban remedial berhasil disimpan.");
     } catch {
       setSavingStatus("error");
       toast.error("Gagal menyimpan draf remedial.");
     }
   };
 
+  // Eksekusi Submit Final remedial: batalkan timers, batch save, lalu submit
   const handleConfirmSubmit = async () => {
     if (!remedialSub || isReadOnly) return;
+    Object.values(debounceTimersRef.current).forEach((t) => clearTimeout(t));
+    debounceTimersRef.current = {};
 
     setSubmittingFinal(true);
     try {
-      for (const [sId, ans] of Object.entries(answers)) {
-        await saveRemedialAnswer(remedialSub.id, sId, ans);
+      const saveRes = await saveRemedialAnswers(remedialSub.id, answers);
+      if (!saveRes.ok) {
+        toast.error(saveRes.message || "Gagal menyimpan jawaban remedial sebelum pengumpulan.");
+        return;
       }
 
       const res = await submitRemedialAssignment(remedialSub.id);
@@ -2504,7 +2548,7 @@ function SiswaRemedialPengerjaanView({
                             key={oIdx}
                             type="button"
                             disabled={isReadOnly}
-                            onClick={() => handleAnswerChange(s.id, optionLabel)}
+                            onClick={() => handleAnswerChange(s.id, optionLabel, true)}
                             className={`flex items-start gap-3 rounded-lg border p-3 text-left text-xs transition-all ${
                               isSelected
                                 ? "border-purple-600 bg-purple-50 dark:bg-purple-950/40 font-medium text-purple-900 dark:text-purple-200 shadow-xs"
@@ -2536,7 +2580,7 @@ function SiswaRemedialPengerjaanView({
                             : "Tuliskan uraian jawaban remedial Anda di sini…"
                         }
                         value={currentAnswer}
-                        onChange={(e) => handleAnswerChange(s.id, e.target.value)}
+                        onChange={(e) => handleAnswerChange(s.id, e.target.value, false)}
                         className="text-xs leading-relaxed"
                       />
                     </div>
@@ -2568,9 +2612,14 @@ function SiswaRemedialPengerjaanView({
                 variant="outline"
                 size="sm"
                 onClick={handleSaveDraftManual}
+                disabled={submittingFinal || savingStatus === "saving"}
                 className="gap-1.5 text-xs font-medium"
               >
-                <Save className="h-3.5 w-3.5" />
+                {savingStatus === "saving" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
                 Simpan Draf Remedial
               </Button>
 
@@ -2617,9 +2666,19 @@ function SiswaRemedialPengerjaanView({
             <AlertDialogAction
               disabled={submittingFinal}
               className="bg-purple-600 text-white hover:bg-purple-700"
-              onClick={handleConfirmSubmit}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleConfirmSubmit();
+              }}
             >
-              {submittingFinal ? "Mengumpulkan…" : "Ya, Kumpulkan Remedial"}
+              {submittingFinal ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Mengumpulkan…
+                </>
+              ) : (
+                "Ya, Kumpulkan Remedial"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -2644,11 +2703,21 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
   const [submittingFinal, setSubmittingFinal] = useState(false);
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
 
+  // Debounce timers ref untuk input esai
+  const debounceTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
+
   const now = new Date();
   const isDeadlinePassed = Boolean(penugasan.deadline && new Date(penugasan.deadline) < now);
   const isClosed = penugasan.status === "closed" || isDeadlinePassed;
   const isSubmitted = submission?.status === "submitted";
   const isReadOnly = isSubmitted || isClosed;
+
+  // Cleanup debounce timers saat unmount
+  useEffect(() => {
+    return () => {
+      Object.values(debounceTimersRef.current).forEach((t) => clearTimeout(t));
+    };
+  }, []);
 
   const refreshRemedialState = async () => {
     if (!penugasan.remedialEnabled) return;
@@ -2719,38 +2788,62 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
     };
   }, [penugasan.id, isClosed, penugasan.remedialEnabled]);
 
-  // Handler perubahan jawaban dengan autosave
-  const handleAnswerChange = async (soalId: string, val: string) => {
+  // Handler perubahan jawaban: immediate (pilihan ganda) vs debounced 800ms (esai)
+  const handleAnswerChange = (soalId: string, val: string, immediate = false) => {
     if (isReadOnly || !submission) return;
 
     // Update state lokal secara instan
     setAnswers((prev) => ({ ...prev, [soalId]: val }));
     setSavingStatus("saving");
 
-    try {
-      const res = await saveAnswer(submission.id, soalId, val);
-      if (res.ok) {
-        setSavingStatus("saved");
-      } else {
+    // Bersihkan timer sebelumnya untuk soal ini jika ada
+    if (debounceTimersRef.current[soalId]) {
+      clearTimeout(debounceTimersRef.current[soalId]);
+      delete debounceTimersRef.current[soalId];
+    }
+
+    const doSave = async () => {
+      try {
+        const res = await saveAnswer(submission.id, soalId, val);
+        if (res.ok) {
+          setSavingStatus("saved");
+        } else {
+          setSavingStatus("error");
+          console.warn("[Autosave] Gagal menyimpan jawaban:", res.message);
+        }
+      } catch (err) {
+        console.error("[Autosave] Error:", err);
         setSavingStatus("error");
-        toast.error(res.message);
       }
-    } catch {
-      setSavingStatus("error");
+    };
+
+    if (immediate) {
+      void doSave();
+    } else {
+      debounceTimersRef.current[soalId] = setTimeout(() => {
+        void doSave();
+        delete debounceTimersRef.current[soalId];
+      }, 800);
     }
   };
 
-  // Simpan draf manual
+  // Simpan draf manual: batalkan pending timers lalu simpan seluruh jawaban secara batch
   const handleSaveDraftManual = async () => {
     if (!submission || isReadOnly) return;
+    Object.values(debounceTimersRef.current).forEach((t) => clearTimeout(t));
+    debounceTimersRef.current = {};
+
     setSavingStatus("saving");
     try {
-      // Simpan semua jawaban yang ada
-      for (const [sId, ans] of Object.entries(answers)) {
-        await saveAnswer(submission.id, sId, ans);
+      // Simpan semua jawaban yang ada secara batch
+      const res = await saveAnswers(submission.id, answers);
+      if (res.ok) {
+        setSavingStatus("saved");
+        toast.success("Draf jawaban berhasil disimpan ke cloud.");
+      } else {
+        setSavingStatus("error");
+        toast.error(res.message || "Gagal menyimpan draf jawaban.");
       }
-      setSavingStatus("saved");
-      toast.success("Draf jawaban berhasil disimpan ke cloud.");
     } catch {
       setSavingStatus("error");
       toast.error("Gagal menyimpan draf jawaban.");
@@ -2769,15 +2862,19 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
     setConfirmSubmitOpen(true);
   };
 
-  // Eksekusi Submit Final
+  // Eksekusi Submit Final: batalkan timers, batch save, lalu submit
   const handleConfirmSubmit = async () => {
     if (!submission || isReadOnly) return;
+    Object.values(debounceTimersRef.current).forEach((t) => clearTimeout(t));
+    debounceTimersRef.current = {};
 
     setSubmittingFinal(true);
     try {
-      // Pastikan semua jawaban terbaru tersimpan terlebih dahulu
-      for (const [sId, ans] of Object.entries(answers)) {
-        await saveAnswer(submission.id, sId, ans);
+      // Pastikan semua jawaban terbaru tersimpan terlebih dahulu secara batch
+      const saveRes = await saveAnswers(submission.id, answers);
+      if (!saveRes.ok) {
+        toast.error(saveRes.message || "Gagal menyimpan jawaban sebelum pengumpulan.");
+        return;
       }
 
       // Panggil operasi submit (verifikasi tenggat waktu di server)
@@ -3199,7 +3296,7 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
                             key={oIdx}
                             type="button"
                             disabled={isReadOnly}
-                            onClick={() => handleAnswerChange(s.id, optionLabel)}
+                            onClick={() => handleAnswerChange(s.id, optionLabel, true)}
                             className={`flex items-start gap-3 rounded-lg border p-3 text-left text-xs transition-all ${
                               isSelected
                                 ? "border-primary bg-primary/10 font-medium text-primary shadow-xs"
@@ -3231,7 +3328,7 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
                             : "Tuliskan uraian jawaban Anda di sini…"
                         }
                         value={currentAnswer}
-                        onChange={(e) => handleAnswerChange(s.id, e.target.value)}
+                        onChange={(e) => handleAnswerChange(s.id, e.target.value, false)}
                         className="text-xs leading-relaxed"
                       />
                     </div>
@@ -3263,9 +3360,14 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
                 variant="outline"
                 size="sm"
                 onClick={handleSaveDraftManual}
+                disabled={submittingFinal || savingStatus === "saving"}
                 className="gap-1.5 text-xs font-medium"
               >
-                <Save className="h-3.5 w-3.5" />
+                {savingStatus === "saving" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
                 Simpan Draf
               </Button>
 
@@ -3312,9 +3414,19 @@ function SiswaPengerjaanView({ penugasan, onBack }: { penugasan: Penugasan; onBa
             <AlertDialogAction
               disabled={submittingFinal}
               className="bg-emerald-600 text-white hover:bg-emerald-700"
-              onClick={handleConfirmSubmit}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleConfirmSubmit();
+              }}
             >
-              {submittingFinal ? "Mengumpulkan…" : "Ya, Kumpulkan Tugas"}
+              {submittingFinal ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Mengumpulkan…
+                </>
+              ) : (
+                "Ya, Kumpulkan Tugas"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
