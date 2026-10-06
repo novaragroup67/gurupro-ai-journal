@@ -272,14 +272,15 @@ function GuruPenugasanView() {
   }, [search.paketSoalId, search.kelasId, search.judul, search.action, paketSoalList]);
 
   // Deep-link to open submissions modal for a specific assignment
+  const [dismissedDeepLinkId, setDismissedDeepLinkId] = useState<string | null>(null);
   useEffect(() => {
-    if (search.penugasanId && penugasanList.length > 0) {
+    if (search.penugasanId && penugasanList.length > 0 && dismissedDeepLinkId !== search.penugasanId) {
       const match = penugasanList.find((p) => p.id === search.penugasanId);
       if (match) {
         setViewingSubmissionsFor(match);
       }
     }
-  }, [search.penugasanId, penugasanList]);
+  }, [search.penugasanId, penugasanList, dismissedDeepLinkId]);
 
   const resetForm = () => {
     setSelectedKelasId("");
@@ -767,7 +768,12 @@ function GuruPenugasanView() {
       {viewingSubmissionsFor && (
         <GuruSubmissionsModal
           penugasan={viewingSubmissionsFor}
-          onClose={() => setViewingSubmissionsFor(null)}
+          onClose={() => {
+            setViewingSubmissionsFor(null);
+            if (search.penugasanId) {
+              setDismissedDeepLinkId(search.penugasanId);
+            }
+          }}
         />
       )}
 
@@ -2124,14 +2130,15 @@ function SiswaPenugasanView() {
   }, [loadSubmissions]);
 
   // Deep-link auto-opener jika search.penugasanId ada
+  const [dismissedDeepLinkId, setDismissedDeepLinkId] = useState<string | null>(null);
   useEffect(() => {
-    if (search.penugasanId && penugasanList.length > 0) {
+    if (search.penugasanId && penugasanList.length > 0 && dismissedDeepLinkId !== search.penugasanId) {
       const matched = penugasanList.find((p) => p.id === search.penugasanId);
       if (matched) {
         setActivePenugasan(matched);
       }
     }
-  }, [search.penugasanId, penugasanList]);
+  }, [search.penugasanId, penugasanList, dismissedDeepLinkId]);
 
   const assignmentStates = useMemo(() => {
     const states: Record<string, StudentAssignmentState> = {};
@@ -2176,6 +2183,9 @@ function SiswaPenugasanView() {
         penugasan={activePenugasan}
         onBack={() => {
           setActivePenugasan(null);
+          if (search.penugasanId) {
+            setDismissedDeepLinkId(search.penugasanId);
+          }
           void loadSubmissions();
         }}
       />

@@ -129,7 +129,7 @@ it("SiswaPenugasanView implements filtering tabs: perlu_dikerjakan, selesai, and
 
 it("SiswaPenugasanView automatically handles search.penugasanId deep linking", () => {
   const penugasanFile = readFileSync(resolve(ROOT_DIR, "src/routes/penugasan.tsx"), "utf-8");
-  assert.match(penugasanFile, /if\s*\(search\.penugasanId\s*&&\s*penugasanList\.length > 0\)/);
+  assert.match(penugasanFile, /if\s*\(search\.penugasanId\s*&&\s*penugasanList\.length > 0/);
   assert.match(penugasanFile, /setActivePenugasan\(matched\)/);
 });
 
