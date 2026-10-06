@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   BookOpen,
   Eye,
+  FileQuestion,
   Loader2,
   MoreVertical,
   Pencil,
@@ -347,6 +348,21 @@ function ModulAjarPage() {
                     <Pencil className="h-4 w-4" />
                     Buka Editor
                   </Button>
+                  <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs text-primary border-primary/30 hover:bg-primary/5">
+                    <Link
+                      to="/soal"
+                      search={{
+                        modulId: m.id,
+                        topik: m.judul.replace(/^Modul Ajar:\s*/i, ""),
+                        mapel: m.mapel || undefined,
+                        kelasId: m.kelasId || undefined,
+                        mode: "buat",
+                      }}
+                    >
+                      <FileQuestion className="h-3.5 w-3.5" />
+                      Buat Soal
+                    </Link>
+                  </Button>
                   {m.status === "Draft" ? (
                     <Button
                       variant="secondary"
@@ -366,6 +382,22 @@ function ModulAjarPage() {
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onSelect={() => setEditing(m)}>
                         {m.status === "Terbit" ? "Lihat detail modul" : "Edit modul"}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link
+                          to="/soal"
+                          search={{
+                            modulId: m.id,
+                            topik: m.judul.replace(/^Modul Ajar:\s*/i, ""),
+                            mapel: m.mapel || undefined,
+                            kelasId: m.kelasId || undefined,
+                            mode: "buat",
+                          }}
+                          className="flex items-center gap-1.5 w-full cursor-pointer"
+                        >
+                          <FileQuestion className="h-4 w-4 mr-1.5 text-primary" />
+                          Buat Soal dari Modul
+                        </Link>
                       </DropdownMenuItem>
                       {m.status === "Draft" ? (
                         <DropdownMenuItem

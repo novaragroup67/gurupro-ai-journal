@@ -9,6 +9,7 @@ import {
   ClipboardList,
   Clock,
   Download,
+  ExternalLink,
   FileSpreadsheet,
   FileText,
   GraduationCap,
@@ -56,6 +57,10 @@ import {
 } from "@/lib/rekap-store";
 
 export const Route = createFileRoute("/penilaian")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    kelasId: typeof search.kelasId === "string" ? search.kelasId : undefined,
+    penugasanId: typeof search.penugasanId === "string" ? search.penugasanId : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Rekap Nilai — GuruPro" },
@@ -90,6 +95,7 @@ function Page() {
 // 1. GURU REKAP NILAI VIEW
 // ============================================================================
 function GuruRekapNilaiView() {
+  const search = Route.useSearch();
   const { profile, user } = useAuth();
   const { kelasList, loading: loadingClasses } = useKelas();
   const currentUserId = user?.id || profile?.id;
@@ -163,8 +169,12 @@ function GuruRekapNilaiView() {
     }
   };
 
-  // Responsif terhadap perubahan daftar kelas / tahun ajaran
+  // Responsif terhadap perubahan daftar kelas / tahun ajaran / query param
   useEffect(() => {
+    if (search.kelasId && allTeacherClasses.some((k) => k.id === search.kelasId)) {
+      setSelectedKelasId(search.kelasId);
+      return;
+    }
     if (teacherClasses.length > 0) {
       if (!teacherClasses.some((k) => k.id === selectedKelasId)) {
         setSelectedKelasId(teacherClasses[0]?.id || "");
@@ -173,7 +183,7 @@ function GuruRekapNilaiView() {
       setSelectedKelasId("");
       setRekapData(null);
     }
-  }, [teacherClasses, selectedKelasId]);
+  }, [teacherClasses, allTeacherClasses, selectedKelasId, search.kelasId]);
 
   // Muat data rekapitulasi saat kelas berubah
   useEffect(() => {
@@ -505,7 +515,17 @@ function GuruRekapNilaiView() {
                             className="text-center min-w-[130px] max-w-[170px]"
                             title={tugas.judul}
                           >
-                            <span className="block truncate font-semibold">{tugas.judul}</span>
+                            <div className="flex items-center justify-center gap-1">
+                              <span className="block truncate font-semibold">{tugas.judul}</span>
+                              <Link
+                                to="/penugasan"
+                                search={{ penugasanId: tugas.id }}
+                                className="text-primary hover:text-primary/80 shrink-0"
+                                title="Buka pengumpulan & penilaian tugas ini di menu Penugasan"
+                              >
+                                <ExternalLink className="h-3 w-3 inline" />
+                              </Link>
+                            </div>
                             <span className="block text-[10px] text-muted-foreground font-normal">
                               KKM: {tugas.kkm ?? 75}
                               {tugas.remedialEnabled ? " · Remedial" : ""}
@@ -592,13 +612,20 @@ function GuruRekapNilaiView() {
                               if (nilaiItem.statusPenilaian === "perlu_penilaian_manual") {
                                 return (
                                   <TableCell key={tugas.id} className="text-center">
-                                    <Badge
-                                      variant="outline"
-                                      className="border-amber-300 bg-amber-50 text-[11px] font-medium text-amber-800"
-                                      title="Perlu Koreksi Manual Guru"
+                                    <Link
+                                      to="/penugasan"
+                                      search={{ penugasanId: tugas.id }}
+                                      className="inline-block"
+                                      title="Klik untuk membuka penilaian esai tugas ini di Penugasan"
                                     >
-                                      Perlu Koreksi
-                                    </Badge>
+                                      <Badge
+                                        variant="outline"
+                                        className="border-amber-300 bg-amber-50 text-[11px] font-medium text-amber-800 hover:bg-amber-100 cursor-pointer gap-1 transition-colors"
+                                      >
+                                        Perlu Koreksi
+                                        <ArrowRight className="h-2.5 w-2.5 inline" />
+                                      </Badge>
+                                    </Link>
                                   </TableCell>
                                 );
                               }
@@ -606,13 +633,19 @@ function GuruRekapNilaiView() {
                               if (nilaiItem.statusPengumpulan === "submitted") {
                                 return (
                                   <TableCell key={tugas.id} className="text-center">
-                                    <Badge
-                                      variant="outline"
-                                      className="border-blue-300 bg-blue-50 text-[11px] font-medium text-blue-800"
-                                      title="Tugas Terkumpul, Belum Dinilai"
+                                    <Link
+                                      to="/penugasan"
+                                      search={{ penugasanId: tugas.id }}
+                                      className="inline-block"
+                                      title="Klik untuk meninjau tugas ini di menu Penugasan"
                                     >
-                                      Terkumpul
-                                    </Badge>
+                                      <Badge
+                                        variant="outline"
+                                        className="border-blue-300 bg-blue-50 text-[11px] font-medium text-blue-800 hover:bg-blue-100 cursor-pointer"
+                                      >
+                                        Terkumpul
+                                      </Badge>
+                                    </Link>
                                   </TableCell>
                                 );
                               }

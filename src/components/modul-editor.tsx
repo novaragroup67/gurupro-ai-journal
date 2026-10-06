@@ -1,9 +1,11 @@
+import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
   Clock,
   Download,
+  FileQuestion,
   FileText,
   Image as ImageIcon,
   Loader2,
@@ -683,12 +685,29 @@ export function ModulEditor({
 
         <div className="flex flex-wrap items-center gap-2 pt-1 lg:pt-0 lg:justify-end">
           {modul.status === "Terbit" ? (
-            <Badge
-              variant="outline"
-              className="border-emerald-500/40 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 text-xs px-3 py-1.5 flex items-center gap-1.5 font-medium"
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" /> Modul Terbit (Read-Only)
-            </Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge
+                variant="outline"
+                className="border-emerald-500/40 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 text-xs px-3 py-1.5 flex items-center gap-1.5 font-medium"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" /> Modul Terbit (Read-Only)
+              </Badge>
+              <Button asChild size="sm" variant="outline" className="text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/5">
+                <Link
+                  to="/soal"
+                  search={{
+                    modulId: modul.id,
+                    topik: modul.judul.replace(/^Modul Ajar:\s*/i, ""),
+                    mapel: modul.mapel || undefined,
+                    kelasId: modul.kelasId || undefined,
+                    mode: "buat",
+                  }}
+                >
+                  <FileQuestion className="h-3.5 w-3.5" />
+                  Buat Soal dari Modul
+                </Link>
+              </Button>
+            </div>
           ) : (
             <>
               <Button
@@ -739,14 +758,31 @@ export function ModulEditor({
 
       {/* Terbit Informational Notice Banner */}
       {modul.status === "Terbit" && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-950/20 p-4 text-sm text-emerald-900 dark:text-emerald-300 flex items-center gap-3">
-          <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
-          <div>
-            <p className="font-semibold">Modul Ajar ini Telah Terbit</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Materi pembelajaran telah resmi dipublikasikan dan dapat diakses siswa dari kelas terdaftar secara mandiri. Penyuntingan draf dinonaktifkan untuk menjaga integritas akademik.
-            </p>
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-950/20 p-4 text-sm text-emerald-900 dark:text-emerald-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+            <div>
+              <p className="font-semibold">Modul Ajar ini Telah Terbit</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Materi pembelajaran telah resmi dipublikasikan dan dapat diakses siswa dari kelas terdaftar secara mandiri.
+              </p>
+            </div>
           </div>
+          <Button asChild size="sm" variant="default" className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 text-xs shrink-0 font-medium">
+            <Link
+              to="/soal"
+              search={{
+                modulId: modul.id,
+                topik: modul.judul.replace(/^Modul Ajar:\s*/i, ""),
+                mapel: modul.mapel || undefined,
+                kelasId: modul.kelasId || undefined,
+                mode: "buat",
+              }}
+            >
+              <FileQuestion className="h-3.5 w-3.5" />
+              Lanjut Buat Soal dari Modul
+            </Link>
+          </Button>
         </div>
       )}
 

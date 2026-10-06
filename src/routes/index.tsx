@@ -996,8 +996,8 @@ function TeacherDashboard() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button asChild size="sm" variant="outline" className="h-8 text-xs">
-                              <Link to="/penugasan">Beri Nilai</Link>
+                            <Button asChild size="sm" variant="outline" className="h-8 text-xs font-medium">
+                              <Link to="/penugasan" search={{ penugasanId: t.id }}>Beri Nilai</Link>
                             </Button>
                           </TableCell>
                         </TableRow>

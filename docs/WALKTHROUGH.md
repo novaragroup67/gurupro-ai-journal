@@ -928,6 +928,70 @@ Seluruh peningkatan mempertahankan arsitektur dwi-penyedia, batas kuota, aturan 
 PRODUCT-1B COMPLETE — AI QUALITY IMPROVEMENTS VERIFIED
 ```
 
+---
+
+## 16. Tahap PRODUCT-1C: Optimasi Alur Kerja Guru (Teacher Workflow Optimization)
+
+### Ringkasan Eksekutif & Metodologi
+Tahap **PRODUCT-1C** mengeksekusi optimalisasi alur kerja guru secara menyeluruh (*end-to-end*) di GuruPro dengan metodologi:
+$$\text{Alur Nyata Guru} \longrightarrow \text{Identifikasi Friksi \& Redundansi Data} \longrightarrow \text{3 Peningkatan Berdampak Tinggi} \longrightarrow \text{Preservasi RLS \& Keamanan Server} \longrightarrow \text{Validasi Regresi Mutlak}$$
+
+Fokus ditujukan langsung pada efisiensi alur kerja guru:
+```text
+Dashboard → Kelas → Modul Ajar → Generator Soal → Penugasan → Pengumpulan Siswa → Penilaian → Rekap → Presentation/PPTX
+```
+Menghilangkan navigasi berulang, menghindari pengisian data ganda yang tidak perlu, memperjelas metrik operasional guru, dan menghubungkan tahap alur kerja yang saling terkait tanpa mengubah arsitektur basis data, tanpa mengubah formula penilaian KKM, dan tanpa mempercayakan otorisasi pada parameter klien.
+
+### Tiga Peningkatan Alur Kerja Berdasarkan Bukti
+
+1. **Transisi Kontekstual Modul Ajar $\to$ Generator Soal (`src/routes/modul-ajar.tsx`, `src/components/modul-editor.tsx`, `src/routes/soal.tsx`)**:
+   - **Masalah**: Guru yang selesai menyusun modul ajar harus berpindah manual ke menu Generator Soal, memilih kelas ulang, mengetik ulang judul topik dan mata pelajaran, serta mencari modul yang bersangkutan di dropdown.
+   - **Solusi**:
+     - Ditambahkan tombol `"Buat Soal"` pada kartu modul di rute `/modul-ajar` dan item dropdown `"Buat Soal dari Modul"`.
+     - Ditambahkan aksi tombol `"Buat Soal dari Modul"` pada bilah aksi header dan banner modul terbit di `ModulEditor`.
+     - Konfigurasi TanStack Router `validateSearch` pada `/soal` untuk menangani parameter: `modulId`, `topik`, `mapel`, `kelasId`, dan `mode: "buat"`.
+     - Generator Soal secara otomatis menginisialisasi mode pembuatan (`mode = "buat"`), menetapkan tautan `modulId`, mengisi topik otomatis, dan memberikan judul standar `"Latihan Soal: " + topik`.
+
+2. **Transisi Pembuatan Penugasan dari Paket Soal (`src/routes/soal.tsx`, `src/routes/penugasan.tsx`)**:
+   - **Masalah**: Setelah selesai menyusun bank/paket soal di Generator Soal, guru harus berpindah manual ke menu Penugasan, membuka modal baru, mencari kelas, dan memilih paket soal dari daftar panjang.
+   - **Solusi**:
+     - Ditambahkan tombol aksi utama `"Tugaskan ke Kelas"` pada `PaketActions` (tampilan kartu & bilah aksi desktop/mobile) serta pada header mode peninjauan paket soal (`/soal`).
+     - Tautan langsung mengarah ke `/penugasan` dengan parameter pencarian: `paketSoalId`, `judul: "Tugas: " + paket.judul`, dan `action: "create"`.
+     - Rute `/penugasan` dengan `validateSearch` secara reaktif membuka dialog pembuatan tugas baru (`openCreateModal = true`), memilih paket soal secara otomatis, dan mengisi judul draf.
+     - Guru tetap memegang kendali penuh dengan verifikasi 1 klik sebelum tugas diterbitkan ke siswa.
+
+3. **Visibilitas Operasional & Pintasan Cepat Penugasan $\to$ Penilaian (`src/routes/penugasan.tsx`, `src/routes/penilaian.tsx`, `src/routes/index.tsx`)**:
+   - **Masalah**: Pada kartu penugasan, guru tidak dapat melihat berapa banyak siswa yang telah mengumpulkan dan berapa yang masih perlu dinilai secara manual. Di Rekap Nilai, label "Perlu Koreksi" hanya indikator pasif tanpa tautan langsung untuk memeriksa jawaban esai siswa. Di Dashboard Guru, tabel tugas perlu dinilai tidak membuka modal penilaian secara spesifik.
+   - **Solusi**:
+     - Pada `/penugasan`, dimuat ringkasan penyerahan riil via `getTeacherSubmissionsSummary()`.
+     - Kartu tugas menampilkan jumlah siswa mengumpulkan (`N siswa mengumpulkan`) dan status penilaian pending (`N perlu dinilai`).
+     - Ditambahkan tombol pintasan `"Periksa (${n})"` yang langsung membuka modal `GuruSubmissionsModal` untuk penugasan tersebut, serta tombol `"Rekap Nilai"` yang menuju ke `/penilaian?kelasId=...&penugasanId=...`.
+     - Rute `/penugasan` mendukung parameter `search.penugasanId` untuk langsung membuka modal periksa jawaban saat diakses melalui deep link.
+     - Pada `/penilaian`, kolom tabel penugasan dilengkapi tautan eksternal ke `/penugasan?penugasanId=...`, dan lencana "Perlu Koreksi" serta "Terkumpul" dibungkus dalam tautan langsung menuju modal penilaian tugas terkait.
+     - Pada Dashboard Guru (`/`), tombol `"Beri Nilai"` pada tabel tugas yang perlu dinilai kini langsung mengarah ke `/penugasan?penugasanId=...`.
+
+### Hasil Uji Mutu & Verifikasi PRODUCT-1C
+
+| Suite Uji / Verifikasi | Perintah | Status | Keterangan |
+|---|---|:---:|---|
+| **PRODUCT-1C Teacher Workflow Suite** | `npm run test:product1c` | **13 / 13 PASS (100%)** | Validasi alur Modul $\to$ Soal, Paket $\to$ Tugas, Penugasan $\to$ Penilaian, search params safety, dan multi-tenant authorization |
+| **PRODUCT-1B AI Quality Suite** | `npm run test:product1b` | **12 / 12 PASS (100%)** | Normalisasi parsing opsi, deteksi opsi kosong & pengecoh malas, kedalaman modul, dan sinonim kejuruan dwibahasa |
+| **PRODUCT-1A Core UX Suite** | `npm run test:product1a` | **12 / 12 PASS (100%)** | Debounce pengetikan siswa, penyimpanan batch atomik, dan pencegahan klik ganda |
+| **OPS-2 Product Analytics Suite** | `npm run test:ops2` | **16 / 16 PASS (100%)** | Taksonomi analitik privasi aman, siklus hidup masukan, dan kueri dashboard |
+| **OPS-1 Production Monitoring Suite** | `npm run test:ops` | **26 / 26 PASS (100%)** | Kesehatan sistem, sanitasi log zero-leak, korelasi request, dan failover terikat |
+| **GO-LIVE Production Operations Suite** | `npm run test:golive` | **29 / 29 PASS (100%)** | Operasional penuh akun guru/siswa, modul, penugasan, penilaian, dan PPTX live |
+| **Full Product UAT Suite** | `npm run test:uat` | **51 / 51 PASS (100%)** | Seluruh 51 skenario end-to-end terverifikasi |
+| **AI Core Recovery Suite** | `npm run test:recovery` | **40 / 40 PASS (100%)** | Pemulihan dokumen, grounding, dwi-router failover, dan penyimpanan biner aman |
+| **Full Regression Master Suite** | `npm test` | **PASS (100%)** | Seluruh 48 sub-suite lulus tanpa kegagalan |
+| **Release Parity Audit** | `npm run verify:release-parity` | **6 / 6 GATES PASS** | Git baseline bersih, env terverifikasi, skema aktif, dan proteksi rahasia |
+| **Linter Sanitization** | `npm run lint` | **PASS (0 error)** | 0 error |
+| **Production Build** | `npm run build` | **PASS (0 error)** | Build Nitro SSR & TanStack Start optimal |
+
+### Status Operasional Tahap PRODUCT-1C
+```text
+PRODUCT-1C COMPLETE — TEACHER WORKFLOW OPTIMIZATION VERIFIED
+```
+
 
 
 

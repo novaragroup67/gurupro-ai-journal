@@ -17,6 +17,7 @@ import {
   Loader2,
   Lock,
   MessageSquare,
+  Pencil,
   Plus,
   Save,
   School,
@@ -74,6 +75,7 @@ import {
   getSoalForSiswa,
   getTeacherPaketSoal,
   getTeacherSubmissions,
+  getTeacherSubmissionsSummary,
   gradeSubmission,
   PenugasanJawaban,
   PenugasanPengumpulan,
@@ -110,6 +112,13 @@ import {
 import { usePaketSoal } from "@/lib/soal-store";
 
 export const Route = createFileRoute("/penugasan")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    paketSoalId: typeof search.paketSoalId === "string" ? search.paketSoalId : undefined,
+    kelasId: typeof search.kelasId === "string" ? search.kelasId : undefined,
+    judul: typeof search.judul === "string" ? search.judul : undefined,
+    action: typeof search.action === "string" ? search.action : undefined,
+    penugasanId: typeof search.penugasanId === "string" ? search.penugasanId : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Penugasan — GuruPro" },
@@ -173,12 +182,24 @@ function PenugasanRoutePage() {
 // ==========================================
 
 function GuruPenugasanView() {
+  const search = Route.useSearch();
   const { profile, user } = useAuth();
   const currentGuruId = user?.id || profile.id;
   const { penugasanList, loading, reload } = usePenugasanGuru();
   const kelasList = useKelasList();
   const paketSoalList = usePaketSoal();
   const { selectedYear } = useTahunAjaran(currentGuruId);
+
+  // Submissions summary cache for operational metrics
+  const [submissionSummary, setSubmissionSummary] = useState<
+    Record<string, { submitted: number; perluDinilai: number; dinilai: number }>
+  >({});
+
+  useEffect(() => {
+    getTeacherSubmissionsSummary().then((res) => {
+      setSubmissionSummary(res.submissionsPerPenugasan || {});
+    });
+  }, [penugasanList]);
 
   // Filter kelas guru untuk tahun ajaran yang dipilih
   const myKelasListInYear = useMemo(() => {
@@ -223,6 +244,36 @@ function GuruPenugasanView() {
   const [remedialPaketSoalIdInput, setRemedialPaketSoalIdInput] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+
+  // Context carryover from navigation (e.g. Bank Soal -> Penugasan)
+  useEffect(() => {
+    if (search.paketSoalId || search.action === "create") {
+      if (search.paketSoalId) {
+        setSelectedPaketSoalId(search.paketSoalId);
+        const found = paketSoalList.find((p) => p.id === search.paketSoalId);
+        if (found) {
+          setJudulInput((prev) => prev || search.judul || `Tugas: ${found.judul}`);
+        }
+      }
+      if (search.kelasId) {
+        setSelectedKelasId(search.kelasId);
+      }
+      if (search.judul) {
+        setJudulInput((prev) => prev || search.judul || "");
+      }
+      setOpenCreateModal(true);
+    }
+  }, [search.paketSoalId, search.kelasId, search.judul, search.action, paketSoalList]);
+
+  // Deep-link to open submissions modal for a specific assignment
+  useEffect(() => {
+    if (search.penugasanId && penugasanList.length > 0) {
+      const match = penugasanList.find((p) => p.id === search.penugasanId);
+      if (match) {
+        setViewingSubmissionsFor(match);
+      }
+    }
+  }, [search.penugasanId, penugasanList]);
 
   const resetForm = () => {
     setSelectedKelasId("");
@@ -521,6 +572,7 @@ function GuruPenugasanView() {
                 const isDraft = item.status === "draft";
                 const isPublished = item.status === "published";
                 const isClosed = item.status === "closed";
+                const summary = submissionSummary[item.id] || { submitted: 0, perluDinilai: 0, dinilai: 0 };
 
                 return (
                   <div
@@ -577,6 +629,19 @@ function GuruPenugasanView() {
                             Tenggat: {formatDeadline(item.deadline)}
                           </span>
                         )}
+                        {summary.submitted > 0 && (
+                          <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-medium">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            {summary.submitted} siswa mengumpulkan
+                            {summary.dinilai > 0 ? ` (${summary.dinilai} dinilai)` : ""}
+                          </span>
+                        )}
+                        {summary.perluDinilai > 0 && (
+                          <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 font-semibold">
+                            <Clock className="h-3.5 w-3.5" />
+                            {summary.perluDinilai} perlu dinilai
+                          </span>
+                        )}
                       </div>
 
                       {item.instruksi && (
@@ -588,6 +653,18 @@ function GuruPenugasanView() {
 
                     {/* Aksi Guru */}
                     <div className="flex flex-wrap items-center gap-2 shrink-0 pt-2 sm:pt-0">
+                      {summary.perluDinilai > 0 && (
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="gap-1.5 text-xs bg-amber-600 hover:bg-amber-700 text-white font-medium shadow-xs"
+                          onClick={() => setViewingSubmissionsFor(item)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Periksa ({summary.perluDinilai})
+                        </Button>
+                      )}
+
                       {/* Tombol Tinjau Pengumpulan Siswa */}
                       <Button
                         size="sm"
@@ -597,6 +674,13 @@ function GuruPenugasanView() {
                       >
                         <Users className="h-3.5 w-3.5 text-primary" />
                         Pengumpulan Siswa
+                      </Button>
+
+                      <Button asChild size="sm" variant="outline" className="gap-1.5 text-xs">
+                        <Link to="/penilaian" search={{ kelasId: item.kelasId, penugasanId: item.id }}>
+                          <Award className="h-3.5 w-3.5 text-emerald-600" />
+                          Rekap Nilai
+                        </Link>
                       </Button>
 
                       {isDraft && (

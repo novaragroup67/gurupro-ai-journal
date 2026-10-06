@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Check,
   CheckCircle2,
+  ClipboardList,
   Copy,
   FileQuestion,
   History,
@@ -99,7 +100,19 @@ import {
   type Tingkat,
 } from "@/lib/soal-types";
 
+type Mode = "bank" | "buat" | "review";
+
 export const Route = createFileRoute("/soal")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    modulId: typeof search.modulId === "string" ? search.modulId : undefined,
+    topik: typeof search.topik === "string" ? search.topik : undefined,
+    mapel: typeof search.mapel === "string" ? search.mapel : undefined,
+    kelasId: typeof search.kelasId === "string" ? search.kelasId : undefined,
+    mode:
+      typeof search.mode === "string" && ["bank", "buat", "review"].includes(search.mode)
+        ? (search.mode as Mode)
+        : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Bank Soal — GuruPro" },
@@ -121,9 +134,8 @@ export const Route = createFileRoute("/soal")({
   component: SoalPage,
 });
 
-type Mode = "bank" | "buat" | "review";
-
 function SoalPage() {
+  const search = Route.useSearch();
   const { profile, user, ready } = useAuth();
   const currentGuruId = user?.id || profile.id;
   const { kelasList } = useKelas();
@@ -242,6 +254,20 @@ function SoalPage() {
   const [hapus, setHapus] = useState<PaketSoal | null>(null);
   const [arsipTarget, setArsipTarget] = useState<PaketSoal | null>(null);
   const [arsipLoading, setArsipLoading] = useState(false);
+
+  // Auto-population from navigation context (e.g. Modul Ajar -> Generator Soal)
+  useEffect(() => {
+    if (search.modulId || search.topik || search.mode === "buat") {
+      if (search.modulId) {
+        setModulId(search.modulId);
+      }
+      if (search.topik) {
+        setTopik(search.topik);
+        setJudul((prev) => (prev ? prev : `Latihan Soal: ${search.topik}`));
+      }
+      setMode("buat");
+    }
+  }, [search.modulId, search.topik, search.mode]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -865,6 +891,22 @@ function SoalPage() {
                 )}
                 {saveState === "saving" ? "Menyimpan Draf..." : "Simpan Draf"}
               </Button>
+
+              {paketId ? (
+                <Button asChild size="sm" variant="default" className="gap-1.5 text-xs bg-navy text-white hover:bg-navy/90">
+                  <Link
+                    to="/penugasan"
+                    search={{
+                      paketSoalId: paketId,
+                      judul: `Tugas: ${judul || "Paket Soal"}`,
+                      action: "create",
+                    }}
+                  >
+                    <ClipboardList className="h-3.5 w-3.5" />
+                    Tugaskan ke Kelas
+                  </Link>
+                </Button>
+              ) : null}
             </div>
           }
         />
@@ -1714,6 +1756,19 @@ function PaketActions({
           Terbitkan sebagai Tugas
         </Button>
       )}
+      <Button asChild size="sm" variant="default" className="gap-1.5 text-xs bg-navy text-white hover:bg-navy/90">
+        <Link
+          to="/penugasan"
+          search={{
+            paketSoalId: paket.id,
+            judul: `Tugas: ${paket.judul}`,
+            action: "create",
+          }}
+        >
+          <ClipboardList className="h-3.5 w-3.5" />
+          Tugaskan ke Kelas
+        </Link>
+      </Button>
       <Button
         size="sm"
         variant="ghost"
