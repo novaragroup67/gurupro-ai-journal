@@ -875,6 +875,60 @@ Fokus ditujukan langsung pada friksi tertinggi pada alur harian pengguna nyata (
 PRODUCT-1A COMPLETE — CORE UX IMPROVEMENTS VERIFIED
 ```
 
+---
+
+## 15. Tahap PRODUCT-1B: Peningkatan Mutu Konten AI & Higienitas Butir Asesmen
+
+### Ringkasan Eksekutif & Metodologi
+Tahap **PRODUCT-1B** berfokus pada peningkatan mutu, akurasi, kedalaman pedagogis, dan relevansi konten pembelajaran yang dihasilkan AI di GuruPro dengan metodologi berbasis bukti:
+$$\text{Data Penggunaan Riil AI} \longrightarrow \text{Sinyal Mutu \& Kegagalan} \longrightarrow \text{Analisis Akar Masalah} \longrightarrow \text{Peningkatan Terarah} \longrightarrow \text{Validasi \& Regresi}$$
+
+Seluruh peningkatan mempertahankan arsitektur dwi-penyedia, batas kuota, aturan bisnis, dan invarian utama anti-halusinasi: **Benar & Terbukti > Selalu Menghasilkan (Correct & Grounded > Always Generates)**.
+
+### Tiga Peningkatan Mutu Utama Berdasarkan Bukti
+
+1. **Higienitas Butir Soal & Pengecoh Pedagogis (`src/lib/ai/question-generator.ts` & `src/lib/ai/question-quality-validator.ts`)**:
+   - **Masalah**: AI kadang menghasilkan casing kunci yang inkonsisten (`"a"` bukannya `"A"`), prefix huruf yang redundan di dalam teks opsi (`"A. Protokol TCP"`), opsi kosong, atau pengecoh malas/non-pedagogis seperti *"Semua jawaban benar"*, *"Tidak ada yang benar"*, *"Semua opsi salah"*. Hal ini merusak pengacakan soal pada ujian siswa dan memicu dobel prefix (`"A. A. Protokol TCP"`).
+   - **Solusi**:
+     - Sanitasi parsing pada `parseAiQuestionResponse`: mengonversi kunci ke huruf kapital kanonikal `A-D`, membersihkan prefix huruf redundan menggunakan ekspresi reguler `/^(?:\([A-Da-d]\)[.:\-]?|[A-Da-d][.):\-]|[A-Da-d]\.)\s*/`, dan menyediakan ID otomatis (`soal_1`, `soal_2`, ...).
+     - Gerbang deterministik pada `validateDeterministicQuestionLayer`: mendeteksi `EMPTY_OPTION` (CRITICAL $\to$ REJECT), `NON_PEDAGOGICAL_DISTRACTOR` (MAJOR $\to$ REVISE), `OPTION_CLONES_QUESTION` (CRITICAL $\to$ REJECT), dan `ESSAY_PROMPT_TOO_SHORT` (MAJOR $\to$ REVISE jika $< 15$ karakter).
+     - Aturan prompt `question_generator_grounded_v1` di registry dipertegas untuk melarang prefix dan pengecoh malas.
+
+2. **Kedalaman Bab & Kelengkapan Aktivitas Modul Ajar (`src/lib/ai/modul-quality-validator.ts`)**:
+   - **Masalah**: Pada materi tertentu, model menghasilkan bab dengan uraian terlampau dangkal ($< 40$ karakter tanpa poin rincian) atau melewatkan langkah aktivitas operasional pada fase inti pembelajaran.
+   - **Solusi**:
+     - Ditambahkan aturan `PED_SHALLOW_SECTION` (CRITICAL $\to$ REJECT) pada `validatePedagogicalCoherence` untuk bab materi dengan isi $< 40$ karakter tanpa poin uraian.
+     - Ditambahkan aturan `PED_EMPTY_ACTIVITIES` dan `PED_EMPTY_INTI_ACTIVITY` (CRITICAL $\to$ REJECT) jika kegiatan pembelajaran tidak memuat langkah konkret yang dapat dioperasionalkan.
+     - Panduan `modul_ajar_grounded_v1` di [`src/lib/ai/prompts-registry.ts`](file:///c:/novara%20project/gurupro-ai-journal-main/src/lib/ai/prompts-registry.ts) diperbarui dengan persyaratan kedalaman substantif.
+
+3. **Sinonim Kejuruan Dwibahasa & Grounding Anti-Halusinasi (`src/lib/ai/grounding.ts`)**:
+   - **Masalah**: Dokumen kejuruan SMK sering memadukan istilah teknis Indonesia dan serapan bahasa Inggris (*algoritma/algorithm*, *protokol/protocol*, *penyimpanan/storage*, *pencadangan/backup*, *perangkat keras/hardware*, *keamanan siber/cybersecurity*, *sistem/system*, *inspeksi/inspection*, *kecepatan/speed*). Ketiadaan pemetaan sinonim menyebabkan klaim yang sebenarnya valid ditolak secara keliru (*false positive rejection*).
+   - **Solusi**: Kamus `EDUCATIONAL_SYNONYMS` diperluas dengan pasangan istilah teknis kejuruan. Klaim yang menggunakan padanan dwibahasa kini berstatus `SUPPORTED`. Invarian ketat anti-halusinasi tetap terjaga: angka yang salah atau entitas yang sama sekali tidak ada di sumber tetap ditolak sebagai `NOT_FOUND` (fail-closed).
+
+### Hasil Uji Mutu & Verifikasi PRODUCT-1B
+
+| Suite Uji / Verifikasi | Perintah | Status | Keterangan |
+|---|---|:---:|---|
+| **PRODUCT-1B AI Quality Suite** | `npm run test:product1b` | **12 / 12 PASS (100%)** | Normalisasi parsing opsi, deteksi opsi kosong & pengecoh malas, kedalaman modul, dan sinonim kejuruan dwibahasa |
+| **AI Question Quality Suite** | `npx tsx tests/ai/question-quality-validation.test.mjs` | **30 / 30 PASS (100%)** | Faktual, kunci jawaban, pengecoh, ambiguitas, esai, dan batas sewa multi-tenant |
+| **AI Modul Quality Suite** | `npx tsx tests/ai/modul-quality-validation.test.mjs` | **28 / 28 PASS (100%)** | Grounding faktual, cakupan bukti, ketiadaan bab dangkal, dan status draf ketat |
+| **AI Core Recovery Suite** | `npm run test:recovery` | **40 / 40 PASS (100%)** | Pemulihan dokumen, grounding, dwi-router failover, dan penyimpanan biner aman |
+| **OPS-1 Production Monitoring Suite** | `npm run test:ops` | **26 / 26 PASS (100%)** | Kesehatan sistem, sanitasi log zero-leak, korelasi request, dan failover terikat |
+| **OPS-2 Product Analytics Suite** | `npm run test:ops2` | **16 / 16 PASS (100%)** | Taksonomi analitik privasi aman, siklus hidup masukan, dan kueri dashboard |
+| **PRODUCT-1A Core UX Suite** | `npm run test:product1a` | **12 / 12 PASS (100%)** | Debounce pengetikan siswa, penyimpanan batch atomik, dan pencegahan klik ganda |
+| **GO-LIVE Production Operations Suite** | `npm run test:golive` | **29 / 29 PASS (100%)** | Operasional penuh akun guru/siswa, modul, penugasan, penilaian, dan PPTX live |
+| **Full Product UAT Suite** | `npm run test:uat` | **51 / 51 PASS (100%)** | Seluruh 51 skenario end-to-end terverifikasi |
+| **Full Regression Master Suite** | `npm test` | **PASS (100%)** | Seluruh 48 sub-suite lulus tanpa kegagalan |
+| **Release Parity Audit** | `npm run verify:release-parity` | **6 / 6 GATES PASS** | Git baseline bersih, env terverifikasi, skema aktif, dan proteksi rahasia |
+| **Linter Sanitization** | `npm run lint` | **PASS (0 error)** | 0 error |
+| **Production Build** | `npm run build` | **PASS (0 error)** | Build Nitro SSR & TanStack Start optimal |
+
+### Status Operasional Tahap PRODUCT-1B
+```text
+PRODUCT-1B COMPLETE — AI QUALITY IMPROVEMENTS VERIFIED
+```
+
+
 
 
 

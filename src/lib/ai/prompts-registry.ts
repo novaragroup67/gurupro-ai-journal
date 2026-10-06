@@ -34,7 +34,10 @@ ATURAN GENERASI & ANTI-HALUSINASI:
 3. JANGAN MENGARANG: Jangan pernah mengarang angka, nilai parameter, rumus, nama protokol, spesifikasi teknis, atau standar yang tidak tertulis di dalam sumber rujukan. Pertahankan nilai numerik secara eksak (misal: "3.000.000", "2.5 hingga 3.0 bar", "administrative distance = 1").
 4. PENGIKATAN BUKTI (EVIDENCE BINDING): Setiap tujuan pembelajaran (tujuanPembelajaran), bab materi pokok (sections), dan kegiatan pembelajaran (kegiatanPembelajaran) WAJIB mencantumkan array "evidenceIds" yang merujuk secara persis pada atribut "evidenceId" dari <SOURCE_CHUNK> yang relevan (misal: ["ev_src_01_c0"]). JANGAN membuat ID bukti sembarangan.
 5. SUMBER TERBATAS / KONFLIK: Jika materi sumber tidak memuat rincian aktivitas/asesmen atau memiliki pertentangan data antar-sumber, laporkan secara transparan pada kolom "catatanKeterbatasan".
-6. OUTPUT FORMAT: Balas HANYA satu objek JSON murni yang valid sesuai GroundedModulAjarOutputSchema (schemaVersion: "1.0.0"). Tanpa pengantar, tanpa penutup, tanpa markdown di luar JSON.`,
+6. KEDALAMAN MATERI & KELENGKAPAN AKTIVITAS:
+   - Setiap bab materi pokok (sections) wajib memuat uraian substantif dan minimal 1 poin bahasan (dilarang membuat bab kosong atau uraian dangkal < 40 karakter).
+   - Setiap tahap kegiatan pembelajaran (pendahuluan, inti, penutup) wajib memiliki minimal 1 langkah kegiatan operasional konkret yang berorientasi pada peserta didik.
+7. OUTPUT FORMAT: Balas HANYA satu objek JSON murni yang valid sesuai GroundedModulAjarOutputSchema (schemaVersion: "1.0.0"). Tanpa pengantar, tanpa penutup, tanpa markdown di luar JSON.`,
     buildUserPrompt: (ctx) => `Berikut adalah data konteks terverifikasi dari sistem GuruPro:
 
 ${ctx.sourceContent || ""}
@@ -125,13 +128,16 @@ ATURAN GENERASI & ANTI-HALUSINASI:
 4. ATURAN SOAL PILIHAN GANDA:
    - Wajib memiliki tepat 4 opsi unik: ["opsi A", "opsi B", "opsi C", "opsi D"].
    - Dilarang membuat opsi kembar atau terduplikasi.
+   - Dilarang membuat opsi kosong atau hanya spasi.
    - Tepat satu kunci jawaban benar yang dinyatakan dalam satu huruf kapital: "A", "B", "C", atau "D".
    - Kunci jawaban WAJIB merujuk secara tepat pada salah satu opsi yang tersedia.
    - Pengecoh (distractors) harus masuk akal (plausible) berdasarkan klasifikasi/konsep yang ada pada materi sumber, namun secara faktual salah untuk konteks pertanyaan tersebut. Jangan membuat opsi yang sepenuhnya mengada-ada atau tidak relevan.
+   - DILARANG menggunakan opsi non-pedagogis seperti "Semua jawaban benar", "Tidak ada yang benar", "Semua salah", "Semua benar", "Jawaban A dan B benar" karena merusak pengacakan soal.
+   - DILARANG menyertakan prefix huruf dalam teks opsi (misal tulis "Protokol TCP", JANGAN tulis "A. Protokol TCP").
 5. ATURAN SOAL ESAI:
    - Nilai opsi WAJIB berupa array kosong: [].
    - Kolom "kunci" WAJIB memuat rubrik / kriteria penilaian ideal minimal 10 karakter.
-   - Teks pertanyaan esai minimal 5 karakter.
+   - Teks pertanyaan esai minimal 15 karakter dengan perumusan stimulus masalah yang jelas.
 6. PENGIKATAN BUKTI (EVIDENCE BINDING):
    - Setiap butir soal WAJIB menyertakan array "evidenceIds" yang merujuk secara persis pada atribut "evidenceId" dari <SOURCE_CHUNK> yang relevan (misal: ["ev_sourceId_c0"]).
    - DILARANG KERAS mengarang, memalsukan, atau membuat ID bukti yang tidak ada pada konteks yang diberikan.

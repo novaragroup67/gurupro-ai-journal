@@ -752,6 +752,43 @@ export function validatePedagogicalCoherence(
     });
   }
 
+  // 5. Section Depth & Richness Check (Prevent shallow or empty sections)
+  for (let i = 0; i < output.sections.length; i++) {
+    const sec = output.sections[i];
+    const text = (sec.isi || "").trim();
+    const hasPoints = Array.isArray(sec.poin) && sec.poin.length > 0;
+    if (text.length < 40 && !hasPoints && !text.includes("\n") && !text.includes("-")) {
+      issues.push({
+        ruleId: "PED_SHALLOW_SECTION",
+        section: `sections[${i}]`,
+        description: `Uraian materi bab "${sec.judul}" terlalu dangkal (< 40 karakter tanpa poin rincian).`,
+        severity: "CRITICAL",
+      });
+    }
+  }
+
+  // 6. Learning Activity Completeness
+  const totalActivities =
+    (output.kegiatanPembelajaran?.pendahuluan?.aktivitas?.length || 0) +
+    (output.kegiatanPembelajaran?.inti?.aktivitas?.length || 0) +
+    (output.kegiatanPembelajaran?.penutup?.aktivitas?.length || 0);
+
+  if (totalActivities === 0) {
+    issues.push({
+      ruleId: "PED_EMPTY_ACTIVITIES",
+      section: "kegiatanPembelajaran",
+      description: "Rencana kegiatan pembelajaran tidak memiliki rincian aktivitas (pendahuluan, inti, dan penutup kosong).",
+      severity: "CRITICAL",
+    });
+  } else if (!output.kegiatanPembelajaran?.inti?.aktivitas || output.kegiatanPembelajaran.inti.aktivitas.length === 0) {
+    issues.push({
+      ruleId: "PED_EMPTY_INTI_ACTIVITY",
+      section: "kegiatanPembelajaran.inti",
+      description: "Kegiatan inti pembelajaran wajib memiliki minimal 1 butir langkah kegiatan operasional.",
+      severity: "CRITICAL",
+    });
+  }
+
   return issues;
 }
 

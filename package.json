@@ -37,7 +37,8 @@
     "test:golive": "npx tsx tests/golive/go-live-production.test.mjs",
     "test:ops": "npx tsx tests/ops/ops-production-monitoring.test.mjs",
     "test:ops2": "npx tsx tests/ops/ops-product-analytics.test.mjs",
-    "test:product1a": "npx tsx tests/ux/product-core-ux.test.mjs"
+    "test:product1a": "npx tsx tests/ux/product-core-ux.test.mjs",
+    "test:product1b": "npx tsx tests/ai/product-quality/product-ai-quality.test.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"

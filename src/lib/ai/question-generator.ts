@@ -251,6 +251,38 @@ export function parseAiQuestionResponse(
     questionsArray = [parsed.question];
   }
 
+  // 3B. Item-level sanitization & normalization (keys, prefixes, IDs)
+  const normalizedQuestions = questionsArray.map((q: any, qIdx: number) => {
+    if (!q || typeof q !== "object") return q;
+    const cleanQ = { ...q };
+
+    // Auto-generate canonical ID if missing or empty
+    if (!cleanQ.id || typeof cleanQ.id !== "string" || !cleanQ.id.trim()) {
+      cleanQ.id = `soal_${qIdx + 1}`;
+    }
+
+    // Normalize Multiple Choice Key & Option Prefixes
+    if (cleanQ.jenis === "Pilihan Ganda" || (Array.isArray(cleanQ.opsi) && cleanQ.opsi.length > 0)) {
+      if (typeof cleanQ.kunci === "string") {
+        const trimmedKey = cleanQ.kunci.trim();
+        const keyMatch = trimmedKey.match(/^[A-Da-d]/);
+        if (keyMatch) {
+          cleanQ.kunci = keyMatch[0].toUpperCase();
+        }
+      }
+
+      // Strip redundant letter prefixes from options (e.g. "A. Protokol TCP", "B) Opsi", "(C) Opsi" -> "Protokol TCP")
+      if (Array.isArray(cleanQ.opsi)) {
+        cleanQ.opsi = cleanQ.opsi.map((opt: any) => {
+          if (typeof opt !== "string") return String(opt ?? "").trim();
+          return opt.replace(/^(?:\([A-Da-d]\)[.:\-]?|[A-Da-d][.):\-]|[A-Da-d]\.)\s*/, "").trim();
+        });
+      }
+    }
+
+    return cleanQ;
+  });
+
   const judul = typeof parsed.judul === "string" && parsed.judul.trim().length >= 3
     ? parsed.judul.trim()
     : `Paket Soal: ${defaultMeta.topik}`;
@@ -261,7 +293,7 @@ export function parseAiQuestionResponse(
     topik: defaultMeta.topik,
     modulId: defaultMeta.modulId,
     tingkat: defaultMeta.tingkat || "Sedang",
-    questions: questionsArray,
+    questions: normalizedQuestions,
     evidenceRefs: Array.isArray(parsed.evidenceRefs) ? parsed.evidenceRefs : [],
   };
 

@@ -420,6 +420,53 @@ export function validateDeterministicQuestionLayer(
           evidenceIds: q.evidenceIds,
         });
       }
+
+      // Non-Pedagogical Distractors & Blank Options Check
+      const NON_PEDAGOGICAL_PATTERN = /^(?:semua\s+(?:jawaban|pilihan|opsi)?\s*(?:benar|salah)|tidak\s+ada\s+(?:yang\s+)?benar|jawaban\s+[a-d]\s+dan\s+[a-d]\s+benar|[a-d]\s+dan\s+[a-d]\s+benar|all\s+of\s+the\s+above|none\s+of\s+the\s+above)$/i;
+
+      for (let oIdx = 0; oIdx < q.opsi.length; oIdx++) {
+        const rawOpt = q.opsi[oIdx];
+        const trimmedOpt = (rawOpt || "").trim();
+
+        if (trimmedOpt.length === 0) {
+          findings.push({
+            code: "EMPTY_OPTION",
+            severity: "CRITICAL",
+            questionIndex: idx,
+            questionId: q.id,
+            component: "distractor",
+            message: `Soal Pilihan Ganda #${idx + 1} memuat opsi jawaban kosong pada opsi ${String.fromCharCode(65 + oIdx)}.`,
+            evidenceIds: q.evidenceIds,
+          });
+        } else if (NON_PEDAGOGICAL_PATTERN.test(trimmedOpt)) {
+          findings.push({
+            code: "NON_PEDAGOGICAL_DISTRACTOR",
+            severity: "MAJOR",
+            questionIndex: idx,
+            questionId: q.id,
+            component: "distractor",
+            message: `Soal Pilihan Ganda #${idx + 1} memuat opsi non-pedagogis "${trimmedOpt}" yang merusak validitas asesmen dan pengacakan opsi.`,
+            evidenceIds: q.evidenceIds,
+          });
+        }
+      }
+
+      // Check if Option Clones Question Stem
+      const normQuestion = normalizeAssessmentText(q.pertanyaan);
+      for (let oIdx = 0; oIdx < q.opsi.length; oIdx++) {
+        const normOpt = normalizeAssessmentText(q.opsi[oIdx] || "");
+        if (normOpt.length >= 8 && normOpt === normQuestion) {
+          findings.push({
+            code: "OPTION_CLONES_QUESTION",
+            severity: "CRITICAL",
+            questionIndex: idx,
+            questionId: q.id,
+            component: "distractor",
+            message: `Opsi ${String.fromCharCode(65 + oIdx)} pada butir soal #${idx + 1} menduplikasi redaksi pertanyaan secara persis.`,
+            evidenceIds: q.evidenceIds,
+          });
+        }
+      }
     }
 
     // Essay Rules
@@ -444,6 +491,18 @@ export function validateDeterministicQuestionLayer(
           questionId: q.id,
           component: "rubric",
           message: `Rubrik penilaian soal esai #${idx + 1} terlalu singkat (< 10 karakter).`,
+          evidenceIds: q.evidenceIds,
+        });
+      }
+
+      if (q.pertanyaan.trim().length < 15) {
+        findings.push({
+          code: "ESSAY_PROMPT_TOO_SHORT",
+          severity: "MAJOR",
+          questionIndex: idx,
+          questionId: q.id,
+          component: "question",
+          message: `Redaksi soal esai #${idx + 1} terlalu singkat (< 15 karakter).`,
           evidenceIds: q.evidenceIds,
         });
       }
