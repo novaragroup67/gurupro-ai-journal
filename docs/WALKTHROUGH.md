@@ -1178,4 +1178,55 @@ PRODUCT-2F: Asisten Rubrik Koreksi Esai AI & Final PRODUCT-2 Gate (Validation)
 PRODUCT-2A COMPLETE — FEATURE ROADMAP & PRIORITIZATION VERIFIED
 ```
 
+---
+
+## 20. Tahap AI-RECOVERY-01: Pemulihan Baseline AI, Paritas Sumber/Live & Keamanan (AI Core Baseline, Source/Live Parity & Security Recovery)
+
+### Ringkasan Eksekutif
+Tahap **AI-RECOVERY-01** menetapkan **baseline teknis kanonikal tunggal** untuk arsitektur AI GuruPro dalam rangka menyukseskan jalur utama (*golden path*):
+> **Source Material → AI Modul Ajar → AI Illustration → Real PPTX**
+
+Tahap ini mengaudit kode sumber nyata, menguji konektivitas live ke Supabase, merekonsiliasi skema migrasi dengan basis data live, mengeliminasi potensi celah keamanan (zero client-side AI secrets), membongkar inkonsistensi fallback palsu (*in-memory fallback traps*), dan membuktikan 100% kepatuhan pada aturan fail-closed sebelum ekspansi fitur AI selanjutnya dijalankan. Dokumen referensi otoritatif lengkap dipublikasikan di [`docs/AI-CORE-RECOVERY-BASELINE.md`](file:///c:/novara%20project/gurupro-ai-journal-main/docs/AI-CORE-RECOVERY-BASELINE.md).
+
+### Temuan Audit Kritis & Tindakan Pemulihan
+
+1. **Paritas Skema Basis Data Live Supabase (`dxzzpsrgbiummjplggyo`)**:
+   - **Kondisi Awal**: Tabel-tabel inti aplikasi (`profiles`, `kelas`, `moduls`, `paket_soal`, `penugasan`, `penilaian`, `system_logs`) aktif dan terlindungi RLS. Namun, 14 tabel generasi AI (`ai_source_snapshots`, `generation_plans`, `illustration_assets`, `presentation_artifacts`, dll.) dan 2 tabel analitik (`product_events`, `user_feedback`) baru dideklarasikan di berkas migrasi lokal repositori dan **belum terpasang di schema cache PostgREST Supabase live** (HTTP 404).
+   - **Konflik Skema**: Ditemukan perbedaan skema `generation_plans` antara berkas migrasi awal GEN-0 (`20260929110000`) dengan draf parsial `20261003000000`.
+   - **Tindakan Pemulihan**: Dibuat migrasi *forward-only* terpadu [`supabase/migrations/20261007120000_ai_core_baseline_schema_recovery.sql`](file:///c:/novara%20project/gurupro-ai-journal-main/supabase/migrations/20261007120000_ai_core_baseline_schema_recovery.sql) yang menyelaraskan seluruh tabel secara kanonikal dengan kontrak TypeScript aktif, mengamankan RLS per-guru, dan mendaftarkan bucket penyimpanan.
+
+2. **Paritas Storage Bucket Supabase**:
+   - Gateway Supabase Storage aktif, namun bucket `illustration-assets`, `presentation-artifacts`, dan `ai-source-materials` belum terbuat di instance live (HTTP 404 NoSuchBucket).
+   - Didaftarkan perintah DDL `INSERT INTO storage.buckets` privat (10MB untuk gambar, 50MB untuk PPTX) dalam migrasi pemulihan.
+
+3. **Keamanan Kredensial AI & Fail-Closed Invariants**:
+   - Fungsi `getServerEnv()` secara ketat menolak membaca variabel berawalan `VITE_*` untuk memastikan kredensial AI tidak bocor ke client.
+   - Pemindaian 99 berkas bundel client membuktikan **zero server secrets** di browser.
+   - Provider resolution (`resolveServerAiConfig`, `resolveIllustrationGenerationProvider`) bersifat **fail-closed murni**: Jika kunci API tidak terkonfigurasi, sistem langsung melempar error server eksplisit (`AI_PROVIDER_ERROR` / `PROVIDER_UNAVAILABLE`) dengan korelasi ID terstruktur tanpa menggunakan mock palsu.
+   - Generator lokal SVG/mock diblokir dan divalidasi oleh `assertValidImageBinary`.
+
+4. **Pemeriksaan Kesehatan AI Server-Side (Zero Secret Leakage)**:
+   - Ditambahkan fungsi diagnostik `checkAiSubsystemHealth()` dan `getAiHealthStatusServerFn` pada [`src/lib/production-health.ts`](file:///c:/novara%20project/gurupro-ai-journal-main/src/lib/production-health.ts) yang melaporkan ketersediaan provider dan nama model tanpa membocorkan substring kunci API atau token.
+
+5. **Standardisasi Taksonomi Kesalahan AI**:
+   - Diperluas `AI_ERROR_CODES` pada [`src/lib/ai/error-taxonomy.ts`](file:///c:/novara%20project/gurupro-ai-journal-main/src/lib/ai/error-taxonomy.ts) dengan alias standar: `AI_CONFIG_ERROR`, `AI_RATE_LIMITED`, `AI_SCHEMA_INVALID`, `AI_MALFORMED_OUTPUT`, `AI_PERSISTENCE_FAILED`, `AI_STORAGE_FAILED`, dan `AI_GROUNDING_FAILED`.
+
+### Hasil Uji Mutu & Verifikasi AI-RECOVERY-01
+
+| Suite Uji / Verifikasi | Perintah | Status | Keterangan |
+|---|---|:---:|---|
+| **AI Recovery Baseline** | `npm run test:ai-recovery` | **12 / 12 PASS (100%)** | 12 kriteria penerimaan baseline, paritas skema, fail-closed, dan isolasi rahasia |
+| **AI Core Recovery** | `npm run test:recovery` | **40 / 40 PASS (100%)** | Parsing dokumen, grounding anti-halusinasi, dwi-router failover, binary validation |
+| **OPS-1 Production Monitoring** | `npm run test:ops` | **26 / 26 PASS (100%)** | Status subsistem, sanitasi log zero-leak, korelasi request, dual-engine health |
+| **Master Test Suite** | `npm test` | **48 / 48 PASS (100%)** | Seluruh 48 sub-suite aplikasi lolos tanpa kegagalan |
+| **Release Parity Audit** | `npm run verify:release-parity` | **6 / 6 GATES PASS** | Git baseline bersih, env inventory, schema parity, secret scan |
+| **Linter Sanitization** | `npm run lint` | **PASS (0 error)** | 0 error |
+| **Production Build** | `npm run build` | **PASS (0 error)** | Nitro SSR & TanStack Start selesai dalam 1.52 detik |
+
+### Status Operasional Tahap AI-RECOVERY-01
+```text
+AI-RECOVERY-01 COMPLETE — AI BASELINE, PARITY & SECURITY VERIFIED
+```
+
+
 
