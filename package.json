@@ -41,7 +41,8 @@
     "test:product1b": "npx tsx tests/ai/product-quality/product-ai-quality.test.mjs",
     "test:product1c": "npx tsx tests/workflow/product-teacher-workflow.test.mjs",
     "test:product1d": "npx tsx tests/ux/product-student-experience.test.mjs",
-    "test:product1e": "npx tsx tests/product/product-validation-final.test.mjs"
+    "test:product1e": "npx tsx tests/product/product-validation-final.test.mjs",
+    "test:ai-recovery": "npx tsx tests/ai-recovery/ai-baseline-recovery.test.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"

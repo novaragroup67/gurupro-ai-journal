@@ -263,3 +263,56 @@ export const getProductionHealthStatusServerFn = createServerFn({ method: "GET" 
   .handler(async () => {
     return await checkProductionHealthStatus();
   });
+
+export interface AiSubsystemHealthReport {
+  configured: boolean;
+  status: "configured" | "provider_reachable" | "provider_unavailable" | "configuration_invalid";
+  primaryProvider: string;
+  fallbackConfigured: boolean;
+  activeProviders: string[];
+  dualRouterActive: boolean;
+  correlationId: string;
+  timestamp: string;
+}
+
+export function checkAiSubsystemHealth(): AiSubsystemHealthReport {
+  const geminiKey = getServerEnv("GEMINI_API_KEY");
+  const openAiKey = getServerEnv("OPENAI_API_KEY");
+  const lovableKey = getServerEnv("LOVABLE_API_KEY");
+
+  const geminiValid = typeof geminiKey === "string" && geminiKey.trim().length > 10;
+  const openAiValid = typeof openAiKey === "string" && openAiKey.trim().length > 10;
+  const lovableValid = typeof lovableKey === "string" && lovableKey.trim().length > 10;
+
+  const activeProviders: string[] = [];
+  if (geminiValid) activeProviders.push("gemini");
+  if (openAiValid) activeProviders.push("openai");
+  if (lovableValid) activeProviders.push("lovable");
+
+  const isConfigured = activeProviders.length > 0;
+  let status: "configured" | "provider_reachable" | "provider_unavailable" | "configuration_invalid" = "provider_unavailable";
+
+  if (isConfigured) {
+    status = "configured";
+  }
+
+  return {
+    configured: isConfigured,
+    status,
+    primaryProvider: geminiValid ? "gemini" : (lovableValid ? "lovable" : (openAiValid ? "openai" : "none")),
+    fallbackConfigured: activeProviders.length > 1,
+    activeProviders,
+    dualRouterActive: geminiValid && openAiValid,
+    correlationId:
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `ai_hlth_${Date.now()}`,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+export const getAiHealthStatusServerFn = createServerFn({ method: "GET" })
+  .handler(async () => {
+    return checkAiSubsystemHealth();
+  });
+
